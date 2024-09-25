@@ -1,0 +1,7 @@
+Key requirements for text to voice solution
+ 
+•	Able to convert pdf and MS word text into playable audio files.
+•	Able to handle scientific text.
+•	Able to read and speak in all EU languages, Turkish, Hindi, Arab, Chinese, Indonesian, Malay, Brazilian Portuguese, other languages may need to be added later.
+•	Able to assess quality of produced audio file by converting back from voice to text and matching with original text.
+•	Able to store audio files in a reliable and configurable database
