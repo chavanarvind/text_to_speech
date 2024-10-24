@@ -1,0 +1,11 @@
+Hi Gabriel,
+
+Upon discussion, we decided to add a new column named “ERP material number” in TRU_PRODUCT_SUMMARY table and this column should fetch data from the following.
+
+-	Ims : NEW_MATCH_MATL_NUM
+-	Ems : MATL_NUM
+-	Tru FGs that are not available in neither of the ERPs : ERP_PART_NUM
+
+There is no need to modify the existing MATL_NUM column in TRU_PRODUCT_SUMMARY table.
+
+Can you please consider this request? Please let me know if you need any further information.
