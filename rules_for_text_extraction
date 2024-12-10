@@ -1,0 +1,56 @@
+Preserve Document Hierarchy:
+
+Identify and retain headings, subheadings, and sections. Use headings to logically separate different parts of the document.
+If headings are not clear, infer them based on context (e.g., keywords like "Side Effects", "Product Information").
+Organize Content into Categories:
+
+Extract and structure content into predefined categories such as:
+Product Information
+Usage Instructions
+Side Effects
+Risks
+Warnings
+Tag each section explicitly with the appropriate category name.
+Maintain Bullets and Lists:
+
+Retain numbered or bulleted lists as they are for clarity.
+If lists are not explicitly present but implied, format them as bullet points.
+Identify and Remove Irrelevant Content:
+
+Remove irrelevant sections like page numbers, footer notes, and metadata unless explicitly requested.
+Eliminate repetitive phrases or non-informative text (e.g., "See next page").
+Format for Clarity:
+
+Ensure sentences are complete and free from broken line breaks or misplaced text.
+Combine fragmented lines into cohesive paragraphs where appropriate.
+Highlight Key Points:
+
+Emphasize critical information such as warnings, contraindications, and essential usage instructions. Use markdown elements like:
+**Bold** for warnings or risks.
+*Italic* for supplementary notes or explanations.
+Standardize Terminology:
+
+Correct any inconsistencies in language or terminology, ensuring clarity.
+Expand abbreviations if context is clear (e.g., “TBD” becomes “To Be Determined”).
+Retain Contextual References:
+
+Keep cross-references intact (e.g., “See Section 3.2” should remain as is).
+If links or citations exist, preserve their integrity.
+Handle Special Sections Separately:
+
+Tables: Extract and format tables into markdown or plain-text tabular forms.
+Images: Add placeholder notes for any missing content (e.g., "[Figure 1: Diagram of Usage Instructions]").
+Validation:
+
+Summarize the structured content for review to confirm accuracy and completeness.
+Example Prompt to Use with ChatGPT:
+"I have extracted text from a product leaflet. Please structure it into categories like 'Product Information', 'Side Effects', 'Usage Instructions', and 'Risks'. Retain lists and headings, highlight warnings in bold, and ensure sentences are complete. Remove irrelevant content like page numbers or repetitive text. If any sections seem unclear, infer them based on context."
+
+Would you like an example output using a sample text?
+
+
+
+
+
+
+
