@@ -1,0 +1,97 @@
+# Import required libraries
+from azure.cognitiveservices.speech import SpeechConfig, AudioConfig, SpeechRecognizer, SpeechSynthesizer
+import streamlit as st
+import json
+import time
+
+# Function to convert text to speech and generate an audio file
+def text_to_speech(text, azure_key, azure_region, output_audio_path="generated_audio.wav"):
+    speech_config = SpeechConfig(subscription=azure_key, region=azure_region)
+    audio_config = AudioConfig(filename=output_audio_path)
+    synthesizer = SpeechSynthesizer(speech_config=speech_config, audio_config=audio_config)
+    
+    result = synthesizer.speak_text_async(text).get()
+    if result.reason == result.Reason.SynthesizingAudioCompleted:
+        return output_audio_path
+    else:
+        raise Exception(f"Text-to-Speech failed: {result.reason}")
+
+# Function to transcribe audio and extract word-level timestamps
+def transcribe_audio(audio_file_path, azure_key, azure_region):
+    speech_config = SpeechConfig(subscription=azure_key, region=azure_region)
+    audio_config = AudioConfig(filename=audio_file_path)
+    recognizer = SpeechRecognizer(speech_config=speech_config, audio_config=audio_config)
+    
+    result = recognizer.recognize_once()
+    if result.reason == result.Reason.RecognizedSpeech:
+        return json.loads(result.json())
+    else:
+        raise Exception(f"Speech recognition failed: {result.reason}")
+
+# Function to align the original text with timestamps
+def align_text_with_timestamps(transcription_data, original_text):
+    word_timestamps = transcription_data['NBest'][0]['Words']
+    word_map = {word['Word'].lower(): word['OffsetInTicks'] for word in word_timestamps}
+    
+    aligned_text = []
+    for line in original_text.splitlines():
+        aligned_line = []
+        for word in line.split():
+            key = word.strip(",.!?").lower()
+            timestamp = word_map.get(key)
+            aligned_line.append(f"{word} ({timestamp})" if timestamp else word)
+        aligned_text.append(" ".join(aligned_line))
+    return "\n".join(aligned_text)
+
+# Function to dynamically highlight words in Streamlit
+def highlight_text_in_streamlit(aligned_text):
+    st.subheader("Real-Time Highlighting")
+    for line in aligned_text.splitlines():
+        words = line.split()
+        highlighted_line = []
+        for word in words:
+            highlighted_line.append(f"<span style='background-color:yellow'>{word}</span>")
+            time.sleep(0.2)  # Simulate word-by-word highlighting
+            st.markdown(" ".join(highlighted_line), unsafe_allow_html=True)
+
+# Streamlit dashboard
+st.title("Text-to-Speech with Word-by-Word Timestamp Highlighting")
+st.write("Upload a text file to convert to speech, generate audio, and map timestamps.")
+
+# File upload
+text_file = st.file_uploader("Upload Text File", type=["txt"])
+
+if text_file:
+    # Read the uploaded text file
+    text_content = text_file.read().decode("utf-8")
+    st.text_area("Uploaded Text", text_content, height=200)
+
+    # Azure Speech API configuration inputs
+    azure_key = st.text_input("Azure Speech API Key", type="password")
+    azure_region = st.text_input("Azure Region")
+
+    if st.button("Generate Audio and Process Timestamps"):
+        if azure_key and azure_region:
+            try:
+                # 1. Convert text to speech and save audio file
+                audio_path = text_to_speech(text_content, azure_key, azure_region)
+                st.success(f"Audio generated: {audio_path}")
+                st.audio(audio_path)  # Playback audio in Streamlit
+
+                # 2. Transcribe the generated audio to get timestamps
+                transcription_data = transcribe_audio(audio_path, azure_key, azure_region)
+                
+                # 3. Align the text with timestamps
+                aligned_result = align_text_with_timestamps(transcription_data, text_content)
+                
+                # 4. Display aligned text with timestamps
+                st.subheader("Aligned Text with Timestamps")
+                st.text(aligned_result)
+                
+                # Optional: Real-time word highlighting
+                highlight_text_in_streamlit(aligned_result)
+                
+            except Exception as e:
+                st.error(f"Error: {e}")
+        else:
+            st.warning("Please provide Azure API Key and Region.")
