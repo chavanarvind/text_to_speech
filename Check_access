@@ -1,0 +1,36 @@
+import azure.cognitiveservices.speech as speechsdk
+
+# Replace these with your Azure Speech service credentials
+SUBSCRIPTION_KEY = "Your_Subscription_Key"
+SERVICE_REGION = "Your_Region"
+
+def test_speech_service():
+    try:
+        # Configure speech service
+        speech_config = speechsdk.SpeechConfig(subscription=SUBSCRIPTION_KEY, region=SERVICE_REGION)
+        assert speech_config, "Speech configuration failed!"
+
+        # Create a recognizer with dummy audio input
+        recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config)
+        assert recognizer, "Recognizer configuration failed!"
+
+        # Perform a simple recognition test with no actual audio
+        result = recognizer.recognize_once()
+        if result.reason == speechsdk.ResultReason.Canceled:
+            cancellation_details = speechsdk.CancellationDetails(result)
+            print(f"Connection failed. Reason: {cancellation_details.reason}")
+            if cancellation_details.reason == speechsdk.CancellationReason.Error:
+                print(f"Error details: {cancellation_details.error_details}")
+        elif result.reason == speechsdk.ResultReason.NoMatch:
+            print("Service connected, but no audio provided (expected for this test).")
+        elif result.reason == speechsdk.ResultReason.RecognizedSpeech:
+            print("Service connected and recognized speech (unexpected for this test).")
+        else:
+            print(f"Unexpected result reason: {result.reason}")
+
+    except Exception as e:
+        print(f"An error occurred: {str(e)}")
+
+if __name__ == "__main__":
+    print("Testing Azure Speech-to-Text service access...")
+    test_speech_service()
