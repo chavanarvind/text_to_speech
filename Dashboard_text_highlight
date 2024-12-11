@@ -1,0 +1,127 @@
+import streamlit as st
+import azure.cognitiveservices.speech as speechsdk
+import json
+import re
+import os
+
+# Azure credentials
+SUBSCRIPTION_KEY = "Your_Subscription_Key"  # Replace with your Azure Speech Key
+SERVICE_REGION = "Your_Region"  # Replace with your Azure Region
+
+# Function to transcribe audio
+def transcribe_audio(audio_file):
+    """Transcribe audio using Azure Speech-to-Text."""
+    speech_config = speechsdk.SpeechConfig(subscription=SUBSCRIPTION_KEY, region=SERVICE_REGION)
+    audio_config = speechsdk.audio.AudioConfig(filename=audio_file)
+    speech_recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config, audio_config=audio_config)
+
+    st.write("Transcribing audio...")
+    result = speech_recognizer.recognize_once()
+    if result.reason == speechsdk.ResultReason.RecognizedSpeech:
+        return result.json
+    else:
+        st.error(f"Speech-to-Text failed: {result.reason}")
+        return None
+
+# Function to extract word timestamps
+def extract_word_timestamps(transcription_json):
+    """Extract word timestamps from Azure Speech-to-Text JSON."""
+    data = json.loads(transcription_json)
+    word_timestamps = []
+    for segment in data["NBest"][0]["Words"]:
+        word_timestamps.append({
+            "word": segment["Word"],
+            "start_time": segment["Offset"] / 1e7,  # Convert nanoseconds to seconds
+            "end_time": (segment["Offset"] + segment["Duration"]) / 1e7
+        })
+    return word_timestamps
+
+# Function to generate HTML for text highlighting
+def generate_highlighted_html(text_content, word_timestamps):
+    """Generate HTML with synchronized word highlighting."""
+    words = re.findall(r'\b\w+\b', text_content)
+    html_words = []
+    for i, word in enumerate(words):
+        if i < len(word_timestamps):
+            timestamp = word_timestamps[i]
+            html_words.append(
+                f'<span id="word{i}" data-start="{timestamp["start_time"]}" '
+                f'data-end="{timestamp["end_time"]}">{word}</span>'
+            )
+        else:
+            html_words.append(word)
+
+    # Generate full HTML content
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Audio Synchronized Highlighting</title>
+        <style>
+            span.highlight {{
+                background-color: yellow;
+            }}
+        </style>
+    </head>
+    <body>
+        <audio id="audio" controls></audio>
+        <pre id="text">
+            {' '.join(html_words)}
+        </pre>
+        <script>
+            const audio = document.getElementById("audio");
+            audio.src = URL.createObjectURL(new Blob([audioData], {{type: "audio/mp3"}}));
+            const words = document.querySelectorAll("span");
+
+            audio.addEventListener("timeupdate", () => {{
+                const currentTime = audio.currentTime;
+                words.forEach(word => {{
+                    const start = parseFloat(word.dataset.start);
+                    const end = parseFloat(word.dataset.end);
+                    if (currentTime >= start && currentTime <= end) {{
+                        word.classList.add("highlight");
+                    }} else {{
+                        word.classList.remove("highlight");
+                    }}
+                }});
+            }});
+        </script>
+    </body>
+    </html>
+    """
+    return html_content
+
+# Streamlit UI
+st.title("Audio-to-Text Synchronization with Highlighting")
+
+# File upload
+uploaded_audio = st.file_uploader("Upload an audio file (WAV format)", type=["wav"])
+uploaded_text = st.file_uploader("Upload a fixed-format text file", type=["txt"])
+
+if uploaded_audio and uploaded_text:
+    # Save uploaded files locally
+    audio_file_path = f"temp_audio.wav"
+    text_file_path = f"temp_text.txt"
+    with open(audio_file_path, "wb") as f:
+        f.write(uploaded_audio.read())
+    with open(text_file_path, "wb") as f:
+        f.write(uploaded_text.read())
+
+    # Step 1: Transcribe Audio
+    transcription_json = transcribe_audio(audio_file_path)
+    if transcription_json:
+        # Step 2: Extract Word Timestamps
+        word_timestamps = extract_word_timestamps(transcription_json)
+
+        # Step 3: Generate HTML with Highlighting
+        with open(text_file_path, "r") as f:
+            text_content = f.read()
+        highlighted_html = generate_highlighted_html(text_content, word_timestamps)
+
+        # Display the HTML
+        st.markdown("### Synchronized Playback and Highlighting")
+        st.components.v1.html(highlighted_html, height=600)
+
+        # Cleanup
+        os.remove(audio_file_path)
+        os.remove(text_file_path)
