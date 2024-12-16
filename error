@@ -1,0 +1,20 @@
+C:\Users\AChava05\PycharmProjects\audio_analysis\pythonProject\.venv\lib\site-packages\pydub\utils.py:198: RuntimeWarning: Couldn't find ffprobe or avprobe - defaulting to ffprobe, but may not work
+  warn("Couldn't find ffprobe or avprobe - defaulting to ffprobe, but may not work", RuntimeWarning)
+Traceback (most recent call last):
+  File "C:\Users\AChava05\PycharmProjects\audio_analysis\pythonProject\audio-agents\get_file_from_azure.py", line 130, in <module>
+    get_artifacts(job_response)
+  File "C:\Users\AChava05\PycharmProjects\audio_analysis\pythonProject\audio-agents\get_file_from_azure.py", line 100, in get_artifacts
+    download_file(download_url, "results.zip")
+  File "C:\Users\AChava05\PycharmProjects\audio_analysis\pythonProject\audio-agents\get_file_from_azure.py", line 112, in download_file
+    play_audio(file_name)
+  File "C:\Users\AChava05\PycharmProjects\audio_analysis\pythonProject\audio-agents\get_file_from_azure.py", line 118, in play_audio
+    audio = AudioSegment.from_file(file_path, format="mp3")
+  File "C:\Users\AChava05\PycharmProjects\audio_analysis\pythonProject\.venv\lib\site-packages\pydub\audio_segment.py", line 728, in from_file
+    info = mediainfo_json(orig_file, read_ahead_limit=read_ahead_limit)
+  File "C:\Users\AChava05\PycharmProjects\audio_analysis\pythonProject\.venv\lib\site-packages\pydub\utils.py", line 274, in mediainfo_json
+    res = Popen(command, stdin=stdin_parameter, stdout=PIPE, stderr=PIPE)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\subprocess.py", line 971, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\subprocess.py", line 1456, in _execute_child
+    hp, ht, pid, tid = _winapi.CreateProcess(executable, args,
+FileNotFoundError: [WinError 2] The system cannot find the file specified
