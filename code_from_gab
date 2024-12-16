@@ -1,0 +1,131 @@
+
+
+import re
+import time
+import tkinter as tk
+from threading import Thread
+from pygame import mixer
+import json
+
+
+class AudioTextPlayer:
+    def __init__(self, root, audio_file, text_file, offsets_file):
+        self.root = root
+        self.root.title("Audio Text Player")
+
+        # Initialize mixer for audio playback
+        mixer.init()
+        mixer.music.load(audio_file)
+
+        # Load the text
+        with open(text_file, 'r', encoding='utf-8') as file:
+            self.text_data = file.read()
+
+            # Load the offsets
+        self.word_offsets = self.load_offsets(offsets_file)
+
+        self.is_playing = False
+        self.is_paused = False
+        self.audio_duration = mixer.Sound(audio_file).get_length()
+
+        # GUI Layout
+        self.text_box = tk.Text(root, wrap=tk.WORD, width=50, height=25)
+        self.text_box.grid(row=0, column=0, padx=10, pady=10)
+        self.text_box.insert(tk.END, self.text_data)
+        self.text_box.config(state=tk.DISABLED)
+
+        # Control Buttons
+        self.control_frame = tk.Frame(root)
+        self.control_frame.grid(row=0, column=1, padx=10, pady=10)
+        self.play_button = tk.Button(self.control_frame, text="Play", command=self.play_audio)
+        self.play_button.pack(pady=5)
+        self.pause_button = tk.Button(self.control_frame, text="Pause", command=self.pause_audio)
+        self.pause_button.pack(pady=5)
+        self.stop_button = tk.Button(self.control_frame, text="Stop", command=self.stop_audio)
+        self.stop_button.pack(pady=5)
+
+        # Thread for updating text highlighting
+        self.highlight_thread = None
+
+    def load_offsets(self, offsets_file):
+        with open(offsets_file, 'r', encoding='utf-8') as file:
+            offsets = json.load(file)
+        return offsets
+
+    def play_audio(self):
+        if not self.is_playing:
+            self.is_playing = True
+            self.is_paused = False
+            mixer.music.play()
+            # Start text highlighting in a separate thread
+            self.highlight_thread = Thread(target=self._highlight_text)
+            self.highlight_thread.start()
+        elif self.is_paused:
+            self.is_paused = False
+            mixer.music.unpause()
+
+    def pause_audio(self):
+        if self.is_playing:
+            self.is_paused = True
+            mixer.music.pause()
+
+    def stop_audio(self):
+        if self.is_playing:
+            self.is_playing = False
+            self.is_paused = False
+            mixer.music.stop()
+
+    def _highlight_text(self):
+        start_pos = 0  # Track the start position in the text
+        previous_audio_offset = 0  # Track the previous offset to calculate sleep time
+
+        for word_data in self.word_offsets:
+            if not self.is_playing:
+                break
+
+            if not self.is_paused:
+                word = word_data["Text"]
+                audio_offset = word_data["AudioOffset"] / 1000  # Convert to seconds
+                duration = word_data["Duration"] / 1000  # Convert to seconds
+
+                # Calculate the time to sleep before highlighting this word
+                time_to_sleep = audio_offset - previous_audio_offset
+
+                # Sleep for the calculated time before highlighting the word
+                if time_to_sleep > 0:
+                    time.sleep(time_to_sleep)
+
+                previous_audio_offset = audio_offset + duration  # Update previous offset to the end of the current word
+
+                # Highlight the current word
+                self.text_box.config(state=tk.NORMAL)
+                self.text_box.tag_remove("highlight", "1.0", tk.END)
+
+                # Try to find the word in the text starting from start_pos
+                found = False
+                for match in re.finditer(re.escape(word), self.text_data[start_pos:]):
+                    start_index = f"1.0 + {start_pos + match.start()}c"
+                    end_index = f"1.0 + {start_pos + match.end()}c"
+                    self.text_box.tag_add("highlight", start_index, end_index)
+                    self.text_box.tag_config("highlight", background="yellow")
+                    start_pos += match.end()  # Update start_pos to end of current match
+                    found = True
+                    break
+
+                if not found:
+                    print(f"Word '{word}' not found in text.")
+
+                self.text_box.config(state=tk.DISABLED)
+                time.sleep(duration)  # Wait for the duration of the word
+
+
+
+if __name__ == "__main__":
+    # Automatically load sample files
+    audio_path = "text2speech/extracted_files/0001.mp3"
+    text_path = "text2speech/text_files/sample.txt"
+    offsets_path = "text2speech/extracted_files/0001.word.json"
+
+    root = tk.Tk()
+    app = AudioTextPlayer(root, audio_path, text_path, offsets_path)
+    root.mainloop()
