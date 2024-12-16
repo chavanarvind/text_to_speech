@@ -3,19 +3,19 @@ import json
 
 # Replace with your Azure Speech Service credentials
 SPEECH_KEY = "<YOUR_AZURE_SPEECH_KEY>"
-SERVICE_REGION = "<YOUR_SERVICE_REGION>"
+ENDPOINT = "<YOUR_AZURE_ENDPOINT>"  # Example: https://<your-resource-name>.cognitiveservices.azure.com/
 
-def text_to_speech_with_offsets(input_text_file, audio_output_path, offsets_output_path):
+def text_to_speech_with_offsets(dummy_text, audio_output_path, offsets_output_path):
     """
     Convert text to speech using Azure TTS and generate word offset data.
 
     Args:
-        input_text_file (str): Path to the input text file.
+        dummy_text (str): Text to convert to speech.
         audio_output_path (str): Path to save the output audio file.
         offsets_output_path (str): Path to save the word offsets JSON file.
     """
-    # Create a Speech Config object
-    speech_config = speechsdk.SpeechConfig(subscription=SPEECH_KEY, region=SERVICE_REGION)
+    # Create a Speech Config object using endpoint
+    speech_config = speechsdk.SpeechConfig(subscription=SPEECH_KEY, endpoint=ENDPOINT)
     speech_config.speech_synthesis_output_format = speechsdk.SpeechSynthesisOutputFormat.Audio48Khz192KBitRateMonoMp3
 
     # Create an audio configuration to output to a file
@@ -23,10 +23,6 @@ def text_to_speech_with_offsets(input_text_file, audio_output_path, offsets_outp
 
     # Create a speech synthesizer
     synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_config)
-
-    # Load the text from the input file
-    with open(input_text_file, "r", encoding="utf-8") as file:
-        text = file.read()
 
     # Set up the word boundary event handler to collect offsets
     word_offsets = []
@@ -42,7 +38,7 @@ def text_to_speech_with_offsets(input_text_file, audio_output_path, offsets_outp
 
     # Perform text-to-speech synthesis
     print("Starting synthesis...")
-    result = synthesizer.speak_text_async(text).get()
+    result = synthesizer.speak_text_async(dummy_text).get()
 
     # Check the result
     if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
@@ -57,10 +53,10 @@ def text_to_speech_with_offsets(input_text_file, audio_output_path, offsets_outp
         if result.error_details:
             print(f"Error details: {result.error_details}")
 
-# Input and output file paths
-input_text_file = "input_text.txt"  # Path to your text file
+# Dummy text and output file paths
+dummy_text = "Hello, this is a test of Azure text-to-speech conversion."
 audio_output_path = "output_audio.mp3"  # Path to save the audio file
 offsets_output_path = "word_offsets.json"  # Path to save the word offsets
 
 # Run the text-to-speech conversion
-text_to_speech_with_offsets(input_text_file, audio_output_path, offsets_output_path)
+text_to_speech_with_offsets(dummy_text, audio_output_path, offsets_output_path)
