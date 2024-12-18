@@ -1,0 +1,136 @@
+import json
+import logging
+from dotenv import load_dotenv
+import os
+import sys
+import time
+import uuid
+import zipfile
+
+import requests
+
+logging.basicConfig(stream=sys.stdout, level=logging.INFO,  # set to logging.DEBUG for verbose output
+                    format="[%(asctime)s] %(message)s", datefmt="%m/%d/%Y %I:%M:%S %p %Z")
+logger = logging.getLogger(__name__)
+
+SPEECH_ENDPOINT = 'https://cog-speech-dto-epil-dev.cognitiveservices.azure.com/'
+SUBSCRIPTION_KEY = 'BBvpAQdmiBQWNukOTc5F2tIb5Ln7TuubMiQGbbkSSO2GJDR6ZK09JQQJ99AKACYeBjFXJ3w3AAAYACOG1LLR'
+API_VERSION = "2024-04-01"
+
+# SPEECH_ENDPOINT = os.environ['SPEECH_ENDPOINT']
+# SUBSCRIPTION_KEY = os.environ['SUBSCRIPTION_KEY']
+# API_VERSION = os.environ['API_VERSION']
+
+
+def _create_job_id():
+    # the job ID must be unique in current speech resource
+    # you can use a GUID or a self-increasing number
+    return uuid.uuid4()
+
+
+def _authenticate():
+    return {'Ocp-Apim-Subscription-Key': SUBSCRIPTION_KEY}
+
+
+def submit_synthesis(job_id: str, file_path='text_files/sml.txt') -> bool:
+    url = f'{SPEECH_ENDPOINT}/texttospeech/batchsyntheses/{job_id}?api-version={API_VERSION}'
+    header = {
+        'Content-Type': 'application/json; charset=utf-8'
+    }
+    header.update(_authenticate())
+
+    with open(file_path, 'r', encoding="utf-8-sig") as f:
+        text = f.read()
+
+    payload = {
+        "inputKind": "SSML",
+        'synthesisConfig': {
+            "voice": "tr-TR-EmelNeural",
+        },
+        "inputs": [
+            {
+                "content": text
+            },
+        ],
+        "properties": {
+            "outputFormat": "audio-24khz-160kbitrate-mono-mp3",
+            "wordBoundaryEnabled": True,
+            "sentenceBoundaryEnabled": True,
+            "timeToLiveInHours": 24 * 7
+        },
+    }
+
+    jpayload = json.dumps(payload, ensure_ascii=False, indent=2)
+    response = requests.put(url, jpayload, headers=header)
+    if response.status_code < 400:
+        logger.info('Batch synthesis job submitted successfully')
+        logger.info(f'Job ID: {response.json()["id"]}')
+        return True
+    else:
+        logger.error(f'Failed to submit batch synthesis job: [{response.status_code}], {response.text}')
+        return False
+
+
+def get_synthesis(job_id: str):
+    url = f'{SPEECH_ENDPOINT}/texttospeech/batchsyntheses/{job_id}?api-version={API_VERSION}'
+    header = _authenticate()
+    response = requests.get(url, headers=header)
+    if response.status_code < 400:
+        logger.info('Get batch synthesis job successfully')
+        logger.info(response.json())
+        return response.json()
+    else:
+        logger.error(f'Failed to get batch synthesis job: {response.text}')
+
+
+def list_synthesis_jobs(skip: int = 0, max_page_size: int = 100):
+    """List all batch synthesis jobs in the subscription"""
+    url = f'{SPEECH_ENDPOINT}/texttospeech/batchsyntheses?api-version={API_VERSION}&skip={skip}&maxpagesize={max_page_size}'
+    header = _authenticate()
+    response = requests.get(url, headers=header)
+    if response.status_code < 400:
+        logger.info(f'List batch synthesis jobs successfully, got {len(response.json()["values"])} jobs')
+        logger.info(response.json())
+    else:
+        logger.error(f'Failed to list batch synthesis jobs: {response.text}')
+
+
+def get_artifacts(job_response):
+    if "outputs" in job_response and "result" in job_response["outputs"]:
+        download_url = job_response["outputs"]["result"]
+        download_file(download_url, "results.zip")
+    else:
+        logger.error("No artifacts found in job response")
+
+
+def download_file(url: str, file_name: str):
+    response = requests.get(url)
+    if response.status_code == 200:
+        with open(file_name, 'wb') as f:
+            f.write(response.content)
+        logger.info(f'Downloaded file: {file_name}')
+        # Unzip the file
+        with zipfile.ZipFile(file_name, 'r') as zip_ref:
+            zip_ref.extractall('extracted_files')
+            # Process and play the audio files
+
+    else:
+        logger.error(f'Failed to download file: {url}')
+
+
+if __name__ == '__main__':
+    job_id = _create_job_id()
+    if submit_synthesis(job_id):
+        while True:
+            job_response = get_synthesis(job_id)
+            status = job_response['status']
+            if status == 'Succeeded':
+                logger.info('Batch synthesis job succeeded')
+                get_artifacts(job_response)
+                break
+            elif status == 'Failed':
+                logger.error('Batch synthesis job failed')
+                break
+            else:
+                logger.info(f'Batch synthesis job is still running, status [{status}]')
+                time.sleep(5)
