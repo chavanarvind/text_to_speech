@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Text Highlighter</title>
+    <style>
+        .highlight {
+            background-color: yellow;
+        }
+        .section {
+            cursor: pointer;
+            padding: 5px;
+            margin: 5px 0;
+            background-color: #f0f0f0;
+            border: 1px solid #ccc;
+        }
+        .section:hover {
+            background-color: #ddd;
+        }
+
+    </style>
+    <script>
+        // Global array to store previously found highlight ranges (in the original text indexing)
+        // Format: {start: number, end: number}
+        let highlightedRanges = [];
+
+        // Removes all highlight spans from the DOM, restoring original text format
+        function removeHighlights() {
+            let highlighted = document.querySelectorAll('.highlight');
+            highlighted.forEach(el => {
+                let parent = el.parentNode;
+                while (el.firstChild) {
+                    parent.insertBefore(el.firstChild, el);
+                }
+                parent.removeChild(el);
+            });
+        }
+
+        // Highlights a specific section based on predefined ranges
+        function highlightSection(startIndex, endIndex) {
+            removeHighlights(); // Clear existing highlights
+            let textNodes = getTextNodesUnder(document.body);
+            // Find start node/offset
+            let currentOffset = 0;
+            let startNode, startOffset;
+            for (let node of textNodes) {
+                let length = node.nodeValue.length;
+                if (currentOffset + length > startIndex) {
+                    startNode = node;
+                    startOffset = startIndex - currentOffset;
+                    break;
+                }
+                currentOffset += length;
+            }
+            // Find end node/offset
+            currentOffset = 0;
+            let endNode, endOffset;
+            for (let node of textNodes) {
+                let length = node.nodeValue.length;
+                if (currentOffset + length >= endIndex) {
+                    endNode = node;
+                    endOffset = endIndex - currentOffset;
+                    break;
+                }
+                currentOffset += length;
+            }
+            let highlightSpan = document.createElement('span');
+            highlightSpan.className = 'highlight';
+            let range = document.createRange();
+            range.setStart(startNode, startOffset);
+            range.setEnd(endNode, endOffset);
+            let fragment = range.cloneContents();
+            range.deleteContents();
+            highlightSpan.appendChild(fragment);
+            range.insertNode(highlightSpan);
+        }
+
+
+        function getTextNodesUnder(el) {
+            let n, a = [], walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
+            while ((n = walk.nextNode())) a.push(n);
+            return a;
+        }
+
+                // Handle section clicks
+                function goToSection(section) {
+            if (section === 1) {
+                highlightSection(0, 28); // Adjust the range for Section 1
+            } else if (section === 2) {
+                highlightSection(29, 67); // Adjust the range for Section 2
+            } else if (section === 3) {
+                highlightSection(68, 112); // Adjust the range for Section 3
+            }
+        }
+
+        function extractHighlightedFragment(startNode, startOffset, endNode, endOffset) {
+            let range = document.createRange();
+            range.setStart(startNode, startOffset);
+            range.setEnd(endNode, endOffset);
+            return range.cloneContents();
+        }
+
+        // Highlights the given absolute range in the full text
+        function highlightRange(startIndex, endIndex) {
+            let textNodes = getTextNodesUnder(document.body);
+
+            // Find start node/offset
+            let currentOffset = 0;
+            let startNode, startOffset;
+            for (let node of textNodes) {
+                let length = node.nodeValue.length;
+                if (currentOffset + length > startIndex) {
+                    startNode = node;
+                    startOffset = startIndex - currentOffset;
+                    break;
+                }
+                currentOffset += length;
+            }
+
+            // Find end node/offset
+            currentOffset = 0;
+            let endNode, endOffset;
+            for (let node of textNodes) {
+                let length = node.nodeValue.length;
+                if (currentOffset + length >= endIndex) {
+                    endNode = node;
+                    endOffset = endIndex - currentOffset;
+                    break;
+                }
+                currentOffset += length;
+            }
+
+            let highlightSpan = document.createElement('span');
+            highlightSpan.className = 'highlight';
+            let highlightedFragment = extractHighlightedFragment(startNode, startOffset, endNode, endOffset);
+
+            let origRange = document.createRange();
+            origRange.setStart(startNode, startOffset);
+            origRange.setEnd(endNode, endOffset);
+            origRange.deleteContents();
+
+            highlightSpan.appendChild(highlightedFragment);
+            origRange.insertNode(highlightSpan);
+        }
+
+        // Check if a given range overlaps with previously highlighted ranges
+        function overlapsHighlightedRanges(start, end) {
+            for (let r of highlightedRanges) {
+                // Overlap if the intervals intersect
+                if (!(end <= r.start || start >= r.end)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Highlights only the first new occurrence of searchString not already highlighted
+        // After highlighting, this occurrence is stored in highlightedRanges.
+        // The DOM at the end of this call shows only this new occurrence highlighted.
+        function highlightNextOccurrence(searchString) {
+            if (!searchString) return;
+
+            // Remove current highlights to start from a clean slate
+            removeHighlights();
+
+            let textNodes = getTextNodesUnder(document.body);
+            let fullText = textNodes.map(n => n.nodeValue).join('');
+
+            // Find the first occurrence of searchString not already highlighted
+            let index = 0, foundStart = -1;
+            while ((index = fullText.indexOf(searchString, index)) !== -1) {
+                let start = index;
+                let end = index + searchString.length;
+
+                if (!overlapsHighlightedRanges(start, end)) {
+                    foundStart = start;
+                    break;
+                }
+                index += searchString.length;
+            }
+
+            if (foundStart === -1) {
+                // No new occurrence found
+                return;
+            }
+
+            let foundEnd = foundStart + searchString.length;
+            // Highlight this new occurrence only
+            highlightRange(foundStart, foundEnd);
+
+            // Remember this occurrence so it won't be re-highlighted in future calls
+            highlightedRanges.push({start: foundStart, end: foundEnd});
+        }
+
+        // Resets all tracking of previously highlighted ranges and clears any highlights from the DOM
+        function resetHighlights() {
+            highlightedRanges = [];
+            removeHighlights();
+        }
+
+        // For manual testing
+        function handleHighlight() {
+            let text = document.getElementById('highlight-input').value;
+            highlightNextOccurrence(text);
+        }
+
+        // For manual testing: reset everything
+        function handleReset() {
+            resetHighlights();
+        }
+    </script>
+</head>
+<body>
+</head>
+<body>
+    <h1>Predefined Sections</h1>
+    <!-- Section links -->
+    <div class="section" onclick="goToSection(1)">Section 1</div>
+    <div class="section" onclick="goToSection(2)">Section 2</div>
+    <div class="section" onclick="goToSection(3)">Section 3</div>
+
+<h1>KULLANMA TALİMATI</h1>
+    <h2>NICORETTE INVISI 10 mg/16 saat transdermal flaster</h2>
+    <p>Cilt üzerine uygulanır.</p>
+    <p><b>Etkin madde:</b> Her bir banttan 16 saatlik kullanım sırasında 10 mg nikotin salıverilir.</p>
+    <p><b>Yardımcı maddeler:</b> Trigliseritler (orta zincir uzunluğunda), bazik bütillenmiş metakrilat kopolimer, polietilentereftalat film (PET), akrilik yapışkan solüsyon, potasyum hidroksit, kroskarmelloz sodyum, alüminyum asetilasetonat, bir yüzü alüminyumlanmış, her iki yüzü silikonlanmış polietilen tereftalat (PET) film.</p>
+ 
