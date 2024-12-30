@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Text Highlighter</title>
+    <style>
+        .highlight {
+            background-color: yellow;
+        }
+    </style>
+    <script>
+        // Global array to store previously found highlight ranges (in the original text indexing)
+        // Format: {start: number, end: number}
+        let highlightedRanges = [];
+
+        // Removes all highlight spans from the DOM, restoring original text format
+        function removeHighlights() {
+            let highlighted = document.querySelectorAll('.highlight');
+            highlighted.forEach(el => {
+                let parent = el.parentNode;
+                while (el.firstChild) {
+                    parent.insertBefore(el.firstChild, el);
+                }
+                parent.removeChild(el);
+            });
+        }
+
+        function getTextNodesUnder(el) {
+            let n, a = [], walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
+            while ((n = walk.nextNode())) a.push(n);
+            return a;
+        }
+
+        function extractHighlightedFragment(startNode, startOffset, endNode, endOffset) {
+            let range = document.createRange();
+            range.setStart(startNode, startOffset);
+            range.setEnd(endNode, endOffset);
+            return range.cloneContents();
+        }
+
+        // Highlights the given absolute range in the full text
+        function highlightRange(startIndex, endIndex) {
+            let textNodes = getTextNodesUnder(document.body);
+
+            // Find start node/offset
+            let currentOffset = 0;
+            let startNode, startOffset;
+            for (let node of textNodes) {
+                let length = node.nodeValue.length;
+                if (currentOffset + length > startIndex) {
+                    startNode = node;
+                    startOffset = startIndex - currentOffset;
+                    break;
+                }
+                currentOffset += length;
+            }
+
+            // Find end node/offset
+            currentOffset = 0;
+            let endNode, endOffset;
+            for (let node of textNodes) {
+                let length = node.nodeValue.length;
+                if (currentOffset + length >= endIndex) {
+                    endNode = node;
+                    endOffset = endIndex - currentOffset;
+                    break;
+                }
+                currentOffset += length;
+            }
+
+            let highlightSpan = document.createElement('span');
+            highlightSpan.className = 'highlight';
+            let highlightedFragment = extractHighlightedFragment(startNode, startOffset, endNode, endOffset);
+
+            let origRange = document.createRange();
+            origRange.setStart(startNode, startOffset);
+            origRange.setEnd(endNode, endOffset);
+            origRange.deleteContents();
+
+            highlightSpan.appendChild(highlightedFragment);
+            origRange.insertNode(highlightSpan);
+        }
+
+        // Check if a given range overlaps with previously highlighted ranges
+        function overlapsHighlightedRanges(start, end) {
+            for (let r of highlightedRanges) {
+                // Overlap if the intervals intersect
+                if (!(end <= r.start || start >= r.end)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Highlights only the first new occurrence of searchString not already highlighted
+        // After highlighting, this occurrence is stored in highlightedRanges.
+        // The DOM at the end of this call shows only this new occurrence highlighted.
+        function highlightNextOccurrence(searchString) {
+            if (!searchString) return;
+
+            // Remove current highlights to start from a clean slate
+            removeHighlights();
+
+            let textNodes = getTextNodesUnder(document.body);
+            let fullText = textNodes.map(n => n.nodeValue).join('');
+
+            // Find the first occurrence of searchString not already highlighted
+            let index = 0, foundStart = -1;
+            while ((index = fullText.indexOf(searchString, index)) !== -1) {
+                let start = index;
+                let end = index + searchString.length;
+
+                if (!overlapsHighlightedRanges(start, end)) {
+                    foundStart = start;
+                    break;
+                }
+                index += searchString.length;
+            }
+
+            if (foundStart === -1) {
+                // No new occurrence found
+                return;
+            }
+
+            let foundEnd = foundStart + searchString.length;
+            // Highlight this new occurrence only
+            highlightRange(foundStart, foundEnd);
+
+            // Remember this occurrence so it won't be re-highlighted in future calls
+            highlightedRanges.push({start: foundStart, end: foundEnd});
+        }
+
+        // Resets all tracking of previously highlighted ranges and clears any highlights from the DOM
+        function resetHighlights() {
+            highlightedRanges = [];
+            removeHighlights();
+        }
+
+        // For manual testing
+        function handleHighlight() {
+            let text = document.getElementById('highlight-input').value;
+            highlightNextOccurrence(text);
+        }
+
+        // For manual testing: reset everything
+        function handleReset() {
+            resetHighlights();
+        }
+    </script>
+</head>
+<body>
+<h1>KULLANMA TALİMATI</h1>
+    <h2>NICORETTE INVISI 10 mg/16 saat transdermal flaster</h2>
+    <p>Cilt üzerine uygulanır.</p>
+    <p><b>Etkin madde:</b> Her bir banttan 16 saatlik kullanım sırasında 10 mg nikotin salıverilir.</p>
+    <p><b>Yardımcı maddeler:</b> Trigliseritler (orta zincir uzunluğunda), bazik bütillenmiş metakrilat kopolimer, polietilentereftalat film (PET), akrilik yapışkan solüsyon, potasyum hidroksit, kroskarmelloz sodyum, alüminyum asetilasetonat, bir yüzü alüminyumlanmış, her iki yüzü silikonlanmış polietilen tereftalat (PET) film.</p>
+    
+    <div style="border: 1px solid black; padding: 10px;">
+        <p><b>Bu ilacı kullanmaya başlamadan önce bu KULLANMA TALİMATINI dikkatlice okuyunuz, çünkü sizin için önemli bilgiler içermektedir.</b></p>
+        <ul>
+            <li>Bu kullanma talimatını saklayınız. Daha sonra tekrar okumaya ihtiyaç duyabilirsiniz.</li>
+            <li>Eğer ilave sorularınız olursa, lütfen doktorunuza veya eczacınıza danışınız.</li>
+            <li>Bu ilaç kişisel olarak sizin için reçete edilmiştir, başkalarına vermeyiniz.</li>
+            <li>Bu ilacın kullanımı sırasında, doktora veya hastaneye gittiğinizde doktorunuza bu ilacı kullandığınızı söyleyiniz.</li>
+            <li>Bu talimatta yazılanlara aynen uyunuz. İlaç hakkında size önerilen dozun dışında yüksek veya düşük doz kullanmayınız.</li>
+        </ul>
+    </div>
+
+    <h3>Bu Kullanma Talimatında:</h3>
+    <ol>
+        <li>NICORETTE INVISI nedir ve ne için kullanılır?</li>
+        <li>NICORETTE INVISI’yi kullanmadan önce dikkat edilmesi gerekenler</li>
+        <li>NICORETTE INVISI nasıl kullanılır?</li>
+        <li>Olası yan etkiler nelerdir?</li>
+        <li>NICORETTE INVISI’nın saklanması</li>
+    </ol>
+
+    <h3>1. NICORETTE INVISI nedir ve ne için kullanılır?</h3>
+    <ul>
+        <li>NICORETTE INVISI etkin madde olarak nikotin içerir. NICORETTE INVISI’den 16 saatlik kullanım sırasında 10 mg nikotin salıverilir. 9 cm²’lik her bir bant 15,75 mg nikotin içerir.</li>
+        <li>NICORETTE INVISI, erişkinlerde (18 yaşın üzerinde) sigarayı bırakmak için kullanılan “nikotin replasman tedavisi (NRT)” olarak adlandırılan bir ilaç grubuna</li>
+    </ul>
+
+<p>dahildir.</p>
+    <ul>
+        <li>NICORETTE INVISI 7 veya 14 bant içeren ambalajlarda kullanıma sunulmaktadır.</li>
+        <li>NICORETTE INVISI, erişkinlerde (18 yaşın üzerinde) sigara bağımlılığının tedavisinde sigarayı bırakmaya istekli kişilerde nikotin isteğini ve sigara bırakıldığında görülen belirtileri (baş ağrısı, uykusuzluk, endişe) hafifleterek sigarayı bırakmaya yardımcı olmak için kullanılır.</li>
+        <li>Bu tedavinin yanı sıra davranış tedavisi ve desteğin başarı oranını arttıracağı unutulmamalıdır.</li>
+    </ul>
+    <h2>2. NICORETTE INVISI’yi kullanmadan önce dikkat edilmesi gerekenler</h2>
+    <h3>NICORETTE INVISI’yi aşağıdaki durumlarda KULLANMAYINIZ</h3>
+    <p>Eğer:</p>
+    <ul>
+        <li>NICORETTE INVISI’nin bileşiminde bulunan nikotine ve yardımcı maddelerden herhangi birine karşı (yardımcı maddeler listesine bakınız) alerjiniz varsa kullanmayınız.</li>
+        <li>12 yaşın altındaki çocuklarda kullanılmamalıdır.</li>
+    </ul>
+    <h3>NICORETTE INVISI’yi aşağıdaki durumlarda DİKKATLİ KULLANINIZ</h3>
+    <p>Eğer:</p>
+    <ul>
+        <li>Yakın zamanda geçirilmiş miyokard infarktüsü (kalp krizi), Prinzmetal anjina dahil stabil olmayan veya ağırlaşan anjina (kalp kasındaki kan akımının azalması veya kalbin beslenmesini sağlayan atardamar spazmı nedeniyle oluşan göğüste ağrı, sıkışma ve baskı hissi), şiddetli kardiyak aritmi (kalp ritim bozukluğu), yakın zamanda geçirilmiş serebrovasküler olay (felç) ve/veya kontrol altında tutulamayan yüksek tansiyon (hipertansiyon) olan bağımlılar davranışsal destek programı gibi yöntemler ile sigarayı bırakmaları için cesaretlendirilmelidir. Eğer başarısız olunursa, NICORETTE INVISI düşünülebilir; fakat tedavi ancak doktor kontrolü altında başlatılmalıdır.</li>
+        <li>Orta ila şiddetli karaciğer veya şiddetli böbrek yetmezliğiniz varsa,</li>
+        <li>Sizde mide veya duedonum (oniki parmak bağırsağı) ülseri, mide veya özefagus (yemek borusu) yangısı varsa,</li>
+        <li>Daha önce nöbet geçirdiyseniz,</li>
+        <li>Tiroid bezleriniz fazla çalışıyorsa veya doktorunuz sizde feokromasitoma (kan basıncına etki eden bir böbrek üstü bezi tümörü) olduğunu bildirdiyse,</li>
+    </ul>
+
+<ul>
+        <li>Şeker hastalığınız varsa, sigarayı bıraktığınızda veya NICORETTE INVISI’yi kullanmaya başladığınızda kan şeker seviyenizi daha sık ölçtürmeniz gerekmektedir. Buna bağlı olarak doktorunuz tarafından insülin ilaçlarınızın dozu ile ilgili düzenlemeler gerekebilir.</li>
+        <li>Manyetik Rezonans Görüntüleme (MR) uygulanacaksa, uygulama öncesi, yanma riskine karşı NICORETTE INVISI’yi çıkartınız.</li>
+        <li>Sedef hastalığı, egzama gibi bir cilt rahatsızlığınız varsa veya cildinizin geniş bir alanını kaplayan kurdeşen (ürtiker) deri hastalığı probleminiz varsa NICORETTE INVISI’yi bu bölgelerde uygulamayınız.</li>
+        <li>Hamileyseniz veya emziriyorsanız nikotin replasman tedavisine başlamadan sigarayı kendiliğinizden bırakmaya çalışmalısınız.</li>
+    </ul>
+    <p>Mevcut şikayetlerinizin devam etmesi, kötüleşmesi ya da yeni şikayetlerinizin oluşması durumunda, bant kullanımı sonlandırılmalı ve doktora başvurulmalıdır.</p>
+    <p>Bu uyarılar geçmişteki herhangi bir dönemde dahi olsa sizin için geçerliyse lütfen doktorunuza danışınız.</p>
+    <ul>
+        <li>Yetişkinler için doğru olan dozlar, çocukları ciddi bir şekilde zehirleyebilir hatta öldürebilir. Nikotin içeren ürünler yanlış kullanılabileceği veya çocukların ulaşabileceği veya yutabileceği yerlerde bırakılmamalıdır.</li>
+        <li>Bant çıkarıldıktan sonra yapışkan kısmı içeride kalacak şekilde ikiye katlanmalı ve küçük bir torba içine veya bir parça alüminyum folyo içine koyulmalıdır. Ardından kullanılmış bant çocukların erişemeyeceği bir yere dikkatle atılmalıdır.</li>
+    </ul>
+    <h2>NICORETTE INVISI’nin yiyecek ve içecek ile kullanılması:</h2>
+    <p>NICORETTE INVISI’nin yiyecek ve içeceklerle bilinen bir etkileşimi yoktur.</p>
+    <h3>Hamilelik</h3>
+    <p><i>İlacı kullanmadan önce doktorunuza veya eczacınıza danışınız.</i></p>
+    <ul>
+        <li>Sigara içmek rahim içi büyüme geriliği, erken doğum ve ölü doğum riskini arttırmaktadır. Nikotin, bebeğe geçmektedir ve bebeğin solunum hareketlerini, dolaşımını etkiler. Dolaşım üzerindeki etkisi doza bağlıdır. Sigara içmenin bebek üzerinde ciddi zararlı etkileri vardır ve bırakılmalıdır.</li>
+        <li>Sigarayı bırakmak hem annenin hem de bebeğin sağlığını iyileştirmek için yapılabilecek en etkili girişimdir. Sigara dumanında nikotin dışında polisiklik hidrokarbonlar ve karbon monoksit gibi maddeler bulunmaktadır ve bu maddelerin sebep olacağı zararlar nikotin replasman ürünleri kullanımı ile karşılaştırıldığında çok yüksektir. Hamilelikte ideal</li>
+    </ul>
+    <p>3/10</p>
+
+<p>olan, sigaranın, hamileliğin erken dönemlerinde, nikotin replasman tedavisi olmadan bırakılmasıdır. Ancak sigarayı ilaç tedavisi olmadan bırakamamış ya da bırakma ihtimali olmayan kişilerde, nikotin replasman tedavisi ile bebekte beklenen risk, sigara kullanımına göre daha düşük olduğundan, hamilelerde nikotin replasman tedavisi kullanılabilir. Sigaranın tamamen bırakılması en iyi seçenek olmakla birlikte eğer bırakılamıyorsa, NICORETTE INVISI’nin hamilelikte kullanımı, sigara kullanımına göre daha güvenli bir alternatiftir. Bırakmayı başaramamış ve çok fazla sigara içen kişilerde doktor sigarayı bırakmaya yardımcı olması için NICORETTE INVISI kullanımına karar verirse, tedavinin mümkün olan en yakın zamanda bırakılması hedeflenmelidir.</p>
+    <ul>
+        <li>NICORETTE INVISI, hamilelikte sadece doktora danışılarak kullanılmalıdır.</li>
+        <li>Aralıklı dozlama sağlayan ürünler genellikle bantlardan daha düşük günlük doz sağlayacağından daha fazla tercih edilebilir. Ancak, hamilelik sırasında çok yoğun bulantı/kusma sorunu yaşayan kadınlarda doktor bant kullanımını tercih edebilir. Eğer bant kullanıyorsanız, yatmadan önce çıkarmalısınız.</li>
+    </ul>
+    <p><i>Tedaviniz sırasında hamile olduğunuzu fark ederseniz hemen doktorunuza veya eczacınıza danışınız.</i></p>
+    <h2>Emzirme</h2>
+    <p><i>İlaç kullanmadan önce doktorunuza veya eczacınıza danışınız.</i></p>
+    <ul>
+        <li>Nikotin, tedavi dozlarında dahi bebeği etkileyecek miktarda anne sütüne geçmektedir. Bu sebeple nikotinin emzirme esnasında kullanımından kaçınılmalıdır. Ancak, sigarayı bırakmada başarı sağlanamadıysa, NICORETTE INVISI kullanımına sadece hekime danışılarak başlanmalıdır.</li>
+        <li>Eğer doktorunuz NICORETTE INVISI’yi kullanmanız yönünde karar verirse, bebeğin mümkün olan en az nikotini alması için bebek, NICORETTE INVISI’yi kullanmadan hemen önce emzirilmelidir.</li>
+    </ul>
+    <h2>Araç ve makine kullanımı</h2>
+    <p>NICORETTE INVISI’nin araç ve makine kullanma yeteneği üzerinde hiçbir etkisi bulunmamaktadır veya ihmal edilebilir düzeydedir.</p>
+    <h2>NICORETTE INVISI’nin içeriğinde bulunan bazı yardımcı maddeler hakkında önemli bilgiler</h2>
+    <p>NICORETTE INVISI’nin içeriğinde bulunan yardımcı maddelere karşı aşırı bir duyarlılığınız yoksa, bu maddelere bağlı olumsuz bir etki beklenmez.</p>
+    <h2>Diğer ilaçlar ile birlikte kullanımı</h2>
+    <p>4/10</p>
+
+<p>Nikotin replasman tedavisi ve diğer ilaçlar arasında klinik olarak ilgili olabilecek bir etkileşim saptanmamıştır.</p>
+    <p>Eğer:</p>
+    <ul>
+        <li>Teofilin (astım tedavisinde kullanılan bir ilaç), klozapin (şizofreni hastalarında kullanılan bir ilaç), takrin (Alzheimer tedavisinde kullanılan bir ilaç) veya ropinirol (Parkinson tedavisinde kullanılan bir ilaç) gibi ilaçlar kullanıyorsanız, sigarayı bırakmanız veya azaltmanızdan dolayı bu ilaçların dozlarının tekrar ayarlanması gerekebilir.</li>
+        <li>Nikotin, vücutta bulunan ve adenozin adı verilen madde ile uyarılan kan basıncını, kalp atım hızını ve ayrıca ağrı yanıtını (angina pectoris benzeri göğüs ağrısı) arttırabilir.</li>
+    </ul>
+    <p>Eğer reçeteli ya da reçetesiz herhangi bir ilacı şu anda kullanıyorsanız veya son zamanlarda kullandıysanız lütfen doktorunuza veya eczacınıza bunlar hakkında bilgi veriniz.</p>
+    <h3>3. NICORETTE INVISI nasıl kullanılır?</h3>
+    <h4>Uygun kullanım ve doz/uygulama sıklığı için talimatlar:</h4>
+    <p>NICORETTE INVISI’yi doktor kontrolü altında kullanmalısınız.</p>
+    <p>Bandı cildinize yapıştırdığınız gün sigara içmeyi tamamen bırakmanız ve en son sigaranızı bir önceki gün içmiş olmanız gerekmektedir. Tedaviniz süresince kesinlikle sigara içmeyiniz.</p>
+    <p>Tedavi en yüksek doza nikotin içeren bant ile başlar ve daha az nikotin içeren bantlar ile devam eder.</p>
+    <p>Doktorunuz uygun dozdaki NICORETTE INVISI’yi, ne zaman ve nasıl kullanmanız gerektiğini söyleyecektir.</p>
+    <p>Bant ile tedavi, uyku esnasında nikotin verilmeden sigara kullanıcısının gün içindeki nikotin dalgalanmalarını taklit eder. Bandın sadece uyurken kullanılıyor olması, gece boyunca nikotin verilmeye devam edildiğinde yaşanan uyku bozukluklarının görülmesini engeller.</p>
+    <p>NICORETTE INVISI’nin önerilen dozu aşağıda verilmiştir. Bu ilacı doktorunuzun tavsiyelerine uygun olarak kullanınız. Önerilen doz bireysel olup bu doza, nikotin bağımlılığınız göz önünde bulundurularak karar verilmelidir.</p>
+    <ul>
+        <li><strong>Çok sayıda sigara tüketen bir kişiyseniz</strong> (Fagerström Testi skoru ≥6 veya günde 15 veya daha fazla sigara içenler), <strong>1. adım</strong> olan 25 mg dozundaki bant ile tedaviye başlayınız ve 8 hafta süreyle günde bir bant kullanınız.</li>
+        <li>Bundan sonra bant kullanımını kademeli olarak azaltılmalıdır. 2 hafta süreyle günde 15 mg’lık bir bant kullanımını (<strong>2. adım</strong>) takiben 2 hafta süreyle günde 10 mg ’lık bir bant (<strong>3. adım</strong>) kullanınız.</li>
+        <li><strong>Az sayıda sigara tüketen bir kişiyseniz</strong> (Fagerström Testi skoru <6 veya günde 15’den daha az sigara içenler) <strong>2. adım</strong> (15 mg) ile tedaviye başlayınız, 8 hafta süreyle devam ediniz ve son 4 hafta için dozu <strong>3. adım</strong> (10 mg) düşürünüz.</li>
+    </ul>
+
+<table border="1">
+        <tr>
+            <th>Çok sayıda sigara tüketen kişiler (Fagerström Testi skoru ≥6 veya günde 15 veya daha fazla sigara içenler)</th>
+            <th>Az sayıda sigara tüketen kişiler (Fagerström Testi skoru <6 veya günde 15'ten daha az sigara içenler)</th>
+        </tr>
+        <tr>
+            <td>
+                <table border="1">
+                    <tr>
+                        <td>Doz rejimi</td>
+                        <td>Süre</td>
+                    </tr>
+                    <tr>
+                        <td>1. Adım</td>
+                        <td>25 mg<br>İlk 8 hafta</td>
+                    </tr>
+                    <tr>
+                        <td>2. Adım</td>
+                        <td>15 mg<br>Sonraki 2 hafta</td>
+                    </tr>
+                    <tr>
+                        <td>3. Adım</td>
+                        <td>10 mg<br>Son 2 hafta</td>
+                    </tr>
+                </table>
+            </td>
+            <td>
+                <table border="1">
+                    <tr>
+                        <td>Doz rejimi</td>
+                        <td>Süre</td>
+                    </tr>
+                    <tr>
+                        <td>2. Adım</td>
+                        <td>15 mg<br>İlk 8 hafta</td>
+                    </tr>
+                    <tr>
+                        <td>3. Adım</td>
+                        <td>10 mg<br>Son 4 hafta</td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+    <p>Bandı doktorunuz başka şekilde tavsiye etmediği sürece 6 aydan fazla kullanmayınız.</p>
+    <p>Sigara kullanımı, NICORETTE INVISI ile tedavi süresince tamamen bırakılmalıdır.</p>
+    <p>Yüksek bağımlılığa sahip, ilerlemiş yoksunluk semptomları olan veya tek nikotin tedavisi ürünüyle başarısız olmuş kişiler, yoksunluk semptomlarından hızlı bir şekilde kurtulmak için NICORETTE INVISI ile birlikte nikotin sakızını kullanabilirler.</p>
+    <h3>Uygulama yolu ve metodu:</h3>
+    <p>NICORETTE INVISI'yi sabahları uyandıktan sonra kalça, üst kol veya göğüs gibi tüysüz deri bölgelerine ve temiz, kuru, yarasız alanlara, günde bir kez uygulayınız. Gece yatmadan önce çıkarınız. Bu uygulama alanlarını her gün değiştiriniz ve ardışık gelen günlerde aynı bölgeyi kullanmayınız.</p>
+    <p>Bandı sabahları uyandığınızda uygulayınız ve gece yatmadan önce çıkarınız. Bantlar 16 saat süresince etkili olduğundan, sigara içicilerin ihtiyacını karşılar ve uyku bozukluğuna neden olmaz.</p>
+    <p>Banyo sırasında bandı çıkarmanız gerekli değildir.</p>
+    <p>Bandı aşağıdaki şekilde uygulayınız:</p>
+    <ol>
+        <li>Bandı uygulamadan önce ellerinizi yıkayınız.</li>
+        <li>Bandın paketini yanından makasla gösterildiği şekilde kesiniz. Temiz, kuru, yarasız ve kalça, üst kol veya göğüs gibi tüysüz bir deri bölgesi seçiniz.</li>
+        <li>Gümüş renkli alüminyum destek tabakasının bir tarafını çıkarınız. Bandın yapışkan yüzeyine parmaklarınızla dokunmaktan kaçınınız.</li>
+        <li>Bandın yapışkan kısmını derinin üzerine dikkatle yapıştırınız ve gümüş renkli alüminyum destek tabakasının kalan yarısını çıkarınız.</li>
+        <li>Bandın üzerine hafifçe avuç veya parmak uçları ile bastırınız.</li>
+        <li>Bandın iyice yapışmasını sağlamak için parmaklarla kenarlarına bastırınız.</li>
+        <li>Nemlendirici krem veya pudra kullanılması bandın düzgün bir şekilde yapışmasını engelleyebilir.</li>
+    </ol>
+    <p>6/10</p>
+
+<p>engelleyebilir. Şayet bant çıkarsa, yenisini yapıştırınız.</p>
+    <h2>Değişik yaş grupları:</h2>
+    <h3>Çocuklarda kullanımı:</h3>
+    <p>Doktor tavsiyesi olmaksızın 18 yaşın altındaki çocuklara uygulanmamalıdır.</p>
+    <h3>Yaşlılarda kullanımı:</h3>
+    <p>Yaşlı kişilerde doz ayarlaması gerekli değildir.</p>
+    <h2>Özel kullanım durumları:</h2>
+    <h3>Böbrek yetmezliği:</h3>
+    <p>Şiddetli böbrek yetmezliği olan kişilerde NICORETTE INVISI dozunun doktorunuz tarafından ayarlanması gerekmektedir.</p>
+    <h3>Karaciğer yetmezliği:</h3>
+    <p>Orta/ağır seviyede karaciğer yetmezliği olan kişilerde NICORETTE INVISI dozunun doktorunuz tarafından ayarlanması gerekmektedir.</p>
+    <p>Eğer NICORETTE INVISI’nin etkisinin çok güçlü veya zayıf olduğuna dair bir izleniminiz var ise doktorunuz veya eczacınız ile konuşunuz.</p>
+    <h2>Kullanmanız gerekenden daha fazla NICORETTE INVISI kullandıysanız:</h2>
+    <p><strong>NICORETTE INVISI’den kullanmanız gerekenden fazlasını kullanmışsanız bir doktor veya eczacı ile konuşunuz.</strong></p>
+    <p>NICORETTE INVISI’den kullanmanız gerekenden fazlasını kullanmışsanız, bulantı (kendini hasta hissetme), kusma, tükürük artışı, karın ağrısı, ishal, terleme, baş ağrısı, baş dönmesi, duyma güçlüğü veya belirgin güçsüzlük duyabilirsiniz. Daha yüksek dozların alındığı vakalarda bu semptomları takiben hipotansiyon, zayıf veya düzensiz nabız, solunum güçlüğü, bitkinlik, dolaşım kolapsı ve genel konvülsiyonlar gelişebilir. Bu durumda nikotin alımı hemen durdurulmalı ve en yakın hastaneye başvurulmalıdır. Doktora veya hastaneye gittiğinizde bu kullanma talimatını ve bandın ambalajını yanınızda götürünüz.</p>
+    <p>Tedavi sırasında yetişkinler tarafından tolere edilebilir dozda nikotin, çocuklarda ciddi zehirlenme semptomları oluşturabilir ve öldürücü olabilir. Çocuklarda nikotin zehirlenmesi şüphesi olduğu takdirde ivedilikle acile başvurulmalı ve tedavi edilmelidir.</p>
+    <h2>NICORETTE INVISI’yi kullanmayı unutursanız:</h2>
+    <p><strong>Unutulan dozları dengelemek için çift doz uygulamayınız.</strong></p>
+    <h2>NICORETTE INVISI ile tedavi sonlandırıldığındaki oluşabilecek etkiler</h2>
+    <p>NICORETTE INVISI’yi size önerilmiş olan dozda ve önerilen süre boyunca kullanmalısınız, aksi takdirde sizin için sigaraya tekrar başlama ihtimali ortaya çıkabilir.</p>
+    <p>7/10</p>
+
+<h4>4. Olası yan etkiler nelerdir?</h4>
+    <p>Tüm ilaçlar gibi, NICORETTE INVISI’nin içeriğinde bulunan maddelere duyarlı olan kişilerde yan etkiler olabilir. Bu etkiler nadiren ciddi etkilerdir. Hemen hepsi nikotine bağlı olan bu etkiler, sigara içerken de ortaya çıkabilen yan etkilerdir.</p>
+    <p>Bazı belirtiler, sigarayı bırakma sonucunda gelişen nikotin yoksunluğu ile ilişkili olabilir. Bu belirtiler şunlardır;</p>
+    <ul>
+        <li>Sinirlilik ve saldırganlık</li>
+        <li>Moral bozukluğu</li>
+        <li>Kaygı bozukluğu (anksiyete)</li>
+        <li>Huzursuzluk</li>
+        <li>Konsantrasyon bozukluğu</li>
+        <li>İştah artışı veya kilo alma</li>
+        <li>Şiddetli sigara içme isteği</li>
+        <li>Gece uyanmaları veya uyku bozukluğu</li>
+        <li>Kalp atım hızında düşme</li>
+        <li>Baş dönmesi, sersemlik, bulanık görme, mide bulantısı</li>
+        <li>Öksürük</li>
+        <li>Kabızlık</li>
+        <li>Diş eti kanaması</li>
+        <li>Ağız içi ülser (aft)</li>
+        <li>Burun kanallarının ve boğazın gerisinin şişmesi</li>
+    </ul>
+    <p>Sigara dumanı soluma alışkanlığı olmayan kişiler tarafından aşırı miktarda NICORETTE INVISI kullanımı;</p>
+    <ul>
+        <li>Baygınlığa</li>
+        <li>Bulantıya</li>
+        <li>Baş ağrılarına yol açabilmektedir.</li>
+    </ul>
+    <p>NICORETTE INVISI’yi ilk defa kullandığınızda hafif deri reaksiyonlarına sebep olabilir. Bu durum genellikle flasterlerin uygulama bölgesinde kızarıklık veya kaşıntı halinde seyreder ve genellikle birkaç gün sonra geçmektedir. Nadiren de olsa reaksiyon devam ederse veya şiddetlenirse, flasterleri kullanmayı bırakın ve doktorunuza danışın.</p>
+    <p><b>Aşağıdakilerden biri olursa, NICORETTE INVISI’yi kullanmayı durdurunuz ve DERHAL doktorunuza bildiriniz veya size en yakın hastanenin acil bölümüne başvurunuz:</b></p>
+    <ul>
+        <li>Aşırı duyarlılık reaksiyonu (yüz, ağız, dudaklar, boğaz ve dilde şişme, ciltte kaşıntı, ciltte şişme, ağız zarında ülser (aft) ve iltihaplanma, nefes almada zorluk ve baş dönmesi)</li>
+        <li>Göğüs rahatsızlığı ve ağrısı</li>
+        <li>Akciğere giden hava yollarında daralma</li>
+    </ul>
+    <p>8/10</p>
+
+<ul>
+        <li>Nefes darlığı</li>
+        <li>Yutma güçlüğü</li>
+        <li>Kalp atışında hızlanma / hızlı kalp atışı</li>
+        <li>Kalpte geri dönüşümlü atım bozukluğu veya kalp atışlarında anormallik</li>
+        <li>Nöbet geçirmek</li>
+    </ul>
+    <p>Bunların hepsi çok ciddi yan etkilerdir.</p>
+    <p>Eğer bunlardan biri sizde mevcut ise, sizin NICORETTE INVISI’ye karşı ciddi alerjiniz var demektir. Acil tıbbi müdahaleye veya hastaneye yatırılmanıza gerek olabilir.</p>
+    <p>Bu çok ciddi yan etkilerin hepsi oldukça seyrek görülür</p>
+    <p>Yan etkiler aşağıdaki kategorilerde gösterildiği şekilde sıralanmıştır:</p>
+    <table>
+        <tr>
+            <td>Çok yaygın</td>
+            <td>: 10 hastanın en az 1’inde görülebilir.</td>
+        </tr>
+        <tr>
+            <td>Yaygın</td>
+            <td>: 10 hastanın birinden az, fakat 100 hastanın birinden fazla görülebilir.</td>
+        </tr>
+        <tr>
+            <td>Yaygın olmayan</td>
+            <td>: 100 hastanın birinden az, fakat 1.000 hastanın birinden fazla görülebilir.</td>
+        </tr>
+        <tr>
+            <td>Seyrek</td>
+            <td>: 1.000 hastanın birinden az fakat 10.000 hastanın birinden fazla görülebilir.</td>
+        </tr>
+        <tr>
+            <td>Çok seyrek</td>
+            <td>: 10.000 hastanın birinden az görülebilir.</td>
+        </tr>
+        <tr>
+            <td>Bilinmiyor</td>
+            <td>: Eldeki verilerden tahmin edilemiyor.</td>
+        </tr>
+    </table>
+    <p><strong>Çok yaygın:</strong></p>
+    <ul>
+        <li>Kaşıntı</li>
+    </ul>
+    <p><strong>Yaygın:</strong></p>
+    <ul>
+        <li>Baş dönmesi</li>
+        <li>Baş ağrısı</li>
+        <li>Bulantı</li>
+        <li>Kusma</li>
+        <li>Döküntü</li>
+        <li>Ürtiker</li>
+    </ul>
+    <p><strong>Yaygın olmayan:</strong></p>
+    <ul>
+        <li>Ellerde ve ayaklarda karıncalanma veya uyuşma</li>
+        <li>Çarpıntı</li>
+        <li>Aşırı terleme</li>
+        <li>Uygulama yeri reaksiyonları</li>
+        <li>Göğüs rahatsızlığı ve ağrısı</li>
+        <li>Halsizlik</li>
+        <li>Yorgunluk</li>
+        <li>Nefes darlığı</li>
+        <li>Kızarma</li>
+        <li>Yüksek tansiyon</li>
+        <li>Kas ağrısı</li>
+        <li>Aşırı duyarlılık reaksiyonu (alerjik reaksiyonlar)</li>
+        <li>Anormal rüya</li>
+    </ul>
+    <p><strong>Seyrek:</strong></p>
+    <ul>
+        <li>Yutma güçlüğü</li>
+    </ul>
+
+<ul>
+    <li>Midede rahatsızlık</li>
+    <li>Ciltte ödem ve şişme</li>
+    <li>Deride kızarıklık (birkaç gün içinde geçen)</li>
+    <li>Kol veya bacak ağrısı</li>
+    <li>Anafilaktik reaksiyon (vücutta alerjen maddelere karşı oluşabilen ciddi alerjik reaksiyon)</li>
+</ul>
+<p>Çok seyrek:</p>
+<ul>
+    <li>Geri dönüşümlü atriyal fibrilasyon</li>
+</ul>
+<p>Biliniyor:</p>
+<ul>
+    <li>Nöbet geçirmek</li>
+</ul>
+<p><strong>Yan etkilerin raporlanması</strong><br>
+Kullanma Talimatında yer alan veya almayan herhangi bir yan etki meydana gelmesi durumunda hekiminiz, eczacınız veya hemşireniz ile konuşunuz. Ayrıca karşılaştığınız yan etkileri www.titck.gov.tr sitesinde yer alan “İlaç Yan Etki Bildirimi” ikonuna tıklayarak ya da 0 800 314 00 08 numaralı yan etki bildirim hattını arayarak Türkiye Farmakovijilans Merkezi (TÜFAM)’ne bildiriniz. Meydana gelen yan etkileri bildirerek kullanmakta olduğunuz ilacın güvenliği hakkında daha fazla bilgi edinilmesine katkı sağlamış olacaksınız.
+</p>
+<p><strong>5.NICORETTE INVISI’nin saklanması</strong></p>
+<p><strong>NICORETTE INVISI’yi çocukların göremeyeceği, erişemeyeceği yerlerde ve ambalajında saklayınız.</strong></p>
+<p>25°C altındaki oda sıcaklığında saklayınız.</p>
+<p><strong>Son kullanma tarihiyle uyumlu olarak kullanınız.</strong></p>
+<p><em>Ambalajdaki son kullanma tarihinden sonra NICORETTE INVISI’yi kullanmayınız.</em></p>
+<p>Eğer üründe ve/veya ambalajında bozukluklar fark ederseniz NICORETTE INVISI’yi kullanmayınız.</p>
+<p>Son kullanma tarihi geçmiş veya kullanılmayan ilaçları çöpe atmayınız! T.C. Çevre, Şehircilik ve İklim Bakanlığınca belirlenen toplama sistemine veriniz.</p>
+<p><strong>Ruhsat sahibi:</strong> JNTL Turkey Tüketici Sağlığı Ltd. Şti. Beykoz/İstanbul</p>
+<p><strong>Üretim yeri:</strong> LTS Lohmann Therapie-Systeme AG, Lohmann Str./Andernach / Almanya</p>
+<p><em>Bu kullanma talimatı 29/11/2022 tarihinde onaylanmıştır.</em></p>
+
+</body>
+</html>
