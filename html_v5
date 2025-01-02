@@ -6,17 +6,16 @@
         .highlight {
             background-color: yellow;
         }
-        .nav-buttons {
-            margin: 10px 0;
-        }
-        .nav-buttons button {
+        button {
             padding: 10px;
-            margin-right: 10px;
+            margin: 5px;
+            cursor: pointer;
         }
     </style>
     <script>
         let highlightedRanges = [];
 
+        // Removes all highlight spans from the DOM, restoring original text format
         function removeHighlights() {
             let highlighted = document.querySelectorAll('.highlight');
             highlighted.forEach(el => {
@@ -43,7 +42,6 @@
 
         function highlightRange(startIndex, endIndex) {
             let textNodes = getTextNodesUnder(document.body);
-
             let currentOffset = 0;
             let startNode, startOffset;
             for (let node of textNodes) {
@@ -81,15 +79,7 @@
             origRange.insertNode(highlightSpan);
         }
 
-        function overlapsHighlightedRanges(start, end) {
-            for (let r of highlightedRanges) {
-                if (!(end <= r.start || start >= r.end)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
+        // Highlights the next occurrence of the text with given start and end times
         function highlightNextOccurrence(searchString) {
             if (!searchString) return;
 
@@ -103,55 +93,30 @@
                 let start = index;
                 let end = index + searchString.length;
 
-                if (!overlapsHighlightedRanges(start, end)) {
-                    foundStart = start;
-                    break;
-                }
-                index += searchString.length;
+                let foundStart = start;
+                let foundEnd = end;
+                highlightRange(foundStart, foundEnd);
+                break;
             }
-
-            if (foundStart === -1) return;
-
-            let foundEnd = foundStart + searchString.length;
-            highlightRange(foundStart, foundEnd);
-
-            highlightedRanges.push({start: foundStart, end: foundEnd});
         }
 
-        function resetHighlights() {
-            highlightedRanges = [];
-            removeHighlights();
-        }
-
-        function scrollToSection(startTime) {
-            // Call the Python method to set audio time
-            window.pywebview.api.set_audio_time(startTime); // This requires PyWebView integration
-        }
-
-        // For manual testing
-        function handleHighlight() {
-            let text = document.getElementById('highlight-input').value;
-            highlightNextOccurrence(text);
-        }
-
-        // For manual testing: reset everything
-        function handleReset() {
-            resetHighlights();
+        function scrollToSection(startTime, endTime) {
+            // Call Python to set audio start and end times for text highlighting
+            window.pywebview.api.set_audio_time(startTime, endTime);
         }
     </script>
 </head>
 <body>
-    <div class="nav-buttons">
-        <button onclick="scrollToSection(0)">KULLANMA TALİMATI</button>
-        <button onclick="scrollToSection(2.237)">NICORETTE INVISI 10 mg/16 saat transdermal flaster</button>
-        <button onclick="scrollToSection(7.187)">Cilt üzerine uygulanır.</button>
-        <button onclick="scrollToSection(9.612)">Etkin madde</button>
+    <div>
+        <h1>Clickable Sections</h1>
+        <button onclick="scrollToSection(0, 2.237)">KULLANMA TALİMATI</button>
+        <button onclick="scrollToSection(2.237, 7.187)">NICORETTE INVISI 10 mg/16 saat transdermal flaster</button>
+        <button onclick="scrollToSection(7.187, 9.612)">Cilt üzerine uygulanır.</button>
+        <button onclick="scrollToSection(9.612, 16.712)">Etkin madde: Her bir banttan 16 saatlik kullanım sırasında 10 mg nikotin salıverilir.</button>
     </div>
-
-    <h1>KULLANMA TALİMATI</h1>
-    <h2>NICORETTE INVISI 10 mg/16 saat transdermal flaster</h2>
-    <p>Cilt üzerine uygulanır.</p>
-    <p><b>Etkin madde:</b> Her bir banttan 16 saatlik kullanım sırasında 10 mg nikotin salıverilir.</p>
-    <p><b>Yardımcı maddeler:</b> Trigliseritler (orta zincir uzunluğunda), bazik bütillenmiş metakrilat kopolimer, polietilentereftalat film (PET), akrilik yapışkan solüsyon, potasyum hidroksit, kroskarmelloz sodyum, alüminyum asetilasetonat, bir yüzü alüminyumlanmış, her iki yüzü silikonlanmış polietilen tereftalat (PET) film.</p>
+    <div>
+        <h2>Text Content</h2>
+        <p>Cilt üzerine uygulanır. Etkin madde: Her bir banttan 16 saatlik kullanım sırasında 10 mg nikotin salıverilir.</p>
+    </div>
 </body>
 </html>
