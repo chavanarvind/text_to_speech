@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fixed Sections Highlighter</title>
+    <style>
+        .highlight {
+            background-color: yellow;
+        }
+        .section {
+            cursor: pointer;
+            padding: 5px;
+            margin: 5px 0;
+            background-color: #f0f0f0;
+            border: 1px solid #ccc;
+        }
+        .section:hover {
+            background-color: #ddd;
+        }
+    </style>
+    <script>
+        let sectionsData = []; // This will store the dynamic section data
+
+        // Function to receive the section data from Python
+        function setSectionsData(data) {
+            sectionsData = data;
+            // Dynamically create sections in the DOM
+            const sectionsContainer = document.getElementById('sections');
+            sectionsContainer.innerHTML = ''; // Clear existing sections
+            sectionsData.forEach((section, index) => {
+                let div = document.createElement('div');
+                div.className = 'section';
+                div.onclick = () => goToSection(index);
+                div.innerText = `Section ${index + 1}: ${section.text}`;
+                sectionsContainer.appendChild(div);
+            });
+        }
+
+        // Function to highlight text based on section
+        function highlightSection(startTime, endTime) {
+            removeHighlights(); // Clear existing highlights
+            let textNodes = getTextNodesUnder(document.body);
+
+            // Find start node/offset
+            let currentOffset = 0;
+            let startNode, startOffset;
+            for (let node of textNodes) {
+                let length = node.nodeValue.length;
+                if (currentOffset + length > startTime) {
+                    startNode = node;
+                    startOffset = startTime - currentOffset;
+                    break;
+                }
+                currentOffset += length;
+            }
+
+            // Find end node/offset
+            currentOffset = 0;
+            let endNode, endOffset;
+            for (let node of textNodes) {
+                let length = node.nodeValue.length;
+                if (currentOffset + length >= endTime) {
+                    endNode = node;
+                    endOffset = endTime - currentOffset;
+                    break;
+                }
+                currentOffset += length;
+            }
+
+            let highlightSpan = document.createElement('span');
+            highlightSpan.className = 'highlight';
+            let range = document.createRange();
+            range.setStart(startNode, startOffset);
+            range.setEnd(endNode, endOffset);
+
+            let fragment = range.cloneContents();
+            range.deleteContents();
+            highlightSpan.appendChild(fragment);
+            range.insertNode(highlightSpan);
+        }
+
+        // Function to go to a specific section based on index
+        function goToSection(index) {
+            const section = sectionsData[index];
+            highlightSection(section.start, section.end);
+        }
+
+        // Helper function to get all text nodes under an element
+        function getTextNodesUnder(el) {
+            let n, a = [], walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
+            while ((n = walk.nextNode())) a.push(n);
+            return a;
+        }
+
+        // Removes all highlight spans from the DOM
+        function removeHighlights() {
+            let highlighted = document.querySelectorAll('.highlight');
+            highlighted.forEach(el => {
+                let parent = el.parentNode;
+                while (el.firstChild) {
+                    parent.insertBefore(el.firstChild, el);
+                }
+                parent.removeChild(el);
+            });
+        }
+    </script>
+</head>
+<body>
+    <h1>Predefined Sections</h1>
+
+    <!-- Section links -->
+    <div id="sections"></div>
+
+    <!-- Sample text -->
+    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+    <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+    <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.</p>
+    <p>Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
+</body>
+</html>
