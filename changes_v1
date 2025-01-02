@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Section and Audio Synchronization</title>
+    <style>
+        .highlight {
+            background-color: yellow;
+        }
+        .section {
+            cursor: pointer;
+            padding: 5px;
+            margin: 5px 0;
+            background-color: #f0f0f0;
+            border: 1px solid #ccc;
+        }
+        .section:hover {
+            background-color: #ddd;
+        }
+    </style>
+    <script>
+        // Sections defined by start and end times
+        const sections = [
+            { id: 1, start_time: 0, end_time: 2.237 },
+            { id: 2, start_time: 2.237, end_time: 7.187 },
+            { id: 3, start_time: 7.187, end_time: 9.612 },
+            { id: 4, start_time: 9.612, end_time: 16.712 }
+        ];
+
+        // Generate clickable sections
+        function generateSections() {
+            const container = document.getElementById('sections');
+            sections.forEach((section) => {
+                const div = document.createElement('div');
+                div.className = 'section';
+                div.textContent = `Section ${section.id}`;
+                div.onclick = () => goToSection(section);
+                container.appendChild(div);
+            });
+        }
+
+        // Handle section click
+        function goToSection(section) {
+            highlightSection(section);
+            playAudio(section.start_time);
+        }
+
+        // Highlights the corresponding section based on its start and end time
+        function highlightSection(section) {
+            removeHighlights();
+            const textNodes = getTextNodesUnder(document.body);
+
+            let currentOffset = 0;
+            let startNode, startOffset, endNode, endOffset;
+
+            // Find the start node and offset
+            for (let node of textNodes) {
+                let length = node.nodeValue.length;
+                if (currentOffset + length > section.start_time) {
+                    startNode = node;
+                    startOffset = section.start_time - currentOffset;
+                    break;
+                }
+                currentOffset += length;
+            }
+
+            currentOffset = 0;
+
+            // Find the end node and offset
+            for (let node of textNodes) {
+                let length = node.nodeValue.length;
+                if (currentOffset + length >= section.end_time) {
+                    endNode = node;
+                    endOffset = section.end_time - currentOffset;
+                    break;
+                }
+                currentOffset += length;
+            }
+
+            // Create the highlight span
+            let highlightSpan = document.createElement('span');
+            highlightSpan.className = 'highlight';
+            let range = document.createRange();
+            range.setStart(startNode, startOffset);
+            range.setEnd(endNode, endOffset);
+
+            let fragment = range.cloneContents();
+            range.deleteContents();
+            highlightSpan.appendChild(fragment);
+            range.insertNode(highlightSpan);
+        }
+
+        // Removes all existing highlights
+        function removeHighlights() {
+            let highlighted = document.querySelectorAll('.highlight');
+            highlighted.forEach(el => {
+                let parent = el.parentNode;
+                while (el.firstChild) {
+                    parent.insertBefore(el.firstChild, el);
+                }
+                parent.removeChild(el);
+            });
+        }
+
+        // Play audio from a specific time
+        function playAudio(startTime) {
+            const audio = document.getElementById('audio-player');
+            audio.currentTime = startTime;
+            audio.play();
+        }
+
+        // Get all text nodes under an element
+        function getTextNodesUnder(el) {
+            let n, a = [], walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
+            while ((n = walk.nextNode())) a.push(n);
+            return a;
+        }
+
+        // Initialize sections on page load
+        window.onload = generateSections;
+    </script>
+</head>
+<body>
+    <h1>Sections</h1>
+    <div id="sections"></div>
+
+    <audio id="audio-player" controls>
+        <source src="audio_file.mp3" type="audio/mpeg">
+        Your browser does not support the audio element.
+    </audio>
+
+    <div id="content">
+        <p>KULLANMA TALİMATI</p>
+        <p>NICORETTE INVISI 10 mg/16 saat transdermal flaster</p>
+        <p>Cilt üzerine uygulanır.</p>
+        <p>Etkin madde: Her bir banttan 16 saatlik kullanım sırasında 10 mg nikotin salıverilir.</p>
+    </div>
+</body>
+</html>
