@@ -1,0 +1,178 @@
+import os
+import sys
+import time
+import pygame
+import pysrt
+from PyQt5.QtCore import QUrl, QTimer, Qt
+from PyQt5.QtWebEngineWidgets import QWebEngineView
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QHBoxLayout, QScrollArea, QLabel, QGridLayout
+
+class AudioPlayer:
+    def __init__(self, audio_file, subtitles_file):
+        pygame.mixer.init()
+        self.audio_file = audio_file
+        self.subtitles = pysrt.open(subtitles_file)
+        self.is_paused = False
+        self.is_playing = False
+        self.current_subtitle_index = 0
+        self.webview = None
+        self.start_time = None
+        self.paused_time = 0
+
+    def play_audio(self):
+        if not os.path.exists(self.audio_file):
+            self.show_error(f"Audio file not found: {self.audio_file}")
+            return
+        if not self.is_paused:
+            pygame.mixer.music.load(self.audio_file)
+            pygame.mixer.music.play()
+            self.start_time = time.time()
+        else:
+            pygame.mixer.music.unpause()
+            self.start_time = time.time() - self.paused_time
+        self.is_playing = True
+        self.is_paused = False
+        QTimer.singleShot(0, self.update_subtitles)
+
+    def pause_audio(self):
+        if self.is_playing:
+            pygame.mixer.music.pause()
+            self.is_paused = True
+            self.is_playing = False
+            self.paused_time = time.time() - self.start_time
+
+    def stop_audio(self):
+        pygame.mixer.music.stop()
+        self.is_playing = False
+        self.is_paused = False
+        self.paused_time = 0
+        self.current_subtitle_index = 0
+        if self.webview:
+            self.webview.page().runJavaScript('resetHighlights()')
+
+    def update_subtitles(self):
+        if not self.is_playing:
+            return
+        current_time = time.time() - self.start_time
+        if self.current_subtitle_index < len(self.subtitles):
+            subtitle = self.subtitles[self.current_subtitle_index]
+            if subtitle.start.ordinal / 1000 <= current_time <= subtitle.end.ordinal / 1000:
+                self.highlight_text(subtitle.text)
+                self.current_subtitle_index += 1
+        if self.is_playing:
+            QTimer.singleShot(100, self.update_subtitles)
+
+    def highlight_text(self, text):
+        if self.webview:
+            self.webview.page().runJavaScript(f'highlightNextOccurrence("{text}")')
+
+    def jump_to_time(self, start_time):
+        if self.is_playing or self.is_paused:
+            pygame.mixer.music.stop()
+            pygame.mixer.music.play(start=start_time)
+            self.start_time = time.time() - start_time
+            self.is_playing = True
+            self.is_paused = False
+        self.current_subtitle_index = next(
+            (i for i, subtitle in enumerate(self.subtitles) if subtitle.start.ordinal / 1000 >= start_time),
+            0
+        )
+        self.update_subtitles()
+
+    def show_error(self, message):
+        msg_box = QMessageBox()
+        msg_box.setIcon(QMessageBox.Critical)
+        msg_box.setText(message)
+        msg_box.setWindowTitle("Error")
+        msg_box.exec_()
+
+class GUI(QWidget):
+    def __init__(self, audio_player, html_file):
+        super().__init__()
+        self.audio_player = audio_player
+        self.html_file = html_file
+        self.init_ui()
+
+    def init_ui(self):
+        self.setWindowTitle("Audio Player with Text Highlighting")
+        self.setGeometry(100, 100, 800, 600)
+
+        main_layout = QVBoxLayout()
+
+        # Audio controls
+        button_layout = QHBoxLayout()
+        play_button = QPushButton('Play')
+        play_button.clicked.connect(self.play_audio)
+        button_layout.addWidget(play_button)
+
+        pause_button = QPushButton('Pause')
+        pause_button.clicked.connect(self.pause_audio)
+        button_layout.addWidget(pause_button)
+
+        stop_button = QPushButton('Stop')
+        stop_button.clicked.connect(self.stop_audio)
+        button_layout.addWidget(stop_button)
+
+        main_layout.addLayout(button_layout)
+
+        # Webview for text display
+        self.webview = QWebEngineView()
+        if os.path.exists(self.html_file):
+            absolute_path = os.path.abspath(self.html_file)
+            file_url = QUrl.fromLocalFile(absolute_path)
+            self.webview.setUrl(file_url)
+        else:
+            self.audio_player.show_error(f"HTML file not found: {self.html_file}")
+        self.audio_player.webview = self.webview
+        main_layout.addWidget(self.webview)
+
+        # Sections for subtitles
+        sections_layout = QVBoxLayout()
+        for i, subtitle in enumerate(self.audio_player.subtitles):
+            section_button = QPushButton(f"Section {i + 1}: {subtitle.text[:30]}...")
+            start_time = subtitle.start.ordinal / 1000
+            section_button.clicked.connect(lambda checked, t=start_time: self.jump_to_section(t))
+            sections_layout.addWidget(section_button)
+
+        scroll_area = QScrollArea()
+        scroll_widget = QWidget()
+        scroll_widget.setLayout(sections_layout)
+        scroll_area.setWidget(scroll_widget)
+        scroll_area.setWidgetResizable(True)
+
+        main_layout.addWidget(scroll_area)
+
+        self.setLayout(main_layout)
+
+    def play_audio(self):
+        self.audio_player.play_audio()
+
+    def pause_audio(self):
+        self.audio_player.pause_audio()
+
+    def stop_audio(self):
+        self.audio_player.stop_audio()
+
+    def jump_to_section(self, start_time):
+        self.audio_player.jump_to_time(start_time)
+
+if __name__ == "__main__":
+    audio_file = 'nic/sml_ges.mp3'
+    subtitles_file = 'nic/sml_ges.srt'
+    html_file = 'nic/clean_output.html'
+
+    if not os.path.exists(audio_file):
+        print(f"Audio file not found: {audio_file}")
+        sys.exit(1)
+    if not os.path.exists(subtitles_file):
+        print(f"Subtitles file not found: {subtitles_file}")
+        sys.exit(1)
+    if not os.path.exists(html_file):
+        print(f"HTML file not found: {html_file}")
+        sys.exit(1)
+
+    app = QApplication(sys.argv)
+    audio_player = AudioPlayer(audio_file, subtitles_file)
+    gui = GUI(audio_player, html_file)
+    gui.show()
+    sys.exit(app.exec_())
