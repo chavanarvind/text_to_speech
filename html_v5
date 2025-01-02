@@ -6,14 +6,15 @@
         .highlight {
             background-color: yellow;
         }
-        .clickable-section {
-            cursor: pointer;
-            color: blue;
-            text-decoration: underline;
+        .nav-buttons {
+            margin: 10px 0;
+        }
+        .nav-buttons button {
+            padding: 10px;
+            margin-right: 10px;
         }
     </style>
     <script>
-        // Global array to store previously found highlight ranges
         let highlightedRanges = [];
 
         function removeHighlights() {
@@ -42,6 +43,7 @@
 
         function highlightRange(startIndex, endIndex) {
             let textNodes = getTextNodesUnder(document.body);
+
             let currentOffset = 0;
             let startNode, startOffset;
             for (let node of textNodes) {
@@ -69,10 +71,12 @@
             let highlightSpan = document.createElement('span');
             highlightSpan.className = 'highlight';
             let highlightedFragment = extractHighlightedFragment(startNode, startOffset, endNode, endOffset);
+
             let origRange = document.createRange();
             origRange.setStart(startNode, startOffset);
             origRange.setEnd(endNode, endOffset);
             origRange.deleteContents();
+
             highlightSpan.appendChild(highlightedFragment);
             origRange.insertNode(highlightSpan);
         }
@@ -88,22 +92,29 @@
 
         function highlightNextOccurrence(searchString) {
             if (!searchString) return;
+
             removeHighlights();
+
             let textNodes = getTextNodesUnder(document.body);
             let fullText = textNodes.map(n => n.nodeValue).join('');
+
             let index = 0, foundStart = -1;
             while ((index = fullText.indexOf(searchString, index)) !== -1) {
                 let start = index;
                 let end = index + searchString.length;
+
                 if (!overlapsHighlightedRanges(start, end)) {
                     foundStart = start;
                     break;
                 }
                 index += searchString.length;
             }
+
             if (foundStart === -1) return;
+
             let foundEnd = foundStart + searchString.length;
             highlightRange(foundStart, foundEnd);
+
             highlightedRanges.push({start: foundStart, end: foundEnd});
         }
 
@@ -112,41 +123,33 @@
             removeHighlights();
         }
 
-        function setAudioTime(startTime) {
-            // Trigger the Python backend to synchronize audio time
-            window.external.invoke('set_audio_time', startTime);
+        function scrollToSection(startTime) {
+            // Call the Python method to set audio time
+            window.pywebview.api.set_audio_time(startTime); // This requires PyWebView integration
         }
 
-        // Adding clickable sections dynamically based on subtitles
-        function createClickableSections() {
-            let sections = [
-                {time: "00:00:00", text: "KULLANMA TALİMATI"},
-                {time: "00:00:02", text: "NICORETTE INVISI 10 mg/16 saat transdermal flaster"},
-                {time: "00:00:07", text: "Cilt üzerine uygulanır."},
-                {time: "00:00:09", text: "Etkin madde: Her bir banttan 16 saatlik kullanım sırasında 10 mg nikotin salıverilir."}
-            ];
-            let container = document.getElementById('sections');
-            sections.forEach(section => {
-                let link = document.createElement('a');
-                link.className = 'clickable-section';
-                link.textContent = section.text;
-                link.href = "javascript:void(0);";
-                link.onclick = () => {
-                    setAudioTime(section.time);
-                    highlightNextOccurrence(section.text);
-                };
-                container.appendChild(link);
-                container.appendChild(document.createElement('br'));
-            });
+        // For manual testing
+        function handleHighlight() {
+            let text = document.getElementById('highlight-input').value;
+            highlightNextOccurrence(text);
         }
 
-        window.onload = createClickableSections;
+        // For manual testing: reset everything
+        function handleReset() {
+            resetHighlights();
+        }
     </script>
 </head>
 <body>
-<h1>KULLANMA TALİMATI</h1>
+    <div class="nav-buttons">
+        <button onclick="scrollToSection(0)">KULLANMA TALİMATI</button>
+        <button onclick="scrollToSection(2.237)">NICORETTE INVISI 10 mg/16 saat transdermal flaster</button>
+        <button onclick="scrollToSection(7.187)">Cilt üzerine uygulanır.</button>
+        <button onclick="scrollToSection(9.612)">Etkin madde</button>
+    </div>
+
+    <h1>KULLANMA TALİMATI</h1>
     <h2>NICORETTE INVISI 10 mg/16 saat transdermal flaster</h2>
-    <div id="sections"></div> <!-- Container for clickable sections -->
     <p>Cilt üzerine uygulanır.</p>
     <p><b>Etkin madde:</b> Her bir banttan 16 saatlik kullanım sırasında 10 mg nikotin salıverilir.</p>
     <p><b>Yardımcı maddeler:</b> Trigliseritler (orta zincir uzunluğunda), bazik bütillenmiş metakrilat kopolimer, polietilentereftalat film (PET), akrilik yapışkan solüsyon, potasyum hidroksit, kroskarmelloz sodyum, alüminyum asetilasetonat, bir yüzü alüminyumlanmış, her iki yüzü silikonlanmış polietilen tereftalat (PET) film.</p>
