@@ -4,6 +4,7 @@ import pysrt
 import pygame
 import sys
 import os
+import threading
 
 class AudioPlayer:
     def __init__(self, audio_file, subtitles_file):
@@ -74,5 +75,6 @@ def create_window():
     webview.api.update_subtitles = audio_player.update_subtitles
 
 
+# Make sure webview runs on the main thread
 if __name__ == "__main__":
     create_window()
