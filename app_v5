@@ -1,10 +1,10 @@
-import webview
 import time
-import pysrt
 import pygame
 import sys
 import os
-import threading
+import webview
+import pysrt
+
 
 class AudioPlayer:
     def __init__(self, audio_file, subtitles_file):
@@ -67,6 +67,7 @@ def create_window():
 
     html_file = 'nic/clean_output.html'
 
+    # Create window using pywebview, ensure it operates in the main thread
     window = webview.create_window('Audio Player with Text Highlighting', html_file)
     webview.start()
 
@@ -75,6 +76,5 @@ def create_window():
     webview.api.update_subtitles = audio_player.update_subtitles
 
 
-# Make sure webview runs on the main thread
 if __name__ == "__main__":
     create_window()
