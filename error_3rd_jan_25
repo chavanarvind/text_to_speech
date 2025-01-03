@@ -1,0 +1,8 @@
+Hello from the pygame community. https://www.pygame.org/contribute.html
+js: Uncaught SyntaxError: Missing initializer in const declaration
+Traceback (most recent call last):
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\audio\audio-agents\app2 copy.py", line 114, in <lambda>
+    button.clicked.connect(lambda _, t=start_time: self.audio_player.go_to_section(t))
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\audio\audio-agents\app2 copy.py", line 69, in go_to_section
+    pygame.mixer.music.play(start=start_time)
+pygame.error: music not loaded
