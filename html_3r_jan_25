@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Text Highlighter</title>
+    <style>
+        .highlight {
+            background-color: yellow;
+        }
+    </style>
+    <script>
+        let highlightedRanges = [];
+
+        function removeHighlights() {
+            let highlighted = document.querySelectorAll('.highlight');
+            highlighted.forEach(el => {
+                let parent = el.parentNode;
+                while (el.firstChild) {
+                    parent.insertBefore(el.firstChild, el);
+                }
+                parent.removeChild(el);
+            });
+        }
+
+        function getTextNodesUnder(el) {
+            let n, a = [], walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
+            while ((n = walk.nextNode())) a.push(n);
+            return a;
+        }
+
+        function highlightRange(startIndex, endIndex) {
+            let textNodes = getTextNodesUnder(document.body);
+
+            let currentOffset = 0;
+            let startNode, startOffset;
+            for (let node of textNodes) {
+                let length = node.nodeValue.length;
+                if (currentOffset + length > startIndex) {
+                    startNode = node;
+                    startOffset = startIndex - currentOffset;
+                    break;
+                }
+                currentOffset += length;
+            }
+
+            currentOffset = 0;
+            let endNode, endOffset;
+            for (let node of textNodes) {
+                let length = node.nodeValue.length;
+                if (currentOffset + length >= endIndex) {
+                    endNode = node;
+                    endOffset = endIndex - currentOffset;
+                    break;
+                }
+                currentOffset += length;
+            }
+
+            let highlightSpan = document.createElement('span');
+            highlightSpan.className = 'highlight';
+            let range = document.createRange();
+            range.setStart(startNode, startOffset);
+            range.setEnd(endNode, endOffset);
+            highlightSpan.appendChild(range.extractContents());
+            range.insertNode(highlightSpan);
+        }
+
+        function highlightByTime(startTime) {
+            removeHighlights();
+            // Example: Adjust this mapping based on actual subtitle ranges
+            const textMap = {
+                10000: [0, 50],
+            };
+            const range = textMap[startTime];
+            if (range) highlightRange(range[0], range[1]);
+        }
+    </script>
+</head>
+<body>
+    <h1>KULLANMA TALİMATI</h1>
+    <p>Some text here...</p>
+</body>
+</html>
