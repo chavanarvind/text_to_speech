@@ -8,17 +8,57 @@
         }
     </style>
     <script>
-        function highlightRange(startIndex, endIndex) {
-            const textNodes = getTextNodesUnder(document.body);
-            let currentOffset = 0;
-            let startNode, startOffset, endNode, endOffset;
+        // Global array to store previously found highlight ranges (in the original text indexing)
+        // Format: {start: number, end: number}
+        let highlightedRanges = [];
 
+        // Removes all highlight spans from the DOM, restoring original text format
+        function removeHighlights() {
+            let highlighted = document.querySelectorAll('.highlight');
+            highlighted.forEach(el => {
+                let parent = el.parentNode;
+                while (el.firstChild) {
+                    parent.insertBefore(el.firstChild, el);
+                }
+                parent.removeChild(el);
+            });
+        }
+
+        function getTextNodesUnder(el) {
+            let n, a = [], walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
+            while ((n = walk.nextNode())) a.push(n);
+            return a;
+        }
+
+        function extractHighlightedFragment(startNode, startOffset, endNode, endOffset) {
+            let range = document.createRange();
+            range.setStart(startNode, startOffset);
+            range.setEnd(endNode, endOffset);
+            return range.cloneContents();
+        }
+
+        // Highlights the given absolute range in the full text
+        function highlightRange(startIndex, endIndex) {
+            let textNodes = getTextNodesUnder(document.body);
+
+            // Find start node/offset
+            let currentOffset = 0;
+            let startNode, startOffset;
             for (let node of textNodes) {
-                const length = node.nodeValue.length;
-                if (!startNode && currentOffset + length > startIndex) {
+                let length = node.nodeValue.length;
+                if (currentOffset + length > startIndex) {
                     startNode = node;
                     startOffset = startIndex - currentOffset;
+                    break;
                 }
+                currentOffset += length;
+            }
+
+            // Find end node/offset
+            currentOffset = 0;
+            let endNode, endOffset;
+            for (let node of textNodes) {
+                let length = node.nodeValue.length;
                 if (currentOffset + length >= endIndex) {
                     endNode = node;
                     endOffset = endIndex - currentOffset;
@@ -27,39 +67,91 @@
                 currentOffset += length;
             }
 
-            const range = document.createRange();
-            range.setStart(startNode, startOffset);
-            range.setEnd(endNode, endOffset);
-
-            const highlightSpan = document.createElement('span');
+            let highlightSpan = document.createElement('span');
             highlightSpan.className = 'highlight';
-            range.surroundContents(highlightSpan);
+            let highlightedFragment = extractHighlightedFragment(startNode, startOffset, endNode, endOffset);
+
+            let origRange = document.createRange();
+            origRange.setStart(startNode, startOffset);
+            origRange.setEnd(endNode, endOffset);
+            origRange.deleteContents();
+
+            highlightSpan.appendChild(highlightedFragment);
+            origRange.insertNode(highlightSpan);
         }
 
-        function resetHighlights() {
-            const highlighted = document.querySelectorAll('.highlight');
-            highlighted.forEach(el => {
-                const parent = el.parentNode;
-                while (el.firstChild) parent.insertBefore(el.firstChild, el);
-                parent.removeChild(el);
-            });
-        }
-
-        function getTextNodesUnder(el) {
-            const nodes = [];
-            const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
-            let node;
-            while ((node = walker.nextNode())) {
-                nodes.push(node);
+        // Check if a given range overlaps with previously highlighted ranges
+        function overlapsHighlightedRanges(start, end) {
+            for (let r of highlightedRanges) {
+                // Overlap if the intervals intersect
+                if (!(end <= r.start || start >= r.end)) {
+                    return true;
+                }
             }
-            return nodes;
+            return false;
+        }
+
+        // Highlights only the first new occurrence of searchString not already highlighted
+        // After highlighting, this occurrence is stored in highlightedRanges.
+        // The DOM at the end of this call shows only this new occurrence highlighted.
+        function highlightNextOccurrence(searchString) {
+            if (!searchString) return;
+
+            // Remove current highlights to start from a clean slate
+            removeHighlights();
+
+            let textNodes = getTextNodesUnder(document.body);
+            let fullText = textNodes.map(n => n.nodeValue).join('');
+
+            // Find the first occurrence of searchString not already highlighted
+            let index = 0, foundStart = -1;
+            while ((index = fullText.indexOf(searchString, index)) !== -1) {
+                let start = index;
+                let end = index + searchString.length;
+
+                if (!overlapsHighlightedRanges(start, end)) {
+                    foundStart = start;
+                    break;
+                }
+                index += searchString.length;
+            }
+
+            if (foundStart === -1) {
+                // No new occurrence found
+                return;
+            }
+
+            let foundEnd = foundStart + searchString.length;
+            // Highlight this new occurrence only
+            highlightRange(foundStart, foundEnd);
+
+            // Remember this occurrence so it won't be re-highlighted in future calls
+            highlightedRanges.push({start: foundStart, end: foundEnd});
+        }
+
+        // Resets all tracking of previously highlighted ranges and clears any highlights from the DOM
+        function resetHighlights() {
+            highlightedRanges = [];
+            removeHighlights();
+        }
+
+        // For manual testing
+        function handleHighlight() {
+            let text = document.getElementById('highlight-input').value;
+            highlightNextOccurrence(text);
+        }
+
+        // For manual testing: reset everything
+        function handleReset() {
+            resetHighlights();
         }
     </script>
 </head>
 <body>
-    <h1>KULLANMA TALİMATI</h1>
+<h1>KULLANMA TALİMATI</h1>
     <h2>NICORETTE INVISI 10 mg/16 saat transdermal flaster</h2>
     <p>Cilt üzerine uygulanır.</p>
     <p><b>Etkin madde:</b> Her bir banttan 16 saatlik kullanım sırasında 10 mg nikotin salıverilir.</p>
+    <p><b>Yardımcı maddeler:</b> Trigliserid, metilparaben, propilparaben ve etil alkol içerir.</p>
 </body>
 </html>
