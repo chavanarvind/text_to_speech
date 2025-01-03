@@ -14,15 +14,11 @@ class AudioPlayer:
         self.text_map = text_map
         self.is_paused = False
         self.is_playing = False
-        self.current_subtitle_index = 0
-        self.webview = None
         self.start_time = None
         self.paused_time = 0
+        self.webview = None
 
     def play_audio(self):
-        if not os.path.exists(self.audio_file):
-            self.show_error(f"Audio file not found: {self.audio_file}")
-            return
         if not self.is_paused:
             pygame.mixer.music.load(self.audio_file)
             pygame.mixer.music.play()
@@ -46,9 +42,16 @@ class AudioPlayer:
         self.is_playing = False
         self.is_paused = False
         self.paused_time = 0
-        self.current_subtitle_index = 0
         if self.webview:
-            self.webview.page().runJavaScript(f'resetHighlights()')
+            self.webview.page().runJavaScript('resetHighlights()')
+
+    def go_to_section(self, start_time):
+        if start_time in self.text_map:
+            pygame.mixer.music.load(self.audio_file)
+            pygame.mixer.music.play(start=start_time)
+            self.start_time = time.time() - start_time
+            section = self.text_map[start_time]
+            self.highlight_text(section["start_index"], section["end_index"])
 
     def update_subtitles(self):
         if not self.is_playing:
@@ -60,15 +63,6 @@ class AudioPlayer:
                 break
         if self.is_playing:
             QTimer.singleShot(100, self.update_subtitles)
-
-    def go_to_section(self, start_time):
-        if start_time in self.text_map:
-            pygame.mixer.music.stop()
-            self.current_subtitle_index = start_time
-            section = self.text_map[start_time]
-            pygame.mixer.music.play(start=start_time)
-            self.start_time = time.time() - start_time
-            self.highlight_text(section["start_index"], section["end_index"])
 
     def highlight_text(self, start_index, end_index):
         if self.webview:
@@ -94,56 +88,38 @@ class GUI(QWidget):
         self.setGeometry(100, 100, 800, 600)
 
         vbox = QVBoxLayout()
-        # Create buttons
         button_layout = QHBoxLayout()
+
         play_button = QPushButton('Play')
-        play_button.clicked.connect(self.play_audio)
+        play_button.clicked.connect(self.audio_player.play_audio)
         button_layout.addWidget(play_button)
 
         pause_button = QPushButton('Pause')
-        pause_button.clicked.connect(self.pause_audio)
+        pause_button.clicked.connect(self.audio_player.pause_audio)
         button_layout.addWidget(pause_button)
 
         stop_button = QPushButton('Stop')
-        stop_button.clicked.connect(self.stop_audio)
+        stop_button.clicked.connect(self.audio_player.stop_audio)
         button_layout.addWidget(stop_button)
 
-        # Add Go to Section buttons
         for start_time in self.audio_player.text_map.keys():
             button = QPushButton(f'Go to {start_time}s')
             button.clicked.connect(lambda _, t=start_time: self.audio_player.go_to_section(t))
             button_layout.addWidget(button)
 
         vbox.addLayout(button_layout)
-
-        # Create and configure the webview
         self.webview = QWebEngineView()
-        if os.path.exists(self.html_file):
-            absolute_path = os.path.abspath(self.html_file)
-            file_url = QUrl.fromLocalFile(absolute_path)
-            self.webview.setUrl(file_url)
-        else:
-            self.audio_player.show_error(f"HTML file not found: {self.html_file}")
+        absolute_path = os.path.abspath(self.html_file)
+        file_url = QUrl.fromLocalFile(absolute_path)
+        self.webview.setUrl(file_url)
         self.audio_player.webview = self.webview
         vbox.addWidget(self.webview)
-
         self.setLayout(vbox)
-
-    def play_audio(self):
-        self.audio_player.play_audio()
-
-    def pause_audio(self):
-        self.audio_player.pause_audio()
-
-    def stop_audio(self):
-        self.audio_player.stop_audio()
 
 
 if __name__ == "__main__":
-    audio_file = 'nic/sml_ges.mp3'
-    html_file = 'nic/clean_output.html'
-
-    # Manually defined text_map
+    audio_file = 'audio.mp3'
+    html_file = 'text.html'
     text_map = {
         0: {"start_index": 0, "end_index": 18, "end_time": 2},
         2: {"start_index": 19, "end_index": 66, "end_time": 7},
@@ -151,15 +127,8 @@ if __name__ == "__main__":
         9: {"start_index": 89, "end_index": 159, "end_time": 16}
     }
 
-    if not os.path.exists(audio_file):
-        print(f"Audio file not found: {audio_file}")
-        sys.exit(1)
-    if not os.path.exists(html_file):
-        print(f"HTML file not found: {html_file}")
-        sys.exit(1)
-
     app = QApplication(sys.argv)
-    audio_player = AudioPlayer(audio_file, text_map)
-    gui = GUI(audio_player, html_file)
+    player = AudioPlayer(audio_file, text_map)
+    gui = GUI(player, html_file)
     gui.show()
     sys.exit(app.exec_())
