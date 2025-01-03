@@ -8,44 +8,17 @@
         }
     </style>
     <script>
-        let highlightedRanges = [];
-
-        function removeHighlights() {
-            let highlighted = document.querySelectorAll('.highlight');
-            highlighted.forEach(el => {
-                let parent = el.parentNode;
-                while (el.firstChild) {
-                    parent.insertBefore(el.firstChild, el);
-                }
-                parent.removeChild(el);
-            });
-        }
-
-        function getTextNodesUnder(el) {
-            let n, a = [], walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
-            while ((n = walk.nextNode())) a.push(n);
-            return a;
-        }
-
         function highlightRange(startIndex, endIndex) {
-            let textNodes = getTextNodesUnder(document.body);
-
+            const textNodes = getTextNodesUnder(document.body);
             let currentOffset = 0;
-            let startNode, startOffset;
+            let startNode, startOffset, endNode, endOffset;
+
             for (let node of textNodes) {
-                let length = node.nodeValue.length;
-                if (currentOffset + length > startIndex) {
+                const length = node.nodeValue.length;
+                if (!startNode && currentOffset + length > startIndex) {
                     startNode = node;
                     startOffset = startIndex - currentOffset;
-                    break;
                 }
-                currentOffset += length;
-            }
-
-            currentOffset = 0;
-            let endNode, endOffset;
-            for (let node of textNodes) {
-                let length = node.nodeValue.length;
                 if (currentOffset + length >= endIndex) {
                     endNode = node;
                     endOffset = endIndex - currentOffset;
@@ -54,28 +27,36 @@
                 currentOffset += length;
             }
 
-            let highlightSpan = document.createElement('span');
-            highlightSpan.className = 'highlight';
-            let range = document.createRange();
+            const range = document.createRange();
             range.setStart(startNode, startOffset);
             range.setEnd(endNode, endOffset);
-            highlightSpan.appendChild(range.extractContents());
-            range.insertNode(highlightSpan);
+
+            const highlightSpan = document.createElement('span');
+            highlightSpan.className = 'highlight';
+            range.surroundContents(highlightSpan);
         }
 
-        function highlightByTime(startTime) {
-            removeHighlights();
-            // Example: Adjust this mapping based on actual subtitle ranges
-            const textMap = {
-                10000: [0, 50],
-            };
-            const range = textMap[startTime];
-            if (range) highlightRange(range[0], range[1]);
+        function resetHighlights() {
+            const highlighted = document.querySelectorAll('.highlight');
+            highlighted.forEach(el => {
+                const parent = el.parentNode;
+                while (el.firstChild) parent.insertBefore(el.firstChild, el);
+                parent.removeChild(el);
+            });
+        }
+
+        function getTextNodesUnder(el) {
+            const n, a = [];
+            const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
+            while ((n = walk.nextNode())) a.push(n);
+            return a;
         }
     </script>
 </head>
 <body>
     <h1>KULLANMA TALİMATI</h1>
-    <p>Some text here...</p>
+    <h2>NICORETTE INVISI 10 mg/16 saat transdermal flaster</h2>
+    <p>Cilt üzerine uygulanır.</p>
+    <p><b>Etkin madde:</b> Her bir banttan 16 saatlik kullanım sırasında 10 mg nikotin salıverilir.</p>
 </body>
 </html>
