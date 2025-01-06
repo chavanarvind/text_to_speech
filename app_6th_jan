@@ -1,0 +1,110 @@
+import os
+import time
+import pygame
+from PyQt5.QtCore import QTimer
+from PyQt5.QtWidgets import QMessageBox
+import pysrt
+
+class AudioPlayer:
+    def __init__(self, audio_file, subtitles_file):
+        pygame.mixer.init()
+        self.audio_file = audio_file
+        self.subtitles = pysrt.open(subtitles_file)
+        self.is_paused = False
+        self.is_playing = False
+        self.current_subtitle_index = 0
+        self.webview = None
+        self.start_time = None
+        self.paused_time = 0
+
+    def play_audio(self, start_time=0, end_time=None):
+        """Play the audio from a specific start time to an end time."""
+        if not os.path.exists(self.audio_file):
+            self.show_error(f"Audio file not found: {self.audio_file}")
+            return
+        
+        # Load and play audio from the start time
+        pygame.mixer.music.load(self.audio_file)
+        pygame.mixer.music.play(start=start_time)
+
+        # If an end time is provided, stop the audio at that time
+        if end_time:
+            QTimer.singleShot(int((end_time - start_time) * 1000), pygame.mixer.music.stop)
+
+        self.is_playing = True
+        self.is_paused = False
+        self.start_time = time.time()
+
+        QTimer.singleShot(0, self.update_subtitles)
+
+    def pause_audio(self):
+        if self.is_playing:
+            pygame.mixer.music.pause()
+            self.is_paused = True
+            self.is_playing = False
+            self.paused_time = time.time() - self.start_time
+
+    def stop_audio(self):
+        pygame.mixer.music.stop()
+        self.is_playing = False
+        self.is_paused = False
+        self.paused_time = 0
+        self.current_subtitle_index = 0
+        if self.webview:
+            self.webview.page().runJavaScript(f'resetHighlights()')
+
+    def update_subtitles(self):
+        if not self.is_playing:
+            return
+        current_time = time.time() - self.start_time
+        if self.current_subtitle_index < len(self.subtitles):
+            subtitle = self.subtitles[self.current_subtitle_index]
+            if subtitle.start.ordinal / 1000 <= current_time <= subtitle.end.ordinal / 1000:
+                self.highlight_text(subtitle.text)
+                self.current_subtitle_index += 1
+        if self.is_playing:
+            QTimer.singleShot(100, self.update_subtitles)
+
+    def highlight_text(self, text):
+        if self.webview:
+            self.webview.page().runJavaScript(f'highlightNextOccurrence("{text}")')
+
+    def show_error(self, message):
+        msg_box = QMessageBox()
+        msg_box.setIcon(QMessageBox.Critical)
+        msg_box.setText(message)
+        msg_box.setWindowTitle("Error")
+        msg_box.exec_()
+
+    def highlight_and_play_section(self, text, start_time, end_time):
+        """Highlight text and play the corresponding audio segment."""
+        # Highlight the text
+        self.highlight_text(text)
+
+        # Play the audio from start_time to end_time
+        self.play_audio(start_time, end_time)
+
+        # Stop the audio after the segment finishes
+        QTimer.singleShot(int((end_time - start_time) * 1000), self.stop_audio)
+
+# Separate method for manually triggering the introduction text highlight and play functionality
+def highlight_introduction(self):
+    # Define sections based on the timestamps from the .srt file
+    intro_subtitles = [
+        ("KULLANMA TALİMATI", 0, 2),
+        ("NICORETTE INVISI 10 mg/16 saat transdermal flaster", 2, 7),
+        ("Cilt üzerine uygulanır.", 7, 9),
+        ("Etkin madde: Her bir banttan 16 saatlik kullanım sırasında 10 mg nikotin salıverilir.", 9, 16)
+    ]
+    
+    # Iterate through each subtitle section and play the audio with highlighting
+    for text, start_time, end_time in intro_subtitles:
+        self.highlight_and_play_section(text, start_time, end_time)
+
+# Example usage
+if __name__ == "__main__":
+    # Create an instance of AudioPlayer with your audio and subtitle file paths
+    audio_player = AudioPlayer("path_to_audio.mp3", "path_to_subtitles.srt")
+
+    # To trigger the introduction section highlighting and audio playback
+    audio_player.highlight_introduction()
