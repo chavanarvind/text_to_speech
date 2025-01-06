@@ -2,20 +2,41 @@ import os
 import time
 import pygame
 from PyQt5.QtCore import QTimer
-from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton, QMessageBox
+from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage
 import pysrt
 
-class AudioPlayer:
-    def __init__(self, audio_file, subtitles_file):
+class AudioPlayer(QMainWindow):
+    def __init__(self, audio_file, subtitles_file, html_file):
+        super().__init__()
         pygame.mixer.init()
         self.audio_file = audio_file
         self.subtitles = pysrt.open(subtitles_file)
         self.is_paused = False
         self.is_playing = False
         self.current_subtitle_index = 0
-        self.webview = None
         self.start_time = None
         self.paused_time = 0
+        
+        # Initialize WebView for displaying HTML content
+        self.webview = QWebEngineView(self)
+        # Set the URL to the local HTML file
+        self.webview.setUrl(f"file:///{os.path.abspath(html_file)}")
+        self.setCentralWidget(self.webview)
+
+        # Setup buttons
+        self.setup_ui()
+
+    def setup_ui(self):
+        # Create a button to trigger the introduction section
+        self.introduction_button = QPushButton("Introduction", self)
+        self.introduction_button.clicked.connect(self.highlight_introduction)
+        
+        layout = QVBoxLayout()
+        layout.addWidget(self.introduction_button)
+        widget = QWidget()
+        widget.setLayout(layout)
+        self.setMenuWidget(widget)
 
     def play_audio(self, start_time=0, end_time=None):
         """Play the audio from a specific start time to an end time."""
@@ -23,11 +44,9 @@ class AudioPlayer:
             self.show_error(f"Audio file not found: {self.audio_file}")
             return
         
-        # Load and play audio from the start time
         pygame.mixer.music.load(self.audio_file)
         pygame.mixer.music.play(start=start_time)
 
-        # If an end time is provided, stop the audio at that time
         if end_time:
             QTimer.singleShot(int((end_time - start_time) * 1000), pygame.mixer.music.stop)
 
@@ -78,33 +97,23 @@ class AudioPlayer:
 
     def highlight_and_play_section(self, text, start_time, end_time):
         """Highlight text and play the corresponding audio segment."""
-        # Highlight the text
         self.highlight_text(text)
-
-        # Play the audio from start_time to end_time
         self.play_audio(start_time, end_time)
-
-        # Stop the audio after the segment finishes
         QTimer.singleShot(int((end_time - start_time) * 1000), self.stop_audio)
 
-# Separate method for manually triggering the introduction text highlight and play functionality
-def highlight_introduction(self):
-    # Define sections based on the timestamps from the .srt file
-    intro_subtitles = [
-        ("KULLANMA TALİMATI", 0, 2),
-        ("NICORETTE INVISI 10 mg/16 saat transdermal flaster", 2, 7),
-        ("Cilt üzerine uygulanır.", 7, 9),
-        ("Etkin madde: Her bir banttan 16 saatlik kullanım sırasında 10 mg nikotin salıverilir.", 9, 16)
-    ]
-    
-    # Iterate through each subtitle section and play the audio with highlighting
-    for text, start_time, end_time in intro_subtitles:
-        self.highlight_and_play_section(text, start_time, end_time)
+    def highlight_introduction(self):
+        intro_subtitles = [
+            ("KULLANMA TALİMATI", 0, 2),
+            ("NICORETTE INVISI 10 mg/16 saat transdermal flaster", 2, 7),
+            ("Cilt üzerine uygulanır.", 7, 9),
+            ("Etkin madde: Her bir banttan 16 saatlik kullanım sırasında 10 mg nikotin salıverilir.", 9, 16)
+        ]
+        for text, start_time, end_time in intro_subtitles:
+            self.highlight_and_play_section(text, start_time, end_time)
 
-# Example usage
 if __name__ == "__main__":
-    # Create an instance of AudioPlayer with your audio and subtitle file paths
-    audio_player = AudioPlayer("path_to_audio.mp3", "path_to_subtitles.srt")
-
-    # To trigger the introduction section highlighting and audio playback
-    audio_player.highlight_introduction()
+    app = QApplication([])
+    # Specify the path to the HTML file here
+    audio_player = AudioPlayer("path_to_audio.mp3", "path_to_subtitles.srt", "path_to_html_file.html")
+    audio_player.show()
+    app.exec_()
