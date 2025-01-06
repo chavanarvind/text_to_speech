@@ -1,0 +1,23 @@
+def highlight_introduction(self):
+    # Define the specific section of the introduction from the .srt file
+    # You can adjust the indices based on your subtitle file
+    intro_subtitles = [
+        ("KULLANMA TALİMATI", 0, 2),  # ("text", start_time, end_time)
+        ("NICORETTE INVISI 10 mg/16 saat transdermal flaster", 2, 7),
+        ("Cilt üzerine uygulanır.", 7, 9),
+        ("Etkin madde: Her bir banttan 16 saatlik kullanım sırasında 10 mg nikotin salıverilir.", 9, 16)
+    ]
+    
+    # Highlight the introduction text by the start and end times
+    for text, start_time, end_time in intro_subtitles:
+        # Highlight the text using the range from .srt file
+        self.audio_player.highlight_text(text)
+        
+        # Calculate duration in milliseconds for QTimer
+        duration = (end_time - start_time) * 1000  # Convert seconds to milliseconds
+        
+        # Use QTimer to stop the audio after the duration
+        QTimer.singleShot(int(duration), self.audio_player.stop_audio)
+
+    # Play the audio segment
+    self.audio_player.play_audio()
