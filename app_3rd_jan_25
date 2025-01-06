@@ -74,28 +74,6 @@ class AudioPlayer:
         msg_box.setWindowTitle("Error")
         msg_box.exec_()
 
-    def highlight_introduction(self):
-    # Hardcoded start and end times for the "Introduction" section (in seconds)
-    start_time = 9.612  # 00:00:09,612
-    end_time = 16.712   # 00:00:16,712
-
-    # Highlight the introduction paragraph in the HTML
-    self.audio_player.webview.page().runJavaScript(
-        'highlightNextOccurrence("Etkin madde: Her bir banttan 16 saatlik kullanım sırasında 10 mg nikotin salıverilir.")'
-    )
-
-    # Stop any currently playing audio
-    self.audio_player.stop_audio()
-
-    # Start the audio at the specified start_time
-    pygame.mixer.music.load(self.audio_player.audio_file)
-    pygame.mixer.music.play(start=start_time)
-
-    # Use a QTimer to stop the audio at the end_time
-    duration = (end_time - start_time) * 1000  # Convert to milliseconds
-    QTimer.singleShot(duration, self.audio_player.stop_audio)
-
-
 
 class GUI(QWidget):
     def __init__(self, audio_player, html_file):
@@ -111,7 +89,6 @@ class GUI(QWidget):
         vbox = QVBoxLayout()
         # Create buttons
         button_layout = QHBoxLayout()
-
         play_button = QPushButton('Play')
         play_button.clicked.connect(self.play_audio)
         button_layout.addWidget(play_button)
@@ -124,8 +101,9 @@ class GUI(QWidget):
         stop_button.clicked.connect(self.stop_audio)
         button_layout.addWidget(stop_button)
 
-        intro_button = QPushButton('Introduction')  # New button
-        intro_button.clicked.connect(self.audio_player.highlight_introduction)
+        # Add "Introduction" button
+        intro_button = QPushButton('Introduction')
+        intro_button.clicked.connect(self.highlight_introduction)
         button_layout.addWidget(intro_button)
 
         vbox.addLayout(button_layout)
@@ -151,6 +129,27 @@ class GUI(QWidget):
 
     def stop_audio(self):
         self.audio_player.stop_audio()
+
+    def highlight_introduction(self):
+        # Hardcoded start and end times for the "Introduction" section (in seconds)
+        start_time = 9.612  # 00:00:09,612
+        end_time = 16.712   # 00:00:16,712
+
+        # Highlight the introduction paragraph in the HTML
+        self.audio_player.webview.page().runJavaScript(
+            'highlightNextOccurrence("Etkin madde: Her bir banttan 16 saatlik kullanım sırasında 10 mg nikotin salıverilir.")'
+        )
+
+        # Stop any currently playing audio
+        self.audio_player.stop_audio()
+
+        # Start the audio at the specified start_time
+        pygame.mixer.music.load(self.audio_player.audio_file)
+        pygame.mixer.music.play(start=start_time)
+
+        # Use a QTimer to stop the audio at the end_time
+        duration = (end_time - start_time) * 1000  # Convert to milliseconds
+        QTimer.singleShot(duration, self.audio_player.stop_audio)
 
 
 if __name__ == "__main__":
