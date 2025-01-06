@@ -75,22 +75,26 @@ class AudioPlayer:
         msg_box.exec_()
 
     def highlight_introduction(self):
-        # Define the time range manually (from the .srt file)
-        start_time_ms = 9612  # 00:00:09,612 in milliseconds
-        end_time_ms = 16712  # 00:00:16,712 in milliseconds
+    # Hardcoded start and end times for the "Introduction" section (in seconds)
+    start_time = 9.612  # 00:00:09,612
+    end_time = 16.712   # 00:00:16,712
 
-        # Restart the audio at the specific timestamp
-        pygame.mixer.music.stop()
-        pygame.mixer.music.load(self.audio_file)
-        pygame.mixer.music.play(start=(start_time_ms / 1000))
-        self.start_time = time.time() - (start_time_ms / 1000)
-        self.is_playing = True
-        self.current_subtitle_index = 3  # Start from the "Etkin madde" section
+    # Highlight the introduction paragraph in the HTML
+    self.audio_player.webview.page().runJavaScript(
+        'highlightNextOccurrence("Etkin madde: Her bir banttan 16 saatlik kullanım sırasında 10 mg nikotin salıverilir.")'
+    )
 
-        # Highlight the corresponding text
-        text = "Etkin madde: Her bir banttan 16 saatlik kullanım sırasında 10 mg nikotin salıverilir."
-        if self.webview:
-            self.webview.page().runJavaScript(f'highlightNextOccurrence("{text}")')
+    # Stop any currently playing audio
+    self.audio_player.stop_audio()
+
+    # Start the audio at the specified start_time
+    pygame.mixer.music.load(self.audio_player.audio_file)
+    pygame.mixer.music.play(start=start_time)
+
+    # Use a QTimer to stop the audio at the end_time
+    duration = (end_time - start_time) * 1000  # Convert to milliseconds
+    QTimer.singleShot(duration, self.audio_player.stop_audio)
+
 
 
 class GUI(QWidget):
