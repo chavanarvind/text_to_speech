@@ -74,19 +74,23 @@ class AudioPlayer:
         msg_box.setWindowTitle("Error")
         msg_box.exec_()
 
-    def go_to_section(self, start_time, section_text):
-        # Move audio to the desired start time
-        pygame.mixer.music.stop()
-        pygame.mixer.music.play(start=start_time)
-        self.start_time = time.time() - start_time  # Adjust the start time
-        
-        # Highlight the text for the specific section
-        if self.webview:
-            self.webview.page().runJavaScript(f'highlightNextOccurrence("{section_text}")')
+    def highlight_introduction(self):
+        # Define the time range manually (from the .srt file)
+        start_time_ms = 9612  # 00:00:09,612 in milliseconds
+        end_time_ms = 16712  # 00:00:16,712 in milliseconds
 
-        # Ensure subtitles are synchronized with this new start time
-        self.current_subtitle_index = 0
-        QTimer.singleShot(0, self.update_subtitles)
+        # Restart the audio at the specific timestamp
+        pygame.mixer.music.stop()
+        pygame.mixer.music.load(self.audio_file)
+        pygame.mixer.music.play(start=(start_time_ms / 1000))
+        self.start_time = time.time() - (start_time_ms / 1000)
+        self.is_playing = True
+        self.current_subtitle_index = 3  # Start from the "Etkin madde" section
+
+        # Highlight the corresponding text
+        text = "Etkin madde: Her bir banttan 16 saatlik kullanım sırasında 10 mg nikotin salıverilir."
+        if self.webview:
+            self.webview.page().runJavaScript(f'highlightNextOccurrence("{text}")')
 
 
 class GUI(QWidget):
@@ -103,8 +107,7 @@ class GUI(QWidget):
         vbox = QVBoxLayout()
         # Create buttons
         button_layout = QHBoxLayout()
-        
-        # Play, Pause, and Stop buttons
+
         play_button = QPushButton('Play')
         play_button.clicked.connect(self.play_audio)
         button_layout.addWidget(play_button)
@@ -117,10 +120,9 @@ class GUI(QWidget):
         stop_button.clicked.connect(self.stop_audio)
         button_layout.addWidget(stop_button)
 
-        # "Go to Section" button
-        go_to_section_button = QPushButton('Go to Section')
-        go_to_section_button.clicked.connect(self.go_to_section)
-        button_layout.addWidget(go_to_section_button)
+        intro_button = QPushButton('Introduction')  # New button
+        intro_button.clicked.connect(self.audio_player.highlight_introduction)
+        button_layout.addWidget(intro_button)
 
         vbox.addLayout(button_layout)
 
@@ -145,17 +147,6 @@ class GUI(QWidget):
 
     def stop_audio(self):
         self.audio_player.stop_audio()
-
-    def go_to_section(self):
-        # Define the start and end times for a section in the audio
-        start_time = 5  # Replace with desired start time (in seconds)
-        end_time = 10  # Replace with desired end time (in seconds)
-        
-        # Define the text for the section to highlight
-        section_text = "NICORETTE INVISI 10 mg/16 saat transdermal flaster"  # Example text for this section
-
-        # Synchronize the audio and highlight the text
-        self.audio_player.go_to_section(start_time, section_text)
 
 
 if __name__ == "__main__":
