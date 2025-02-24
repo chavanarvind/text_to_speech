@@ -1,0 +1,56 @@
+def find_time(srt_data, search_words, prefer_second=False):
+    """
+    Find the start or end time in the .srt data based on the search words.
+    Collects all matches that meet the 60% threshold.
+    If prefer_second is True and at least two matches are found,
+    returns the second match. Otherwise, returns the first match.
+    """
+    matches = []
+    for entry in srt_data:
+        match_count = sum(1 for word in search_words if word in entry['text'])
+        if match_count >= len(search_words) * 0.6:  # At least 60% match
+            matches.append(entry)
+    if prefer_second and len(matches) >= 2:
+        return matches[1]
+    elif matches:
+        return matches[0]
+    else:
+        return None
+
+# In your process_json function, use the updated find_time for start time:
+def process_json(srt_data, json_file, output_file):
+    """
+    Process the JSON file to add start and end times based on the logic.
+    """
+    with open(json_file, 'r', encoding='utf-8') as file:
+        data = json.load(file)
+
+    updated_data = {}
+
+    for key, value in data.items():
+        # Step 1: Clean the entire value text first
+        clean_value = clean_text(value)
+
+        # Step 2: Find start time using the first 15 words of the key
+        search_key = " ".join(key.split()[:15])  # Use first 15 words of the key
+        # Here, we set prefer_second=True so that if there are at least two matches,
+        # the second match (presumably in the main content) is used.
+        start_entry = find_time(srt_data, search_key.split(), prefer_second=True)
+        start_time = start_entry['start_time'] if start_entry else None
+
+        # Step 3: Find end time based on last 8 words of the last sentence
+        last_sentence = clean_value.split('.')[-1].strip()  # Get last sentence
+        search_value = " ".join(last_sentence.split()[-8:])  # Use last 8 words for search
+        end_entry = find_time(srt_data, search_value.split())
+        end_time = end_entry['end_time'] if end_entry else None
+
+        # Step 4: Update JSON
+        updated_data[key] = {
+            'content': value,
+            'start_time': start_time,
+            'end_time': end_time
+        }
+
+    # Write the updated JSON to a file
+    with open(output_file, 'w', encoding='utf-8') as file:
+        json.dump(updated_data, file, ensure_ascii=False, indent=4)
