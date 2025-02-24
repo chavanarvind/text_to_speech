@@ -1,0 +1,109 @@
+import json
+import re
+
+def parse_srt(srt_file):
+    """
+    Parse the .srt file and return a list of dictionaries with start and end times, and text.
+    Handles malformed lines gracefully and logs progress for debugging.
+    """
+    srt_data = []
+    with open(srt_file, 'r', encoding='utf-8') as file:
+        content = file.read()
+
+    entries = content.strip().split('\n\n')
+    for entry_index, entry in enumerate(entries, start=1):
+        lines = entry.split('\n')
+        print(f"Processing entry {entry_index}: {lines}")  # Log each entry for debugging
+        if len(lines) >= 3:  # Ensure enough lines for parsing
+            times = lines[1]
+            if ' --> ' in times:  # Ensure timestamp format is correct
+                try:
+                    start_time, end_time = times.split(' --> ')
+                    text = " ".join(lines[2:])
+                    srt_data.append({
+                        'start_time': start_time.strip(),
+                        'end_time': end_time.strip(),
+                        'text': text.strip()
+                    })
+                except ValueError as e:
+                    print(f"Error processing entry {entry_index}: {lines}")
+                    print(f"Exception: {e}")
+            else:
+                print(f"Skipping malformed timestamp line in entry {entry_index}: {lines[1]}")
+        else:
+            print(f"Skipping malformed entry {entry_index}: {lines}")
+    return srt_data
+
+def clean_text(text):
+    """
+    Remove HTML tags and special characters from the text.
+    """
+    text = re.sub(r'<[^>]+>', '', text)  # Remove HTML tags
+    text = re.sub(r'[\n\r\t]', ' ', text)  # Remove newline, tab characters
+    text = re.sub(r'[^\w\s]', '', text)  # Remove special characters
+    return text.strip()
+
+def find_time(srt_data, search_words):
+    """
+    Find the start or end time in the .srt data based on the search words.
+    Allow partial matches for improved flexibility.
+    """
+    for entry in srt_data:
+        match_count = sum(1 for word in search_words if word in entry['text'])
+        if match_count >= len(search_words) * 0.6:  # At least 60% match
+            return entry
+    return None
+
+def process_json(srt_data, json_file, output_file):
+    """
+    Process the JSON file to add start and end times based on the logic.
+    """
+    with open(json_file, 'r', encoding='utf-8') as file:
+        data = json.load(file)
+
+    updated_data = {}
+
+    for key, value in data.items():
+        # Step 1: Clean the entire value text first
+        clean_value = clean_text(value)
+
+        # Step 2: Find start time
+        search_key = " ".join(key.split()[:15])  # Use first 8 words of the key
+        start_entry = find_time(srt_data, search_key.split())
+        start_time = start_entry['start_time'] if start_entry else None
+
+        # Step 3: Find last sentence after cleaning
+        last_sentence = clean_value.split('.')[-1].strip()  # Get last sentence
+        search_value = " ".join(last_sentence.split()[-8:])  # Use last 8 words for search
+        end_entry = find_time(srt_data, search_value.split())
+        end_time = end_entry['end_time'] if end_entry else None
+
+        # Step 4: Update JSON
+        updated_data[key] = {
+            'content': value,
+            'start_time': start_time,
+            'end_time': end_time
+        }
+
+    # Write the updated JSON to a file
+    with open(output_file, 'w', encoding='utf-8') as file:
+        json.dump(updated_data, file, ensure_ascii=False, indent=4)
+
+# File paths
+srt_file = 'nic/sml_ges.srt'  # Replace with your .srt file path
+json_file = 'sections.json'  # Replace with your JSON file path
+output_file = 'updated_sections.json'  # Output JSON file
+srt_dic_file = 'srt_dic.json'  # Save srt_dic as JSON
+
+# Parse .srt file and save the dictionary
+srt_data = parse_srt(srt_file)
+
+# Save srt_dic as a JSON file
+with open(srt_dic_file, 'w', encoding='utf-8') as file:
+    json.dump(srt_data, file, ensure_ascii=False, indent=4)
+
+# Process JSON based on the parsed .srt data
+process_json(srt_data, json_file, output_file)
+
+print(f"Updated JSON has been saved to {output_file}.")
+print(f"srt_dic has been saved to {srt_dic_file}.")
