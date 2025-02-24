@@ -1,0 +1,56 @@
+import os
+from bs4 import BeautifulSoup
+import json
+
+# Step 1: Read the HTML file
+file_name = "nic/clean_output.html"
+
+with open(file_name, "r", encoding="utf-8") as file:
+    html_content = file.read()
+
+# Step 2: Parse the HTML using BeautifulSoup
+soup = BeautifulSoup(html_content, "html.parser")
+
+# Step 3: Extract sections and content
+sections = {}
+h2_headers = soup.find_all("h2")  # Find all <h2> tags
+
+for h2 in h2_headers:
+    section_title = h2.get_text(strip=True)  # Get the text of the <h2> tag
+    content = [str(h2)]  # Start with the <h2> tag itself
+    
+    print(f"Heading: {section_title}")  # Print the heading text
+    
+    # Collect all sibling elements until the next <h2>
+    for sibling in h2.find_next_siblings():
+        if sibling.name == "h2":  # Stop when the next <h2> is found
+            break
+        content.append(str(sibling))  # Append the HTML content of the sibling
+    
+    # Combine the content
+    combined_content = "".join(content)
+    print(f"Combined Content: {combined_content}")  # Print the combined content
+    
+    # Store it in the dictionary
+    sections[section_title] = combined_content
+
+# Step 4: Define the output JSON file
+output_file = "sections.json"
+
+# Step 5: Check if JSON file exists and create it if not
+if not os.path.exists(output_file):
+    with open(output_file, "w", encoding="utf-8") as json_file:
+        json.dump({}, json_file, indent=4, ensure_ascii=False)
+    print(f"{output_file} did not exist. It has been created.")
+
+# Step 6: Save the extracted sections to the JSON file
+with open(output_file, "r+", encoding="utf-8") as json_file:
+    existing_data = json.load(json_file)  # Load existing data
+    existing_data.update(sections)  # Update with new sections
+
+    # Write updated data back to the file
+    json_file.seek(0)  # Move the cursor to the beginning of the file
+    json.dump(existing_data, json_file, indent=4, ensure_ascii=False)
+    json_file.truncate()  # Remove any leftover content from the previous file size
+
+print(f"Extracted sections have been saved to {output_file}.")
