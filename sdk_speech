@@ -1,0 +1,424 @@
+import json
+import logging
+import os
+import sys
+import time
+import uuid
+import zipfile
+
+import requests
+
+logging.basicConfig(stream=sys.stdout, level=logging.INFO,  # set to logging.DEBUG for verbose output
+                    format="[%(asctime)s] %(message)s", datefmt="%m/%d/%Y %I:%M:%S %p %Z")
+logger = logging.getLogger(__name__)
+
+SPEECH_ENDPOINT = "https://cog-speech-dto-epil-dev.cognitiveservices.azure.com/"
+SUBSCRIPTION_KEY = "BBvpAQdmiBQWNukOTc5F2tIb5Ln7TuubMiQGbbkSSO2GJDR6ZK09JQQJ99AKACYeBjFXJ3w3AAAYACOG1LLR"
+API_VERSION = "2024-04-01"
+
+
+def _create_job_id():
+    # the job ID must be unique in current speech resource
+    # you can use a GUID or a self-increasing number
+    return uuid.uuid4()
+
+
+def _authenticate():
+    return {'Ocp-Apim-Subscription-Key': SUBSCRIPTION_KEY}
+
+
+def submit_synthesis(job_id: str, file_path='text_files/sml_ges.txt') -> bool:
+    url = f'{SPEECH_ENDPOINT}/texttospeech/batchsyntheses/{job_id}?api-version={API_VERSION}'
+    header = {
+        'Content-Type': 'application/json; charset=utf-8'
+    }
+    header.update(_authenticate())
+
+    with open(file_path, 'r', encoding="utf-8-sig") as f:
+        text = f.read()
+
+    text = """
+    <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="http://www.w3.org/2001/mstts" xmlns:emo="http://www.w3.org/2009/10/emotionml" xml:lang="tr-TR">
+<voice name="tr-TR-EmelNeural">
+<p><s><emphasis level="strong">KULLANMA TALİMATI</emphasis></s></p>
+<p><s><emphasis level="strong">NICORETTE INVISI 10 mg/16 saat transdermal flaster</emphasis></s></p>
+<p>Cilt üzerine uygulanır.</p>
+<p>Etkin madde: Her bir banttan 16 saatlik kullanım sırasında 10 mg nikotin salıverilir.</p>
+<p>Yardımcı maddeler: Trigliseritler (orta zincir uzunluğunda), bazik bütillenmiş metakrilat kopolimer, polietilentereftalat film (PET), akrilik yapışkan solüsyon, potasyum hidroksit, kroskarmelloz sodyum, alüminyum asetilasetonat, bir yüzü alüminyumlanmış, her iki yüzü silikonlanmış polietilen tereftalat (PET) film.</p>
+<p>Bu ilacı kullanmaya başlamadan önce bu KULLANMA TALİMATINI dikkatlice okuyunuz, çünkü sizin için önemli bilgiler içermektedir.</p>
+<p>
+<s>Bu kullanma talimatını saklayınız. Daha sonra tekrar okumaya ihtiyaç duyabilirsiniz.</s><break time="500ms" />
+<s>Eğer ilave sorularınız olursa, lütfen doktorunuza veya eczacınıza danışınız.</s><break time="500ms" />
+<s>Bu ilaç kişisel olarak sizin için reçete edilmiştir, başkalarına vermeyiniz.</s><break time="500ms" />
+<s>Bu ilacın kullanımı sırasında, doktora veya hastaneye gittiğinizde doktorunuza bu ilacı kullandığınızı söyleyiniz.</s><break time="500ms" />
+<s>Bu talimatta yazılanlara aynen uyunuz. İlaç hakkında size önerilen dozun dışında yüksek veya düşük doz kullanmayınız.</s><break time="500ms" />
+</p>
+<p><s><emphasis level="strong">Bu Kullanma Talimatında:</emphasis></s></p>
+<p>
+<s>NICORETTE INVISI nedir ve ne için kullanılır?</s><break time="500ms" />
+<s>NICORETTE INVISI’yi kullanmadan önce dikkat edilmesi gerekenler</s><break time="500ms" />
+<s>NICORETTE INVISI nasıl kullanılır?</s><break time="500ms" />
+<s>Olası yan etkiler nelerdir?</s><break time="500ms" />
+<s>NICORETTE INVISI’nın saklanması</s><break time="500ms" />
+</p>
+<p><s><emphasis level="strong">1. NICORETTE INVISI nedir ve ne için kullanılır?</emphasis></s></p>
+<p>
+<s>NICORETTE INVISI etkin madde olarak nikotin içerir. NICORETTE INVISI’den 16 saatlik kullanım sırasında 10 mg nikotin salıverilir. 9 cm²’lik her bir bant 15,75 mg nikotin içerir.</s><break time="500ms" />
+<s>NICORETTE INVISI, erişkinlerde (18 yaşın üzerinde) sigarayı bırakmak için kullanılan “nikotin replasman tedavisi (NRT)” olarak adlandırılan bir ilaç grubuna</s><break time="500ms" />
+</p>
+<p>dahildir.</p>
+<p>
+<s>NICORETTE INVISI 7 veya 14 bant içeren ambalajlarda kullanıma sunulmaktadır.</s><break time="500ms" />
+<s>NICORETTE INVISI, erişkinlerde (18 yaşın üzerinde) sigara bağımlılığının tedavisinde sigarayı bırakmaya istekli kişilerde nikotin isteğini ve sigara bırakıldığında görülen belirtileri (baş ağrısı, uykusuzluk, endişe) hafifleterek sigarayı bırakmaya yardımcı olmak için kullanılır.</s><break time="500ms" />
+<s>Bu tedavinin yanı sıra davranış tedavisi ve desteğin başarı oranını arttıracağı unutulmamalıdır.</s><break time="500ms" />
+</p>
+<p><s><emphasis level="strong">2. NICORETTE INVISI’yi kullanmadan önce dikkat edilmesi gerekenler</emphasis></s></p>
+<p><s><emphasis level="strong">NICORETTE INVISI’yi aşağıdaki durumlarda KULLANMAYINIZ</emphasis></s></p>
+<p>Eğer:</p>
+<p>
+<s>NICORETTE INVISI’nin bileşiminde bulunan nikotine ve yardımcı maddelerden herhangi birine karşı (yardımcı maddeler listesine bakınız) alerjiniz varsa kullanmayınız.</s><break time="500ms" />
+<s>12 yaşın altındaki çocuklarda kullanılmamalıdır.</s><break time="500ms" />
+</p>
+<p><s><emphasis level="strong">NICORETTE INVISI’yi aşağıdaki durumlarda DİKKATLİ KULLANINIZ</emphasis></s></p>
+<p>Eğer:</p>
+<p>
+<s>Yakın zamanda geçirilmiş miyokard infarktüsü (kalp krizi), Prinzmetal anjina dahil stabil olmayan veya ağırlaşan anjina (kalp kasındaki kan akımının azalması veya kalbin beslenmesini sağlayan atardamar spazmı nedeniyle oluşan göğüste ağrı, sıkışma ve baskı hissi), şiddetli kardiyak aritmi (kalp ritim bozukluğu), yakın zamanda geçirilmiş serebrovasküler olay (felç) ve/veya kontrol altında tutulamayan yüksek tansiyon (hipertansiyon) olan bağımlılar davranışsal destek programı gibi yöntemler ile sigarayı bırakmaları için cesaretlendirilmelidir. Eğer başarısız olunursa, NICORETTE INVISI düşünülebilir; fakat tedavi ancak doktor kontrolü altında başlatılmalıdır.</s><break time="500ms" />
+<s>Orta ila şiddetli karaciğer veya şiddetli böbrek yetmezliğiniz varsa,</s><break time="500ms" />
+<s>Sizde mide veya duedonum (oniki parmak bağırsağı) ülseri, mide veya özefagus (yemek borusu) yangısı varsa,</s><break time="500ms" />
+<s>Daha önce nöbet geçirdiyseniz,</s><break time="500ms" />
+<s>Tiroid bezleriniz fazla çalışıyorsa veya doktorunuz sizde feokromasitoma (kan basıncına etki eden bir böbrek üstü bezi tümörü) olduğunu bildirdiyse,</s><break time="500ms" />
+</p>
+<p>
+<s>Şeker hastalığınız varsa, sigarayı bıraktığınızda veya NICORETTE INVISI’yi kullanmaya başladığınızda kan şeker seviyenizi daha sık ölçtürmeniz gerekmektedir. Buna bağlı olarak doktorunuz tarafından insülin ilaçlarınızın dozu ile ilgili düzenlemeler gerekebilir.</s><break time="500ms" />
+<s>Manyetik Rezonans Görüntüleme (MR) uygulanacaksa, uygulama öncesi, yanma riskine karşı NICORETTE INVISI’yi çıkartınız.</s><break time="500ms" />
+<s>Sedef hastalığı, egzama gibi bir cilt rahatsızlığınız varsa veya cildinizin geniş bir alanını kaplayan kurdeşen (ürtiker) deri hastalığı probleminiz varsa NICORETTE INVISI’yi bu bölgelerde uygulamayınız.</s><break time="500ms" />
+<s>Hamileyseniz veya emziriyorsanız nikotin replasman tedavisine başlamadan sigarayı kendiliğinizden bırakmaya çalışmalısınız.</s><break time="500ms" />
+</p>
+<p>Mevcut şikayetlerinizin devam etmesi, kötüleşmesi ya da yeni şikayetlerinizin oluşması durumunda, bant kullanımı sonlandırılmalı ve doktora başvurulmalıdır.</p>
+<p>Bu uyarılar geçmişteki herhangi bir dönemde dahi olsa sizin için geçerliyse lütfen doktorunuza danışınız.</p>
+<p>
+<s>Yetişkinler için doğru olan dozlar, çocukları ciddi bir şekilde zehirleyebilir hatta öldürebilir. Nikotin içeren ürünler yanlış kullanılabileceği veya çocukların ulaşabileceği veya yutabileceği yerlerde bırakılmamalıdır.</s><break time="500ms" />
+<s>Bant çıkarıldıktan sonra yapışkan kısmı içeride kalacak şekilde ikiye katlanmalı ve küçük bir torba içine veya bir parça alüminyum folyo içine koyulmalıdır. Ardından kullanılmış bant çocukların erişemeyeceği bir yere dikkatle atılmalıdır.</s><break time="500ms" />
+</p>
+<p><s><emphasis level="strong">NICORETTE INVISI’nin yiyecek ve içecek ile kullanılması:</emphasis></s></p>
+<p>NICORETTE INVISI’nin yiyecek ve içeceklerle bilinen bir etkileşimi yoktur.</p>
+<p><s><emphasis level="strong">Hamilelik</emphasis></s></p>
+<p>İlacı kullanmadan önce doktorunuza veya eczacınıza danışınız.</p>
+<p>
+<s>Sigara içmek rahim içi büyüme geriliği, erken doğum ve ölü doğum riskini arttırmaktadır. Nikotin, bebeğe geçmektedir ve bebeğin solunum hareketlerini, dolaşımını etkiler. Dolaşım üzerindeki etkisi doza bağlıdır. Sigara içmenin bebek üzerinde ciddi zararlı etkileri vardır ve bırakılmalıdır.</s><break time="500ms" />
+<s>Sigarayı bırakmak hem annenin hem de bebeğin sağlığını iyileştirmek için yapılabilecek en etkili girişimdir. Sigara dumanında nikotin dışında polisiklik hidrokarbonlar ve karbon monoksit gibi maddeler bulunmaktadır ve bu maddelerin sebep olacağı zararlar nikotin replasman ürünleri kullanımı ile karşılaştırıldığında çok yüksektir. Hamilelikte ideal</s><break time="500ms" />
+</p>
+<p>3/10</p>
+<p>olan, sigaranın, hamileliğin erken dönemlerinde, nikotin replasman tedavisi olmadan bırakılmasıdır. Ancak sigarayı ilaç tedavisi olmadan bırakamamış ya da bırakma ihtimali olmayan kişilerde, nikotin replasman tedavisi ile bebekte beklenen risk, sigara kullanımına göre daha düşük olduğundan, hamilelerde nikotin replasman tedavisi kullanılabilir. Sigaranın tamamen bırakılması en iyi seçenek olmakla birlikte eğer bırakılamıyorsa, NICORETTE INVISI’nin hamilelikte kullanımı, sigara kullanımına göre daha güvenli bir alternatiftir. Bırakmayı başaramamış ve çok fazla sigara içen kişilerde doktor sigarayı bırakmaya yardımcı olması için NICORETTE INVISI kullanımına karar verirse, tedavinin mümkün olan en yakın zamanda bırakılması hedeflenmelidir.</p>
+<p>
+<s>NICORETTE INVISI, hamilelikte sadece doktora danışılarak kullanılmalıdır.</s><break time="500ms" />
+<s>Aralıklı dozlama sağlayan ürünler genellikle bantlardan daha düşük günlük doz sağlayacağından daha fazla tercih edilebilir. Ancak, hamilelik sırasında çok yoğun bulantı/kusma sorunu yaşayan kadınlarda doktor bant kullanımını tercih edebilir. Eğer bant kullanıyorsanız, yatmadan önce çıkarmalısınız.</s><break time="500ms" />
+</p>
+<p>Tedaviniz sırasında hamile olduğunuzu fark ederseniz hemen doktorunuza veya eczacınıza danışınız.</p>
+<p><s><emphasis level="strong">Emzirme</emphasis></s></p>
+<p>İlaç kullanmadan önce doktorunuza veya eczacınıza danışınız.</p>
+<p>
+<s>Nikotin, tedavi dozlarında dahi bebeği etkileyecek miktarda anne sütüne geçmektedir. Bu sebeple nikotinin emzirme esnasında kullanımından kaçınılmalıdır. Ancak, sigarayı bırakmada başarı sağlanamadıysa, NICORETTE INVISI kullanımına sadece hekime danışılarak başlanmalıdır.</s><break time="500ms" />
+<s>Eğer doktorunuz NICORETTE INVISI’yi kullanmanız yönünde karar verirse, bebeğin mümkün olan en az nikotini alması için bebek, NICORETTE INVISI’yi kullanmadan hemen önce emzirilmelidir.</s><break time="500ms" />
+</p>
+<p><s><emphasis level="strong">Araç ve makine kullanımı</emphasis></s></p>
+<p>NICORETTE INVISI’nin araç ve makine kullanma yeteneği üzerinde hiçbir etkisi bulunmamaktadır veya ihmal edilebilir düzeydedir.</p>
+<p><s><emphasis level="strong">NICORETTE INVISI’nin içeriğinde bulunan bazı yardımcı maddeler hakkında önemli bilgiler</emphasis></s></p>
+<p>NICORETTE INVISI’nin içeriğinde bulunan yardımcı maddelere karşı aşırı bir duyarlılığınız yoksa, bu maddelere bağlı olumsuz bir etki beklenmez.</p>
+<p><s><emphasis level="strong">Diğer ilaçlar ile birlikte kullanımı</emphasis></s></p>
+<p>4/10</p>
+<p>Nikotin replasman tedavisi ve diğer ilaçlar arasında klinik olarak ilgili olabilecek bir etkileşim saptanmamıştır.</p>
+<p>Eğer:</p>
+<p>
+<s>Teofilin (astım tedavisinde kullanılan bir ilaç), klozapin (şizofreni hastalarında kullanılan bir ilaç), takrin (Alzheimer tedavisinde kullanılan bir ilaç) veya ropinirol (Parkinson tedavisinde kullanılan bir ilaç) gibi ilaçlar kullanıyorsanız, sigarayı bırakmanız veya azaltmanızdan dolayı bu ilaçların dozlarının tekrar ayarlanması gerekebilir.</s><break time="500ms" />
+<s>Nikotin, vücutta bulunan ve adenozin adı verilen madde ile uyarılan kan basıncını, kalp atım hızını ve ayrıca ağrı yanıtını (angina pectoris benzeri göğüs ağrısı) arttırabilir.</s><break time="500ms" />
+</p>
+<p>Eğer reçeteli ya da reçetesiz herhangi bir ilacı şu anda kullanıyorsanız veya son zamanlarda kullandıysanız lütfen doktorunuza veya eczacınıza bunlar hakkında bilgi veriniz.</p>
+<p><s><emphasis level="strong">3. NICORETTE INVISI nasıl kullanılır?</emphasis></s></p>
+<p><s><emphasis level="strong">Uygun kullanım ve doz/uygulama sıklığı için talimatlar:</emphasis></s></p>
+<p>NICORETTE INVISI’yi doktor kontrolü altında kullanmalısınız.</p>
+<p>Bandı cildinize yapıştırdığınız gün sigara içmeyi tamamen bırakmanız ve en son sigaranızı bir önceki gün içmiş olmanız gerekmektedir. Tedaviniz süresince kesinlikle sigara içmeyiniz.</p>
+<p>Tedavi en yüksek doza nikotin içeren bant ile başlar ve daha az nikotin içeren bantlar ile devam eder.</p>
+<p>Doktorunuz uygun dozdaki NICORETTE INVISI’yi, ne zaman ve nasıl kullanmanız gerektiğini söyleyecektir.</p>
+<p>Bant ile tedavi, uyku esnasında nikotin verilmeden sigara kullanıcısının gün içindeki nikotin dalgalanmalarını taklit eder. Bandın sadece uyurken kullanılıyor olması, gece boyunca nikotin verilmeye devam edildiğinde yaşanan uyku bozukluklarının görülmesini engeller.</p>
+<p>NICORETTE INVISI’nin önerilen dozu aşağıda verilmiştir. Bu ilacı doktorunuzun tavsiyelerine uygun olarak kullanınız. Önerilen doz bireysel olup bu doza, nikotin bağımlılığınız göz önünde bulundurularak karar verilmelidir.</p>
+<p>
+<s>Çok sayıda sigara tüketen bir kişiyseniz (Fagerström Testi skoru ≥6 veya günde 15 veya daha fazla sigara içenler), 1. adım olan 25 mg dozundaki bant ile tedaviye başlayınız ve 8 hafta süreyle günde bir bant kullanınız.</s><break time="500ms" />
+<s>Bundan sonra bant kullanımını kademeli olarak azaltılmalıdır. 2 hafta süreyle günde 15 mg’lık bir bant kullanımını (2. adım) takiben 2 hafta süreyle günde 10 mg ’lık bir bant (3. adım) kullanınız.</s><break time="500ms" />
+<s>Az sayıda sigara tüketen bir kişiyseniz (Fagerström Testi skoru &lt;6 veya günde 15’den daha az sigara içenler) 2. adım (15 mg) ile tedaviye başlayınız, 8 hafta süreyle devam ediniz ve son 4 hafta için dozu 3. adım (10 mg) düşürünüz.</s><break time="500ms" />
+</p>
+<p>
+<s>Çok sayıda sigara tüketen kişiler (Fagerström Testi skoru ≥6 veya günde 15 veya daha fazla sigara içenler)</s><break time="500ms" />
+<p>
+<s>Doz rejimi</s><break time="500ms" />
+<s>1. Adım</s><break time="500ms" />
+<s>2. Adım</s><break time="500ms" />
+<s>3. Adım</s><break time="500ms" />
+<break time="600ms"/> 
+<s>Süre</s><break time="500ms" />
+<s>25 mgİlk 8 hafta</s><break time="500ms" />
+<s>15 mgSonraki 2 hafta</s><break time="500ms" />
+<s>10 mgSon 2 hafta</s><break time="500ms" />
+<break time="600ms"/> 
+</p>
+<break time="600ms"/> 
+<s>Az sayıda sigara tüketen kişiler (Fagerström Testi skoru &lt;6 veya günde 15&#x27;ten daha az sigara içenler)</s><break time="500ms" />
+<s>Doz rejimi</s><break time="500ms" />
+<break time="600ms"/> 
+</p>
+<p>Bandı doktorunuz başka şekilde tavsiye etmediği sürece 6 aydan fazla kullanmayınız.</p>
+<p>Sigara kullanımı, NICORETTE INVISI ile tedavi süresince tamamen bırakılmalıdır.</p>
+<p>Yüksek bağımlılığa sahip, ilerlemiş yoksunluk semptomları olan veya tek nikotin tedavisi ürünüyle başarısız olmuş kişiler, yoksunluk semptomlarından hızlı bir şekilde kurtulmak için NICORETTE INVISI ile birlikte nikotin sakızını kullanabilirler.</p>
+<p><s><emphasis level="strong">Uygulama yolu ve metodu:</emphasis></s></p>
+<p>NICORETTE INVISI&#x27;yi sabahları uyandıktan sonra kalça, üst kol veya göğüs gibi tüysüz deri bölgelerine ve temiz, kuru, yarasız alanlara, günde bir kez uygulayınız. Gece yatmadan önce çıkarınız. Bu uygulama alanlarını her gün değiştiriniz ve ardışık gelen günlerde aynı bölgeyi kullanmayınız.</p>
+<p>Bandı sabahları uyandığınızda uygulayınız ve gece yatmadan önce çıkarınız. Bantlar 16 saat süresince etkili olduğundan, sigara içicilerin ihtiyacını karşılar ve uyku bozukluğuna neden olmaz.</p>
+<p>Banyo sırasında bandı çıkarmanız gerekli değildir.</p>
+<p>Bandı aşağıdaki şekilde uygulayınız:</p>
+<p>
+<s>Bandı uygulamadan önce ellerinizi yıkayınız.</s><break time="500ms" />
+<s>Bandın paketini yanından makasla gösterildiği şekilde kesiniz. Temiz, kuru, yarasız ve kalça, üst kol veya göğüs gibi tüysüz bir deri bölgesi seçiniz.</s><break time="500ms" />
+<s>Gümüş renkli alüminyum destek tabakasının bir tarafını çıkarınız. Bandın yapışkan yüzeyine parmaklarınızla dokunmaktan kaçınınız.</s><break time="500ms" />
+<s>Bandın yapışkan kısmını derinin üzerine dikkatle yapıştırınız ve gümüş renkli alüminyum destek tabakasının kalan yarısını çıkarınız.</s><break time="500ms" />
+<s>Bandın üzerine hafifçe avuç veya parmak uçları ile bastırınız.</s><break time="500ms" />
+<s>Bandın iyice yapışmasını sağlamak için parmaklarla kenarlarına bastırınız.</s><break time="500ms" />
+<s>Nemlendirici krem veya pudra kullanılması bandın düzgün bir şekilde yapışmasını engelleyebilir.</s><break time="500ms" />
+</p>
+<p>6/10</p>
+<p>engelleyebilir. Şayet bant çıkarsa, yenisini yapıştırınız.</p>
+<p><s><emphasis level="strong">Değişik yaş grupları:</emphasis></s></p>
+<p><s><emphasis level="strong">Çocuklarda kullanımı:</emphasis></s></p>
+<p>Doktor tavsiyesi olmaksızın 18 yaşın altındaki çocuklara uygulanmamalıdır.</p>
+<p><s><emphasis level="strong">Yaşlılarda kullanımı:</emphasis></s></p>
+<p>Yaşlı kişilerde doz ayarlaması gerekli değildir.</p>
+<p><s><emphasis level="strong">Özel kullanım durumları:</emphasis></s></p>
+<p><s><emphasis level="strong">Böbrek yetmezliği:</emphasis></s></p>
+<p>Şiddetli böbrek yetmezliği olan kişilerde NICORETTE INVISI dozunun doktorunuz tarafından ayarlanması gerekmektedir.</p>
+<p><s><emphasis level="strong">Karaciğer yetmezliği:</emphasis></s></p>
+<p>Orta/ağır seviyede karaciğer yetmezliği olan kişilerde NICORETTE INVISI dozunun doktorunuz tarafından ayarlanması gerekmektedir.</p>
+<p>Eğer NICORETTE INVISI’nin etkisinin çok güçlü veya zayıf olduğuna dair bir izleniminiz var ise doktorunuz veya eczacınız ile konuşunuz.</p>
+<p><s><emphasis level="strong">Kullanmanız gerekenden daha fazla NICORETTE INVISI kullandıysanız:</emphasis></s></p>
+<p>NICORETTE INVISI’den kullanmanız gerekenden fazlasını kullanmışsanız bir doktor veya eczacı ile konuşunuz.</p>
+<p>NICORETTE INVISI’den kullanmanız gerekenden fazlasını kullanmışsanız, bulantı (kendini hasta hissetme), kusma, tükürük artışı, karın ağrısı, ishal, terleme, baş ağrısı, baş dönmesi, duyma güçlüğü veya belirgin güçsüzlük duyabilirsiniz. Daha yüksek dozların alındığı vakalarda bu semptomları takiben hipotansiyon, zayıf veya düzensiz nabız, solunum güçlüğü, bitkinlik, dolaşım kolapsı ve genel konvülsiyonlar gelişebilir. Bu durumda nikotin alımı hemen durdurulmalı ve en yakın hastaneye başvurulmalıdır. Doktora veya hastaneye gittiğinizde bu kullanma talimatını ve bandın ambalajını yanınızda götürünüz.</p>
+<p>Tedavi sırasında yetişkinler tarafından tolere edilebilir dozda nikotin, çocuklarda ciddi zehirlenme semptomları oluşturabilir ve öldürücü olabilir. Çocuklarda nikotin zehirlenmesi şüphesi olduğu takdirde ivedilikle acile başvurulmalı ve tedavi edilmelidir.</p>
+<p><s><emphasis level="strong">NICORETTE INVISI’yi kullanmayı unutursanız:</emphasis></s></p>
+<p>Unutulan dozları dengelemek için çift doz uygulamayınız.</p>
+<p><s><emphasis level="strong">NICORETTE INVISI ile tedavi sonlandırıldığındaki oluşabilecek etkiler</emphasis></s></p>
+<p>NICORETTE INVISI’yi size önerilmiş olan dozda ve önerilen süre boyunca kullanmalısınız, aksi takdirde sizin için sigaraya tekrar başlama ihtimali ortaya çıkabilir.</p>
+<p>7/10</p>
+<p><s><emphasis level="strong">4. Olası yan etkiler nelerdir?</emphasis></s></p>
+<p>Tüm ilaçlar gibi, NICORETTE INVISI’nin içeriğinde bulunan maddelere duyarlı olan kişilerde yan etkiler olabilir. Bu etkiler nadiren ciddi etkilerdir. Hemen hepsi nikotine bağlı olan bu etkiler, sigara içerken de ortaya çıkabilen yan etkilerdir.</p>
+<p>Bazı belirtiler, sigarayı bırakma sonucunda gelişen nikotin yoksunluğu ile ilişkili olabilir. Bu belirtiler şunlardır;</p>
+<p>
+<s>Sinirlilik ve saldırganlık</s><break time="500ms" />
+<s>Moral bozukluğu</s><break time="500ms" />
+<s>Kaygı bozukluğu (anksiyete)</s><break time="500ms" />
+<s>Huzursuzluk</s><break time="500ms" />
+<s>Konsantrasyon bozukluğu</s><break time="500ms" />
+<s>İştah artışı veya kilo alma</s><break time="500ms" />
+<s>Şiddetli sigara içme isteği</s><break time="500ms" />
+<s>Gece uyanmaları veya uyku bozukluğu</s><break time="500ms" />
+<s>Kalp atım hızında düşme</s><break time="500ms" />
+<s>Baş dönmesi, sersemlik, bulanık görme, mide bulantısı</s><break time="500ms" />
+<s>Öksürük</s><break time="500ms" />
+<s>Kabızlık</s><break time="500ms" />
+<s>Diş eti kanaması</s><break time="500ms" />
+<s>Ağız içi ülser (aft)</s><break time="500ms" />
+<s>Burun kanallarının ve boğazın gerisinin şişmesi</s><break time="500ms" />
+</p>
+<p>Sigara dumanı soluma alışkanlığı olmayan kişiler tarafından aşırı miktarda NICORETTE INVISI kullanımı;</p>
+<p>
+<s>Baygınlığa</s><break time="500ms" />
+<s>Bulantıya</s><break time="500ms" />
+<s>Baş ağrılarına yol açabilmektedir.</s><break time="500ms" />
+</p>
+<p>NICORETTE INVISI’yi ilk defa kullandığınızda hafif deri reaksiyonlarına sebep olabilir. Bu durum genellikle flasterlerin uygulama bölgesinde kızarıklık veya kaşıntı halinde seyreder ve genellikle birkaç gün sonra geçmektedir. Nadiren de olsa reaksiyon devam ederse veya şiddetlenirse, flasterleri kullanmayı bırakın ve doktorunuza danışın.</p>
+<p>Aşağıdakilerden biri olursa, NICORETTE INVISI’yi kullanmayı durdurunuz ve DERHAL doktorunuza bildiriniz veya size en yakın hastanenin acil bölümüne başvurunuz:</p>
+<p>
+<s>Aşırı duyarlılık reaksiyonu (yüz, ağız, dudaklar, boğaz ve dilde şişme, ciltte kaşıntı, ciltte şişme, ağız zarında ülser (aft) ve iltihaplanma, nefes almada zorluk ve baş dönmesi)</s><break time="500ms" />
+<s>Göğüs rahatsızlığı ve ağrısı</s><break time="500ms" />
+<s>Akciğere giden hava yollarında daralma</s><break time="500ms" />
+</p>
+<p>8/10</p>
+<p>
+<s>Nefes darlığı</s><break time="500ms" />
+<s>Yutma güçlüğü</s><break time="500ms" />
+<s>Kalp atışında hızlanma / hızlı kalp atışı</s><break time="500ms" />
+<s>Kalpte geri dönüşümlü atım bozukluğu veya kalp atışlarında anormallik</s><break time="500ms" />
+<s>Nöbet geçirmek</s><break time="500ms" />
+</p>
+<p>Bunların hepsi çok ciddi yan etkilerdir.</p>
+<p>Eğer bunlardan biri sizde mevcut ise, sizin NICORETTE INVISI’ye karşı ciddi alerjiniz var demektir. Acil tıbbi müdahaleye veya hastaneye yatırılmanıza gerek olabilir.</p>
+<p>Bu çok ciddi yan etkilerin hepsi oldukça seyrek görülür</p>
+<p>Yan etkiler aşağıdaki kategorilerde gösterildiği şekilde sıralanmıştır:</p>
+<p>
+<s>Çok yaygın</s><break time="500ms" />
+<s>Yaygın</s><break time="500ms" />
+<s>Yaygın olmayan</s><break time="500ms" />
+<s>Seyrek</s><break time="500ms" />
+<s>Çok seyrek</s><break time="500ms" />
+<s>Bilinmiyor</s><break time="500ms" />
+<break time="600ms"/> 
+<s>: 10 hastanın en az 1’inde görülebilir.</s><break time="500ms" />
+<s>: 10 hastanın birinden az, fakat 100 hastanın birinden fazla görülebilir.</s><break time="500ms" />
+<s>: 100 hastanın birinden az, fakat 1.000 hastanın birinden fazla görülebilir.</s><break time="500ms" />
+<s>: 1.000 hastanın birinden az fakat 10.000 hastanın birinden fazla görülebilir.</s><break time="500ms" />
+<s>: 10.000 hastanın birinden az görülebilir.</s><break time="500ms" />
+<s>: Eldeki verilerden tahmin edilemiyor.</s><break time="500ms" />
+<break time="600ms"/> 
+</p>
+<p>Çok yaygın:</p>
+<p>
+<s>Kaşıntı</s><break time="500ms" />
+</p>
+<p>Yaygın:</p>
+<p>
+<s>Baş dönmesi</s><break time="500ms" />
+<s>Baş ağrısı</s><break time="500ms" />
+<s>Bulantı</s><break time="500ms" />
+<s>Kusma</s><break time="500ms" />
+<s>Döküntü</s><break time="500ms" />
+<s>Ürtiker</s><break time="500ms" />
+</p>
+<p>Yaygın olmayan:</p>
+<p>
+<s>Ellerde ve ayaklarda karıncalanma veya uyuşma</s><break time="500ms" />
+<s>Çarpıntı</s><break time="500ms" />
+<s>Aşırı terleme</s><break time="500ms" />
+<s>Uygulama yeri reaksiyonları</s><break time="500ms" />
+<s>Göğüs rahatsızlığı ve ağrısı</s><break time="500ms" />
+<s>Halsizlik</s><break time="500ms" />
+<s>Yorgunluk</s><break time="500ms" />
+<s>Nefes darlığı</s><break time="500ms" />
+<s>Kızarma</s><break time="500ms" />
+<s>Yüksek tansiyon</s><break time="500ms" />
+<s>Kas ağrısı</s><break time="500ms" />
+<s>Aşırı duyarlılık reaksiyonu (alerjik reaksiyonlar)</s><break time="500ms" />
+<s>Anormal rüya</s><break time="500ms" />
+</p>
+<p>Seyrek:</p>
+<p>
+<s>Yutma güçlüğü</s><break time="500ms" />
+</p>
+<p>
+<s>Midede rahatsızlık</s><break time="500ms" />
+<s>Ciltte ödem ve şişme</s><break time="500ms" />
+<s>Deride kızarıklık (birkaç gün içinde geçen)</s><break time="500ms" />
+<s>Kol veya bacak ağrısı</s><break time="500ms" />
+<s>Anafilaktik reaksiyon (vücutta alerjen maddelere karşı oluşabilen ciddi alerjik reaksiyon)</s><break time="500ms" />
+</p>
+<p>Çok seyrek:</p>
+<p>
+<s>Geri dönüşümlü atriyal fibrilasyon</s><break time="500ms" />
+</p>
+<p>Biliniyor:</p>
+<p>
+<s>Nöbet geçirmek</s><break time="500ms" />
+</p>
+<p>Yan etkilerin raporlanması Kullanma Talimatında yer alan veya almayan herhangi bir yan etki meydana gelmesi durumunda hekiminiz, eczacınız veya hemşireniz ile konuşunuz. Ayrıca karşılaştığınız yan etkileri www.titck.gov.tr sitesinde yer alan “İlaç Yan Etki Bildirimi” ikonuna tıklayarak ya da 0 800 314 00 08 numaralı yan etki bildirim hattını arayarak Türkiye Farmakovijilans Merkezi (TÜFAM)’ne bildiriniz. Meydana gelen yan etkileri bildirerek kullanmakta olduğunuz ilacın güvenliği hakkında daha fazla bilgi edinilmesine katkı sağlamış olacaksınız.</p>
+<p>5.NICORETTE INVISI’nin saklanması</p>
+<p>NICORETTE INVISI’yi çocukların göremeyeceği, erişemeyeceği yerlerde ve ambalajında saklayınız.</p>
+<p>25°C altındaki oda sıcaklığında saklayınız.</p>
+<p>Son kullanma tarihiyle uyumlu olarak kullanınız.</p>
+<p>Ambalajdaki son kullanma tarihinden sonra NICORETTE INVISI’yi kullanmayınız.</p>
+<p>Eğer üründe ve/veya ambalajında bozukluklar fark ederseniz NICORETTE INVISI’yi kullanmayınız.</p>
+<p>Son kullanma tarihi geçmiş veya kullanılmayan ilaçları çöpe atmayınız! T.C. Çevre, Şehircilik ve İklim Bakanlığınca belirlenen toplama sistemine veriniz.</p>
+<p>Ruhsat sahibi: JNTL Turkey Tüketici Sağlığı Ltd. Şti. Beykoz/İstanbul</p>
+<p>Üretim yeri: LTS Lohmann Therapie-Systeme AG, Lohmann Str./Andernach / Almanya</p>
+<p>Bu kullanma talimatı 29/11/2022 tarihinde onaylanmıştır.</p>
+</voice>
+</speak>
+
+    """
+
+    payload = {
+        "inputKind": "SSML",
+        'synthesisConfig': {
+            "voice": "tr-TR-EmelNeural",
+        },
+        "inputs": [
+            {
+                "content": text
+            },
+        ],
+        "properties": {
+            "outputFormat": "audio-24khz-160kbitrate-mono-mp3",
+            "wordBoundaryEnabled": True,
+            "sentenceBoundaryEnabled": True,
+            "timeToLiveInHours": 24 * 7
+        },
+    }
+
+    jpayload = json.dumps(payload, ensure_ascii=False, indent=2)
+    response = requests.put(url, jpayload, headers=header)
+    if response.status_code < 400:
+        logger.info('Batch synthesis job submitted successfully')
+        logger.info(f'Job ID: {response.json()["id"]}')
+        return True
+    else:
+        logger.error(f'Failed to submit batch synthesis job: [{response.status_code}], {response.text}')
+        return False
+
+
+def get_synthesis(job_id: str):
+    url = f'{SPEECH_ENDPOINT}/texttospeech/batchsyntheses/{job_id}?api-version={API_VERSION}'
+    header = _authenticate()
+    response = requests.get(url, headers=header)
+    if response.status_code < 400:
+        logger.info('Get batch synthesis job successfully')
+        logger.info(response.json())
+        return response.json()
+    else:
+        logger.error(f'Failed to get batch synthesis job: {response.text}')
+
+
+def list_synthesis_jobs(skip: int = 0, max_page_size: int = 100):
+    """List all batch synthesis jobs in the subscription"""
+    url = f'{SPEECH_ENDPOINT}/texttospeech/batchsyntheses?api-version={API_VERSION}&skip={skip}&maxpagesize={max_page_size}'
+    header = _authenticate()
+    response = requests.get(url, headers=header)
+    if response.status_code < 400:
+        logger.info(f'List batch synthesis jobs successfully, got {len(response.json()["values"])} jobs')
+        logger.info(response.json())
+    else:
+        logger.error(f'Failed to list batch synthesis jobs: {response.text}')
+
+
+def get_artifacts(job_response):
+    if "outputs" in job_response and "result" in job_response["outputs"]:
+        download_url = job_response["outputs"]["result"]
+        download_file(download_url, "results.zip")
+    else:
+        logger.error("No artifacts found in job response")
+
+
+def download_file(url: str, file_name: str):
+    response = requests.get(url)
+    if response.status_code == 200:
+        with open(file_name, 'wb') as f:
+            f.write(response.content)
+        logger.info(f'Downloaded file: {file_name}')
+        # Unzip the file
+        with zipfile.ZipFile(file_name, 'r') as zip_ref:
+            zip_ref.extractall('extracted_files')
+            # Process and play the audio files
+
+    else:
+        logger.error(f'Failed to download file: {url}')
+
+
+if __name__ == '__main__':
+    job_id = _create_job_id()
+    if submit_synthesis(job_id):
+        while True:
+            job_response = get_synthesis(job_id)
+            status = job_response['status']
+            if status == 'Succeeded':
+                logger.info('Batch synthesis job succeeded')
+                get_artifacts(job_response)
+                break
+            elif status == 'Failed':
+                logger.error('Batch synthesis job failed')
+                break
+            else:
+                logger.info(f'Batch synthesis job is still running, status [{status}]')
+                time.sleep(5)
