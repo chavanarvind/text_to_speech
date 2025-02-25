@@ -1,0 +1,259 @@
+import os
+import sys
+import time
+import pygame
+import pysrt
+import json
+from PyQt5.QtCore import QUrl, QTimer, pyqtSlot
+from PyQt5.QtWebEngineWidgets import QWebEngineView
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QHBoxLayout, QMessageBox, QListWidget, QLabel, QGridLayout
+from PyQt5.QtWidgets import QFileDialog
+class AudioPlayer:
+    def __init__(self, audio_file, subtitles_file):
+        pygame.mixer.init()
+        self.audio_file = audio_file
+        self.subtitles = pysrt.open(subtitles_file)
+        self.is_paused = False
+        self.is_playing = False
+        self.current_subtitle_index = 0
+        self.webview = None
+        self.start_time = None
+        self.paused_time = 0
+        self.section_start_time = 0
+        self.section_end_time = None
+
+    def play_audio(self):
+        if not os.path.exists(self.audio_file):
+            self.show_error(f"Audio file not found: {self.audio_file}")
+            return
+        if not self.is_paused:
+            pygame.mixer.music.load(self.audio_file)
+            pygame.mixer.music.play(start=self.section_start_time)
+            self.start_time = time.time() - self.section_start_time
+        else:
+            pygame.mixer.music.unpause()
+            self.start_time = time.time() - self.paused_time
+        self.is_playing = True
+        self.is_paused = False
+        QTimer.singleShot(0, self.update_subtitles)
+
+    def pause_audio(self):
+        if self.is_playing:
+            pygame.mixer.music.pause()
+            self.is_paused = True
+            self.is_playing = False
+            self.paused_time = time.time() - self.start_time
+
+    def stop_audio(self):
+        pygame.mixer.music.stop()
+        self.is_playing = False
+        self.is_paused = False
+        self.paused_time = 0
+        self.current_subtitle_index = 0
+        if self.webview:
+            self.webview.page().runJavaScript('resetHighlights()')
+
+    def update_subtitles(self):
+        if not self.is_playing:
+            return
+        current_time = time.time() - self.start_time
+        if self.section_end_time and current_time >= self.section_end_time:
+            self.stop_audio()
+            return
+        while self.current_subtitle_index < len(self.subtitles):
+            subtitle = self.subtitles[self.current_subtitle_index]
+            start_sec = subtitle.start.ordinal / 1000
+            end_sec = subtitle.end.ordinal / 1000
+            if start_sec <= current_time <= end_sec:
+                self.highlight_text(subtitle.text)
+                break
+            if current_time > end_sec:
+                self.current_subtitle_index += 1  
+        if self.is_playing:
+            QTimer.singleShot(100, self.update_subtitles)
+
+    def highlight_text(self, text):
+        escaped_text = text.replace("'", "\\'").replace('"', '\\"')
+        if self.webview:
+            self.webview.page().runJavaScript(f'highlightNextOccurrence("{escaped_text}")')
+
+    def show_error(self, message):
+        msg_box = QMessageBox()
+        msg_box.setIcon(QMessageBox.Critical)
+        msg_box.setText(message)
+        msg_box.setWindowTitle("Error")
+        msg_box.exec_()
+
+
+class Dashboard(QWidget):
+    def __init__(self, audio_player, sections_data):
+        super().__init__()
+        self.audio_player = audio_player
+        self.sections_data = sections_data
+        self.html_file = None  # Will be set after file selection
+        self.original_content = None
+        self.init_ui()
+
+    def init_ui(self):
+        self.setWindowTitle("Dashboard - Audio Player with Text Highlighting")
+        self.setGeometry(100, 100, 1000, 700)
+
+            # Set dark blue background for the entire widget
+        self.setStyleSheet("""
+        QWidget {
+            background-color: #0A1931;  /* Dark Blue */
+            color: white;
+            font-family: Arial;
+            font-size: 14px;
+        }
+        QPushButton {
+            background-color: #185ADB;  /* Medium Blue */
+            color: white;
+            border-radius: 5px;
+            padding: 8px;
+        }
+        QPushButton:hover {
+            background-color: #1E90FF; /* Brighter Blue */
+        }
+        QPushButton:pressed {
+            background-color: #0B60B0; /* Darker Blue */
+        }
+        QListWidget {
+            background-color: #122643; /* Darker shade for sections */
+            color: white;
+            border: 1px solid #185ADB;
+        }
+        QLabel {
+            font-weight: bold;
+            color: white;
+        }
+        QWebEngineView {
+            border: 2px solid #185ADB;
+        }
+    """)
+
+
+    
+        grid_layout = QGridLayout()
+        self.setLayout(grid_layout)
+
+        # Upload button (Small size, aligned at the top)
+        upload_button = QPushButton("Upload HTML File")
+        upload_button.setFixedHeight(30)  # Restrict height
+        grid_layout.addWidget(upload_button, 0, 0, 1, 2)  # Span across 2 columns
+        upload_button.clicked.connect(self.upload_html_file)
+
+        # Section List (Left Panel)
+        self.section_list = QListWidget()
+        self.section_list.addItems(self.sections_data.keys())
+        self.section_list.clicked.connect(self.handle_section_change)
+
+        # Set fixed width for section list so it doesn't expand too much
+        self.section_list.setFixedWidth(250)
+
+        # WebView (Right Panel) - Should take most space
+        self.webview = QWebEngineView()
+        self.webview.setMinimumSize(700, 500)  # Ensure enough space for the HTML file
+
+       # Add widgets to layout
+        grid_layout.addWidget(QLabel("Sections"), 1, 0)
+        grid_layout.addWidget(self.section_list, 2, 0, 3, 1)
+        grid_layout.addWidget(QLabel("Highlighted Text"), 1, 1)
+        grid_layout.addWidget(self.webview, 2, 1, 3, 1)
+
+       # Audio Control Buttons (Below)
+        button_layout = QHBoxLayout()
+        play_button = QPushButton('▶ Play Section')
+        play_button.clicked.connect(self.play_audio)
+        button_layout.addWidget(play_button)
+
+        pause_button = QPushButton('⏸ Pause')
+        pause_button.clicked.connect(self.pause_audio)
+        button_layout.addWidget(pause_button)
+
+        stop_button = QPushButton('⏹ Stop')
+        stop_button.clicked.connect(self.stop_audio)
+        button_layout.addWidget(stop_button)
+
+        reset_button = QPushButton('🔄 Start/Reset')
+        reset_button.clicked.connect(self.reset_audio)
+        button_layout.addWidget(reset_button)
+
+        grid_layout.addWidget(QLabel("Audio Controls"), 5, 0, 1, 2)  # Span 2 columns
+        grid_layout.addLayout(button_layout, 6, 0, 1, 2)  # Span 2 columns
+
+    
+    
+
+    def upload_html_file(self):
+        options = QFileDialog.Options()
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select HTML File", "", "HTML Files (*.html);;All Files (*)", options=options)
+        
+        if file_path:
+            self.html_file = file_path
+            self.original_content = self.load_original_content()
+            self.webview.setUrl(QUrl.fromLocalFile(self.html_file))
+            self.audio_player.webview = self.webview
+
+    def load_original_content(self):
+        with open(self.html_file, 'r', encoding='utf-8') as file:
+            return file.read()
+
+    def reset_audio(self):
+        if not self.html_file:
+            self.audio_player.show_error("Please upload an HTML file first.")
+            return
+
+        self.audio_player.stop_audio()
+        self.audio_player.webview.page().runJavaScript('resetHighlights()')
+        self.audio_player.webview.page().runJavaScript(f"document.body.innerHTML = `{self.original_content}`;")
+        self.audio_player.section_start_time = 0
+        self.audio_player.section_end_time = None
+        self.audio_player.play_audio()
+
+    def play_audio(self):
+        self.audio_player.play_audio()
+
+    def pause_audio(self):
+        self.audio_player.pause_audio()
+
+    def stop_audio(self):
+        self.audio_player.stop_audio()
+
+    @pyqtSlot()
+    def handle_section_change(self):
+        if not self.html_file:
+            self.audio_player.show_error("Please upload an HTML file first.")
+            return
+
+        section_name = self.section_list.currentItem().text()
+        section = self.sections_data.get(section_name)
+        if not section:
+            return
+        self.audio_player.webview.page().runJavaScript('resetHighlights()')
+        self.audio_player.webview.page().runJavaScript(f"highlightSection('{section_name}')")
+
+        try:
+            self.audio_player.stop_audio()
+            self.audio_player.section_start_time = self.convert_to_seconds(section.get('start_time', '00:00:00,000'))
+            self.audio_player.section_end_time = self.convert_to_seconds(section.get('end_time', '00:00:00,000'))
+        except Exception as e:
+            print(f"Error processing section times: {e}")
+
+    def convert_to_seconds(self, time_str):
+        parts = time_str.split(',')
+        time_parts = parts[0].split(':')
+        return int(time_parts[0]) * 3600 + int(time_parts[1]) * 60 + float(time_parts[2]) + int(parts[1]) / 1000
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    audio_player = AudioPlayer('nic/sml_ges.mp3', 'nic/sml_ges.srt')
+    
+    # Old way (which caused error due to 3rd argument missing)
+    # dashboard = Dashboard(audio_player, 'nic/clean_output.html', json.load(open('updated_sections.json', 'r', encoding='utf-8')))
+
+    # New way (without specifying HTML file initially)
+    dashboard = Dashboard(audio_player, json.load(open('updated_sections.json', 'r', encoding='utf-8')))
+    
+    dashboard.show()
+    sys.exit(app.exec_())
