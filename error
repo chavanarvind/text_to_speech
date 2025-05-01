@@ -1,1 +1,1 @@
-na
+AttributeError: module 'pyarrow.parquet' has no attribute 'concat_tables'
