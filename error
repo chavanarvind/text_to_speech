@@ -1,1 +1,53 @@
-AttributeError: module 'pyarrow.parquet' has no attribute 'concat_tables'
+import os
+import glob
+import pyarrow as pa
+import pyarrow.parquet as pq
+import pandas as pd
+import gc
+
+# === CONFIGURATION ===
+download_path = './bom_data'           # Folder where parquet files are located
+output_csv = 'data/raw.csv'            # Output CSV file
+columns_to_extract = ['column1', 'column2']  # Replace with actual column names
+
+# === SAFETY CHECK ===
+if not os.path.exists(output_csv):
+
+    os.makedirs('data', exist_ok=True)         # Ensure output folder exists
+    os.makedirs(download_path, exist_ok=True)  # Ensure download folder exists (for Azure download)
+
+    parquet_files = glob.glob(os.path.join(download_path, '*.parquet'))
+
+    tables = []
+    for file in parquet_files:
+        try:
+            print(f"Reading: {file}")
+            table = pq.read_table(file, columns=columns_to_extract)
+            tables.append(table)
+
+            os.remove(file)
+            print(f"Deleted: {file}")
+
+            # Optional: trigger garbage collection
+            gc.collect()
+
+        except Exception as e:
+            print(f"Error reading {file}: {e}")
+
+    if tables:
+        combined_table = pa.concat_tables(tables)
+        df = combined_table.to_pandas()
+
+        # Count and remove duplicates
+        num_duplicates = df.duplicated().sum()
+        print(f"Number of duplicate rows: {num_duplicates}")
+        df = df.drop_duplicates()
+
+        # Save to CSV
+        df.to_csv(output_csv, index=False)
+        print(f"Cleaned data saved to: {output_csv}")
+
+    else:
+        print("No valid Parquet files found.")
+else:
+    print(f"'{output_csv}' already exists — skipping processing.")
