@@ -1,30 +1,12 @@
-[12/18/2024 05:42:57 PM India Standard Time] Batch synthesis job submitted successfully
-[12/18/2024 05:42:57 PM India Standard Time] Job ID: 3d82489d-9276-43c3-bdce-cd9a7f703cbb
-[12/18/2024 05:42:58 PM India Standard Time] Get batch synthesis job successfully
-[12/18/2024 05:42:58 PM India Standard Time] {'id': '3d82489d-9276-43c3-bdce-cd9a7f703cbb', 'status': 'Failed', 'createdDateTime': '2024-12-18T12:12:57.6633734Z', 'lastActionDateTime': '2024-12-18T12:12:58.0343962', 'inputKind': 'SSML', 'customVoices': {}, 'properties': {'timeToLiveInHours': 168, 'outputFormat': 'audio-24khz-160kbitrate-mono-mp3', 'concatenateResult': False, 'decompressOutputFiles': False, 'wordBoundaryEnabled': True, 'sentenceBoundaryEnabled': True, 'sizeInBytes': 0, 'succeededAudioCount': 0, 'failedAudioCount': 1, 'durationInMilliseconds': 0, 'billingDetails': {'neuralCharacters': 24568}, 'error': {'code': 'BadRequest', 'message': 'Error: Connection was closed by the remote host. Error code: 1007. Error details: Status(StatusCode="FailedPrecondition", Detail="SSML parsing error: 0x80045003 - The caller has spec USP state: TurnStarted. Received audio size: 0 bytes.'}}, 'synthesisConfig': {'voice': 'tr-TR-EmelNeural'}, 'outputs': {'result': 'https://stttssvcproduse.blob.core.windows.net/batchsynthesis-output/9de21869ea5340ceabe5b5c4f7bb8018/3d82489d-9276-43c3-bdce-cd9a7f703cbb/results.zip?skoid=72d5b856-6c19-4f12-8d9f-57c205aaba10&sktid=33e01921-4d64-4f8c-a055-5bdaffd5e33d&skt=2024-12-18T04%3A04%3A36Z&ske=2024-12-24T04%3A09%3A36Z&sks=b&skv=2023-11-03&sv=2023-11-03&st=2024-12-18T12%3A07%3A58Z&se=2024-12-21T12%3A12%3A58Z&sr=b&sp=rl&sig=dDgezLuCBIfCOVUiLBjvDBKBSSjYTJ8%2BfNNnfSMDljk%3D'}}
-[12/18/2024 05:42:58 PM India Standard Time] Batch synthesis job failed
-(.venv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\audio\audio-agents\text2speech>
 
+# azureml-core of version 1.0.72 or higher is required
+from azureml.core import Workspace, Dataset
 
+subscription_id = '06eaff3d-17f0-43e5-9619-fb73df4372cb'
+resource_group = 'AZR-WEH-DTO-AML-Production'
+workspace_name = 'AML-DTO-Marmot-prod'
 
-adRequest', 'message': 'Error: Connection was closed by the remote host. Error code: 1007. Error details: Status(StatusCode="FailedPrecondition", Detail="SSML parsing error: 0x80045003 - The caller has spec USP state: TurnStarted. Received audio size: 0 bytes.'}}, 'synthesisConfig': {'voice': 'tr-TR-EmelNeural'}, 'outputs': {'result': 'https://stttssvcproduse.blob.core.windows.net/batchsynthesis-output/9de21869ea5340ceabe5b5c4f7bb8018/3d82489d-9276-43c3-bdce-cd9a7f703cbb/results.zip?skoid=72d5b856-6c19-4f12-8d9f-57c205aaba10&sktid=33e01921-4d64-4f8c-a055-5bdaffd5e33d&skt=2024-12-18T04%3A04%3A36Z&ske=2024-12-24T04%3A09%3A36Z&sks=b&skv=2023-11-03&sv=2023-11-03&st=2024-12-18T12%3A07%3A58Z&se=2024-12-21T12%3A12%3A58Z&sr=b&sp=rl&sig=dDgezLuCBIfCOVUiLBjvDBKBSSjYTJ8%2BfNNnfSMDljk%3D'}}
-[12/18/2024 05:42:58 PM India Standard Time] Batch synthesis job failed
-(.venv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\audio\audio-agents\text2speech>
+workspace = Workspace(subscription_id, resource_group, workspace_name)
 
-
-
-
-
-
-adRequest', 'message': 'Error: Connection was closed by the remote host. Error code: 1007. Error details: Status(StatusCode="FailedPrecondition", Detail="SSML parsing error: 0x80045003 - The caller has spec USP state: TurnStarted. Received audio size: 0 bytes.'}}, 'synthesisConfig': {'voice': 'tr-TR-EmelNeural'}, 'outputs': {'result': 'https://stttssvcproduse.blob.core.windows.net/batchsynthesis-output/9de21869ea5340ceabe5b5c4f7bb8018/3d82489d-9276-43c3-bdce-cd9a7f703cbb/results.zip?skoid=72d5b856-6c19-4f12-8d9f-57c205aaba10&sktid=33e01921-4d64-4f8c-a055-5bdaffd5e33d&skt=2024-12-18T04%3A04%3A36Z&ske=2024-12-24T04%3A09%3A36Z&sks=b&skv=2023-11-03&sv=2023-11-03&st=2024-12-18T12%3A07%3A58Z&se=2024-12-21T12%3A12%3A58Z&sr=b&sp=rl&sig=dDgezLuCBIfCOVUiLBjvDBKBSSjYTJ8%2BfNNnfSMDljk%3D'}}
-[12/18/2024 05:42:58 PM India Standard Time] Batch synthesis job failed
-(.venv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\audio\audio-agents\text2speech>
-
-
-
-adRequest', 'message': 'Error: Connection was closed by the remote host. Error code: 1007. Error details: Status(StatusCode="FailedPrecondition", Detail="SSML parsing error: 0x80045003 - The caller has spec USP state: TurnStarted. Received audio size: 0 bytes.'}}, 'synthesisConfig': {'voice': 'tr-TR-EmelNeural'}, 'outputs': {'result': 'https://stttssvcproduse.blob.core.windows.net/batchsynthesis-output/9de21869ea5340ceabe5b5c4f7bb8018/3d82489d-9276-43c3-bdce-cd9a7f703cbb/results.zip?skoid=72d5b856-6c19-4f12-8d9f-57c205aaba10&sktid=33e01921-4d64-4f8c-a055-5bdaffd5e33d&skt=2024-12-18T04%3A04%3A36Z&ske=2024-12-24T04%3A09%3A36Z&sks=b&skv=2023-11-03&sv=2023-11-03&st=2024-12-18T12%3A07%3A58Z&se=2024-12-21T12%3A12%3A58Z&sr=b&sp=rl&sig=dDgezLuCBIfCOVUiLBjvDBKBSSjYTJ8%2BfNNnfSMDljk%3D'}}
-[12/18/2024 05:42:58 PM India Standard Time] Batch synthesis job failed
-(.venv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\audio\audio-agents\text2speech>
-adRequest', 'message': 'Error: Connection was closed by the remote host. Error code: 1007. Error details: Status(StatusCode="FailedPrecondition", Detail="SSML parsing error: 0x80045003 - The caller has spec USP state: TurnStarted. Received audio size: 0 bytes.'}}, 'synthesisConfig': {'voice': 'tr-TR-EmelNeural'}, 'outputs': {'result': 'https://stttssvcproduse.blob.core.windows.net/batchsynthesis-output/9de21869ea5340ceabe5b5c4f7bb8018/3d82489d-9276-43c3-bdce-cd9a7f703cbb/results.zip?skoid=72d5b856-6c19-4f12-8d9f-57c205aaba10&sktid=33e01921-4d64-4f8c-a055-5bdaffd5e33d&skt=2024-12-18T04%3A04%3A36Z&ske=2024-12-24T04%3A09%3A36Z&sks=b&skv=2023-11-03&sv=2023-11-03&st=2024-12-18T12%3A07%3A58Z&se=2024-12-21T12%3A12%3A58Z&sr=b&sp=rl&sig=dDgezLuCBIfCOVUiLBjvDBKBSSjYTJ8%2BfNNnfSMDljk%3D'}}
-adRequest', 'message': 'Error: Connection was closed by the remote host. Error code: 1007. Error details: Status(StatusCode="FailedPrecondition", Detail="SSML parsing error: 0x80045003 - The caller has spec USP state: TurnStarted. Received audio size: 0 bytes.'}}, 'synthesisConfig': {'voice': 'tr-TR-EmelNeural'}, 'outputs': {'result': 'https://stttssvcproduse.blob.core.windows.net/batchsynthesis-output/9de21869ea5340ceabe5b5c4f7bb8018/3d82489d-9276-43c3-bdce-cd9a7f703cbb/results.zip?skoid=72d5b856-6c19-adRequest', 'message': 'Error: Connection was closed by the remote host. Error code: 1007. Error details: Status(StatusCode="FailedPrecondition", Detail="SSML parsing error: 0x80045003 - The caller has spec USP state: TurnStarted. Received audio size: 0 bytes.'}}, 'synthesisConfig': {'voice': 'tr-TR-EmelNeural'}, 'outputs': {'result': 'https://stttssvcproduse.blob.core.windows.net/batchsynthesis-output/9de21869ea5340ceabe5b5c4f7bb8018/3d82489d-9276-43c3-bdce-cd9a7f703cbb/results.zip?skoid=72d5b856-6c19-4f12-8d9f-57c205aaba10&sktid=33e01921-4d64-4f8c-a055-5bdaffd5e33d&skt=2024-12-18T04%3A04%3A36Z&ske=2024-12-24T04%3A09%3A36Z&sks=b&skv=2023-11-03&sv=2023-11-03&st=2024-12-18T12%3A07%3A58Z&se=2024-12-21T12%3A12%3A58Z&sr=b&sp=rl&sig=dDgezLuCBIfCOVUiLBjvDBKBSSjYTJ8%2BfNNnfSMDljk%3D'}}
-[12/18/2024 05:42:58 PM India Standard Time] Batch synthesis job failed
+dataset = Dataset.get_by_name(workspace, name='harmonized_bom_data_asset')
+dataset.download(target_path='.', overwrite=False)
