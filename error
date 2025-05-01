@@ -1,4 +1,4 @@
-
+STANDARD_D4S_V3
 
 Provisioning error
 The specified Azure ML Compute Instance achava052 encountered an unusable node. This may be caused by incorrect virtual network configuration. Refer to https://aka.ms/amlcomputevnet for details. Follow up with Azure Support if you have any concerns.
