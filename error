@@ -1,42 +1,6 @@
-import os
-import glob
-import pyarrow.parquet as pq
-import pandas as pd
-import gc
-
-# === CONFIGURATION ===
-download_path = './bom_data'           # Folder where parquet files are located
-output_dir = 'data/cleaned_parts'      # Folder to store cleaned CSVs
-columns_to_extract = ['column1', 'column2']  # Replace with actual column names
-
-# === SETUP ===
-os.makedirs(output_dir, exist_ok=True)
-os.makedirs(download_path, exist_ok=True)
-
-parquet_files = glob.glob(os.path.join(download_path, '*.parquet'))
-
-# === PROCESS EACH FILE SEPARATELY ===
-for idx, file in enumerate(parquet_files, start=1):
-    try:
-        print(f"Processing: {file}")
-
-        # Read specific columns
-        table = pq.read_table(file, columns=columns_to_extract)
-        df = table.to_pandas()
-
-        # Remove duplicates in this file
-        num_duplicates = df.duplicated().sum()
-        print(f"File {file} - duplicate rows: {num_duplicates}")
-        df = df.drop_duplicates()
-
-        # Save to CSV
-        out_file = os.path.join(output_dir, f"raw_part_{idx}.csv")
-        df.to_csv(out_file, index=False)
-        print(f"Saved cleaned CSV: {out_file}")
-
-        # Clean up
-        del df, table
-        gc.collect()
-
-    except Exception as e:
-        print(f"Error processing {file}: {e}")
+Columns
+MATL_SHRT_DESC 
+CMPNT_MATL_DESC
+CMPNT_MATL_TYPE_CD
+CMPNT_CAT_CD_DESC
+CMPNT_UOM_CD 
