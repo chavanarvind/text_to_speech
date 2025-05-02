@@ -4,3 +4,14 @@ CMPNT_MATL_DESC
 CMPNT_MATL_TYPE_CD
 CMPNT_CAT_CD_DESC
 CMPNT_UOM_CD 
+
+
+New Column	Description
+has_api	Keyword flag for active pharmaceutical ingredients
+has_pkg	Package-related keywords
+has_chem	Chemical-related keywords
+has_liquid	Liquid/cream-related keywords
+matl_type_mapped	Interpreted material type from SAP codes
+is_liquid_uom	UOM indicates liquid
+is_count_uom	UOM indicates discrete count
+desc_len, word_count, has_numeric	Descriptive complexity
