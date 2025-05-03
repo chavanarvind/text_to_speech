@@ -1,12 +1,16 @@
 import pandas as pd
 import os
 
+# === Ensure folders exist ===
+os.makedirs('./data', exist_ok=True)
+os.makedirs('./data/cleaned_parts', exist_ok=True)
+
 # === FILE PATHS ===
 csv_path = './data/combined.csv'
 parquet_path = './data/combined.parquet'
 target_map_path = './data/cleaned_parts/target_map.csv'
 
-# === STEP 1: Convert CSV to Parquet in chunks ===
+# === STEP 1: Convert CSV to Parquet if not exists ===
 if not os.path.exists(parquet_path):
     print("🔁 Converting CSV to Parquet...")
     first = True
@@ -15,6 +19,8 @@ if not os.path.exists(parquet_path):
         chunk.to_parquet(parquet_path, index=False, engine='pyarrow', append=not first)
         first = False
     print("✅ CSV converted to Parquet:", parquet_path)
+else:
+    print("✅ Parquet file already exists:", parquet_path)
 
 # === STEP 2: Load target map ===
 print("📥 Loading target map...")
