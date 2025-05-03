@@ -8,20 +8,18 @@ os.makedirs('./data/cleaned_parts', exist_ok=True)
 
 # === FILE PATHS ===
 csv_path = './data/combined.csv'
-parquet_path = './data/combined.parquet'
+parquet_temp_path = './data/combined_temp.parquet'   # temporary before merge
+parquet_final_path = './data/combined.parquet'
 target_map_path = './data/cleaned_parts/target_map.csv'
 
-# === STEP 1: Convert CSV to Parquet in chunks if not already done ===
-if not os.path.exists(parquet_path):
-    print("🔁 Converting CSV to Parquet...")
-    first = True
-    for chunk in pd.read_csv(csv_path, chunksize=1_000_000, dtype=str):
-        chunk = chunk.drop_duplicates()
-        chunk.to_parquet(parquet_path, index=False, engine='pyarrow', append=not first)
-        first = False
-    print("✅ CSV converted to Parquet:", parquet_path)
-else:
-    print("✅ Parquet file already exists:", parquet_path)
+# === STEP 1: Convert CSV to TEMP Parquet in chunks ===
+print("🔁 Converting CSV to temporary Parquet (chunked)...")
+first = True
+for chunk in pd.read_csv(csv_path, chunksize=1_000_000, dtype=str):
+    chunk = chunk.drop_duplicates()
+    chunk.to_parquet(parquet_temp_path, index=False, engine='pyarrow', append=not first)
+    first = False
+print("✅ CSV converted to:", parquet_temp_path)
 
 # === STEP 2: Load target map ===
 print("📥 Loading target map...")
@@ -29,11 +27,9 @@ target_map = pd.read_csv(target_map_path, usecols=['CMPNT_CAT_CD_DESC', 'Final C
 target_map = target_map.drop_duplicates()
 target_map['CMPNT_CAT_CD_DESC'] = target_map['CMPNT_CAT_CD_DESC'].astype('category')
 
-# === STEP 3: Read Parquet in batches, merge, and overwrite Parquet file ===
-print("🔁 Merging with target_map and updating the same file...")
-
-# Use PyArrow to read in batches
-pf = pq.ParquetFile(parquet_path)
+# === STEP 3: Merge in chunks and write to FINAL Parquet ===
+print("🔁 Merging with target_map and saving to final Parquet...")
+pf = pq.ParquetFile(parquet_temp_path)
 first = True
 
 for batch in pf.iter_batches(batch_size=1_000_000):
@@ -41,7 +37,10 @@ for batch in pf.iter_batches(batch_size=1_000_000):
     chunk = chunk.drop_duplicates()
     chunk['CMPNT_CAT_CD_DESC'] = chunk['CMPNT_CAT_CD_DESC'].astype('category')
     merged = chunk.merge(target_map, how='left', on='CMPNT_CAT_CD_DESC')
-    merged.to_parquet(parquet_path, index=False, engine='pyarrow', append=not first)
+    merged.to_parquet(parquet_final_path, index=False, engine='pyarrow', append=not first)
     first = False
 
-print("✅ Done. File updated:", parquet_path)
+print("✅ Final merged file saved at:", parquet_final_path)
+
+# Optional: delete temp file
+# os.remove(parquet_temp_path)
