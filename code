@@ -1,25 +1,27 @@
 import pandas as pd
+import pyarrow as pa
 import pyarrow.parquet as pq
 import os
+import shutil
 
-# === Ensure required folders exist ===
+# === Ensure folders exist ===
 os.makedirs('./data', exist_ok=True)
 os.makedirs('./data/cleaned_parts', exist_ok=True)
+os.makedirs('./data/temp_chunks', exist_ok=True)  # for intermediate chunk storage
 
 # === FILE PATHS ===
 csv_path = './data/combined.csv'
-parquet_temp_path = './data/combined_temp.parquet'   # temporary before merge
-parquet_final_path = './data/combined.parquet'
+temp_parquet_dir = './data/temp_chunks'
+final_parquet_path = './data/combined.parquet'
 target_map_path = './data/cleaned_parts/target_map.csv'
 
-# === STEP 1: Convert CSV to TEMP Parquet in chunks ===
-print("🔁 Converting CSV to temporary Parquet (chunked)...")
-first = True
-for chunk in pd.read_csv(csv_path, chunksize=1_000_000, dtype=str):
+# === STEP 1: Convert CSV to individual Parquet chunk files ===
+print("🔁 Converting CSV to temporary Parquet chunks...")
+for i, chunk in enumerate(pd.read_csv(csv_path, chunksize=1_000_000, dtype=str)):
     chunk = chunk.drop_duplicates()
-    chunk.to_parquet(parquet_temp_path, index=False, engine='pyarrow', append=not first)
-    first = False
-print("✅ CSV converted to:", parquet_temp_path)
+    chunk_path = os.path.join(temp_parquet_dir, f"chunk_{i}.parquet")
+    chunk.to_parquet(chunk_path, index=False, engine='pyarrow')
+print("✅ Chunks written to:", temp_parquet_dir)
 
 # === STEP 2: Load target map ===
 print("📥 Loading target map...")
@@ -27,20 +29,31 @@ target_map = pd.read_csv(target_map_path, usecols=['CMPNT_CAT_CD_DESC', 'Final C
 target_map = target_map.drop_duplicates()
 target_map['CMPNT_CAT_CD_DESC'] = target_map['CMPNT_CAT_CD_DESC'].astype('category')
 
-# === STEP 3: Merge in chunks and write to FINAL Parquet ===
-print("🔁 Merging with target_map and saving to final Parquet...")
-pf = pq.ParquetFile(parquet_temp_path)
-first = True
+# === STEP 3: Merge chunks and write to final Parquet file ===
+print("🔁 Merging chunks and saving to final Parquet...")
+writer = None
 
-for batch in pf.iter_batches(batch_size=1_000_000):
-    chunk = pd.DataFrame(batch.to_pandas())
+for file in sorted(os.listdir(temp_parquet_dir)):
+    if not file.endswith(".parquet"):
+        continue
+
+    file_path = os.path.join(temp_parquet_dir, file)
+    chunk = pd.read_parquet(file_path)
     chunk = chunk.drop_duplicates()
     chunk['CMPNT_CAT_CD_DESC'] = chunk['CMPNT_CAT_CD_DESC'].astype('category')
     merged = chunk.merge(target_map, how='left', on='CMPNT_CAT_CD_DESC')
-    merged.to_parquet(parquet_final_path, index=False, engine='pyarrow', append=not first)
-    first = False
+    table = pa.Table.from_pandas(merged)
 
-print("✅ Final merged file saved at:", parquet_final_path)
+    if writer is None:
+        writer = pq.ParquetWriter(final_parquet_path, table.schema, compression='snappy')
+    
+    writer.write_table(table)
 
-# Optional: delete temp file
-# os.remove(parquet_temp_path)
+if writer:
+    writer.close()
+
+print("✅ Done. Final merged Parquet saved to:", final_parquet_path)
+
+# === STEP 4: Cleanup (optional) ===
+shutil.rmtree(temp_parquet_dir)
+print("🧹 Temporary chunks deleted.")
