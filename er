@@ -1,0 +1,97 @@
+import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
+import os
+import shutil
+
+# === Ensure required folders exist ===
+os.makedirs('./data', exist_ok=True)
+os.makedirs('./data/cleaned_parts', exist_ok=True)
+os.makedirs('./data/temp_chunks', exist_ok=True)
+
+# === FILE PATHS ===
+csv_path = './data/combined.csv'
+temp_parquet_dir = './data/temp_chunks'
+final_parquet_path = './data/combined.parquet'
+target_map_path = './data/cleaned_parts/target_map.csv'
+
+# === STEP 0: Delete old output if it exists ===
+if os.path.exists(final_parquet_path):
+    print("🗑️ Existing combined.parquet found. Removing...")
+    os.remove(final_parquet_path)
+
+# === STEP 1: Convert CSV to temporary Parquet chunks ===
+print("🔁 Converting CSV to temporary Parquet chunks...")
+chunk_files = []
+for i, chunk in enumerate(pd.read_csv(csv_path, chunksize=1_000_000, dtype=str)):
+    chunk = chunk.drop_duplicates()
+    chunk_path = os.path.join(temp_parquet_dir, f"chunk_{i}.parquet")
+    chunk.to_parquet(chunk_path, index=False, engine='pyarrow')
+    chunk_files.append(chunk_path)
+print(f"✅ {len(chunk_files)} chunks written to {temp_parquet_dir}")
+
+# === STEP 2: Load and prepare target map ===
+print("📥 Loading target map...")
+target_map = pd.read_csv(target_map_path, usecols=['CMPNT_CAT_CD_DESC', 'Final Category'], dtype=str)
+target_map = target_map.drop_duplicates()
+target_map['CMPNT_CAT_CD_DESC'] = target_map['CMPNT_CAT_CD_DESC'].astype('category')
+
+# === STEP 3: Merge chunks and write to final Parquet (overwrite) ===
+print("🔁 Merging chunks and writing to combined.parquet...")
+writer = None
+
+for chunk_file in chunk_files:
+    chunk = pd.read_parquet(chunk_file)
+    chunk = chunk.drop_duplicates()
+    chunk['CMPNT_CAT_CD_DESC'] = chunk['CMPNT_CAT_CD_DESC'].astype('category')
+
+    merged = chunk.merge(target_map, how='left', on='CMPNT_CAT_CD_DESC')
+    table = pa.Table.from_pandas(merged)
+
+    if writer is None:
+        writer = pq.ParquetWriter(final_parquet_path, table.schema, compression='snappy')
+
+    writer.write_table(table)
+
+if writer:
+    writer.close()
+    print("✅ Final Parquet file written at:", final_parquet_path)
+else:
+    print("⚠️ No chunks processed. Final file not written.")
+
+# === STEP 4: Clean up temporary chunks ===
+shutil.rmtree(temp_parquet_dir)
+print("🧹 Temporary chunk files deleted.")
+
+------------------------------------------------
+🔁 Converting CSV to temporary Parquet chunks...
+✅ 886 chunks written to ./data/temp_chunks
+📥 Loading target map...
+🔁 Merging chunks and writing to combined.parquet...
+---------------------------------------------------------------------------
+FileNotFoundError                         Traceback (most recent call last)
+Cell In[11], line 52
+     49     table = pa.Table.from_pandas(merged)
+     51     if writer is None:
+---> 52         writer = pq.ParquetWriter(final_parquet_path, table.schema, compression='snappy')
+     54     writer.write_table(table)
+     56 if writer:
+
+File /anaconda/envs/azureml_py310_sdkv2/lib/python3.10/site-packages/pyarrow/parquet/core.py:1015, in ParquetWriter.__init__(self, where, schema, filesystem, flavor, version, use_dictionary, compression, write_statistics, use_deprecated_int96_timestamps, compression_level, use_byte_stream_split, column_encoding, writer_engine_version, data_page_version, use_compliant_nested_type, encryption_properties, write_batch_size, dictionary_pagesize_limit, store_schema, write_page_index, write_page_checksum, sorting_columns, store_decimal_as_integer, **options)
+   1010 filesystem, path = _resolve_filesystem_and_path(where, filesystem)
+   1011 if filesystem is not None:
+   1012     # ARROW-10480: do not auto-detect compression.  While
+   1013     # a filename like foo.parquet.gz is nonconforming, it
+   1014     # shouldn't implicitly apply compression.
+-> 1015     sink = self.file_handle = filesystem.open_output_stream(
+   1016         path, compression=None)
+   1017 else:
+   1018     sink = where
+
+File /anaconda/envs/azureml_py310_sdkv2/lib/python3.10/site-packages/pyarrow/_fs.pyx:887, in pyarrow._fs.FileSystem.open_output_stream()
+
+File /anaconda/envs/azureml_py310_sdkv2/lib/python3.10/site-packages/pyarrow/error.pxi:155, in pyarrow.lib.pyarrow_internal_check_status()
+
+File /anaconda/envs/azureml_py310_sdkv2/lib/python3.10/site-packages/pyarrow/error.pxi:92, in pyarrow.lib.check_status()
+
+FileNotFoundError: [Errno 2] Failed to open local file './data/combined.parquet'. Detail: [errno 2] No such file or directory
