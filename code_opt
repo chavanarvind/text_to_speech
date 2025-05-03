@@ -1,0 +1,125 @@
+# azureml-core of version 1.0.72 or higher is required
+from azureml.core import Workspace, Dataset
+
+subscription_id = 
+resource_group = 
+workspace_name = 
+
+workspace = Workspace(subscription_id, resource_group, workspace_name)
+
+dataset = Dataset.get_by_name(workspace, name='harmonized_bom_data_asset')
+# Download dataset locally
+download_path = './parquet_files'
+os.makedirs(download_path, exist_ok=True)
+dataset.download(target_path=download_path, overwrite=True)
+
+
+
+# === CONFIGURATION ===
+#download_path = './bom_data'           # Folder where parquet files are located
+output_csv = 'data/raw.csv'            # Output CSV file
+columns_to_extract = ['MATL_SHRT_DESC', 'CMPNT_MATL_DESC','CMPNT_MATL_TYPE_CD','CMPNT_CAT_CD_DESC','CMPNT_UOM_CD']  # Replace with real column names
+
+# === SAFETY CHECK ===
+if not os.path.exists(output_csv):
+
+    os.makedirs('data', exist_ok=True)         # Ensure output folder exists
+    os.makedirs(download_path, exist_ok=True)  # Ensure download folder exists (for Azure download)
+
+    parquet_files = glob.glob(os.path.join(download_path, '*.parquet'))
+
+    tables = []
+    for file in parquet_files:
+        try:
+            print(f"Reading: {file}")
+            table = pq.read_table(file, columns=columns_to_extract)
+            tables.append(table)
+
+            os.remove(file)
+            print(f"Deleted: {file}")
+
+            # Optional: trigger garbage collection
+            gc.collect()
+
+        except Exception as e:
+            print(f"Error reading {file}: {e}")
+
+    if tables:
+        combined_table = pa.concat_tables(tables)
+        df = combined_table.to_pandas()
+
+        # Count and remove duplicates
+        num_duplicates = df.duplicated().sum()
+        print(f"Number of duplicate rows: {num_duplicates}")
+        df = df.drop_duplicates()
+
+        # Save to CSV
+        df.to_csv(output_csv, index=False)
+        print(f"Cleaned data saved to: {output_csv}")
+
+    else:
+        print("No valid Parquet files found.")
+else:
+    print(f"'{output_csv}' already exists — skipping processing.")
+
+
+
+import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
+import os
+import shutil
+
+# === Ensure required folders exist ===
+os.makedirs('./data', exist_ok=True)
+os.makedirs('./data/cleaned_parts', exist_ok=True)
+os.makedirs('./data/temp_chunks', exist_ok=True)  # temporary storage
+
+# === FILE PATHS ===
+csv_path = './data/combined.csv'
+temp_parquet_dir = './data/temp_chunks'
+final_parquet_path = './data/combined.parquet'
+target_map_path = './data/cleaned_parts/target_map.csv'
+
+# === STEP 1: Convert CSV to temporary Parquet chunks ===
+print("🔁 Converting CSV to temporary Parquet chunks...")
+chunk_files = []
+for i, chunk in enumerate(pd.read_csv(csv_path, chunksize=1_000_000, dtype=str)):
+    chunk = chunk.drop_duplicates()
+    chunk_path = os.path.join(temp_parquet_dir, f"chunk_{i}.parquet")
+    chunk.to_parquet(chunk_path, index=False, engine='pyarrow')
+    chunk_files.append(chunk_path)
+print(f"✅ {len(chunk_files)} chunks written to {temp_parquet_dir}")
+
+# === STEP 2: Load and prepare target map ===
+print("📥 Loading target map...")
+target_map = pd.read_csv(target_map_path, usecols=['CMPNT_CAT_CD_DESC', 'Final Category'], dtype=str)
+target_map = target_map.drop_duplicates()
+target_map['CMPNT_CAT_CD_DESC'] = target_map['CMPNT_CAT_CD_DESC'].astype('category')
+
+# === STEP 3: Merge each chunk and write to final Parquet ===
+print("🔁 Merging chunks and writing to final Parquet...")
+writer = None
+
+for chunk_file in chunk_files:
+    chunk = pd.read_parquet(chunk_file)
+    chunk = chunk.drop_duplicates()
+    chunk['CMPNT_CAT_CD_DESC'] = chunk['CMPNT_CAT_CD_DESC'].astype('category')
+    
+    merged = chunk.merge(target_map, how='left', on='CMPNT_CAT_CD_DESC')
+    table = pa.Table.from_pandas(merged)
+
+    if writer is None:
+        writer = pq.ParquetWriter(final_parquet_path, table.schema, compression='snappy')
+
+    writer.write_table(table)
+
+if writer:
+    writer.close()
+    print("✅ Final merged Parquet file created at:", final_parquet_path)
+else:
+    print("⚠️ No chunks processed. Final file not created.")
+
+# === STEP 4: Optional cleanup of temporary chunk files ===
+shutil.rmtree(temp_parquet_dir)
+print("🧹 Temporary chunk files deleted.")
