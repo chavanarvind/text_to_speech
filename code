@@ -6,21 +6,19 @@ csv_path = './data/combined.csv'
 parquet_path = './data/combined.parquet'
 target_map_path = './data/cleaned_parts/target_map.csv'
 
-# === STEP 1: Convert CSV to Parquet if not exists ===
+# === STEP 1: Convert CSV to Parquet in chunks ===
 if not os.path.exists(parquet_path):
     print("🔁 Converting CSV to Parquet...")
-    chunk_list = []
-    for chunk in pd.read_csv(csv_path, chunksize=1_000_000):
+    first = True
+    for chunk in pd.read_csv(csv_path, chunksize=1_000_000, dtype=str):
         chunk = chunk.drop_duplicates()
-        chunk_list.append(chunk)
-    combined_df = pd.concat(chunk_list, ignore_index=True)
-    combined_df.to_parquet(parquet_path, index=False)
-    del chunk_list, combined_df
+        chunk.to_parquet(parquet_path, index=False, engine='pyarrow', append=not first)
+        first = False
     print("✅ CSV converted to Parquet:", parquet_path)
 
 # === STEP 2: Load target map ===
 print("📥 Loading target map...")
-target_map = pd.read_csv(target_map_path, usecols=['CMPNT_CAT_CD_DESC', 'Final Category'])
+target_map = pd.read_csv(target_map_path, usecols=['CMPNT_CAT_CD_DESC', 'Final Category'], dtype=str)
 target_map = target_map.drop_duplicates()
 target_map['CMPNT_CAT_CD_DESC'] = target_map['CMPNT_CAT_CD_DESC'].astype('category')
 
@@ -33,8 +31,6 @@ for chunk in parquet_reader:
     chunk = chunk.drop_duplicates()
     chunk['CMPNT_CAT_CD_DESC'] = chunk['CMPNT_CAT_CD_DESC'].astype('category')
     merged = chunk.merge(target_map, how='left', on='CMPNT_CAT_CD_DESC')
-
-    # Overwrite combined.parquet on first write, append afterwards
     merged.to_parquet(parquet_path, index=False, engine='pyarrow', append=not first)
     first = False
 
