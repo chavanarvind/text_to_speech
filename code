@@ -1,7 +1,8 @@
 import pandas as pd
+import pyarrow.parquet as pq
 import os
 
-# === Ensure folders exist ===
+# === Ensure required folders exist ===
 os.makedirs('./data', exist_ok=True)
 os.makedirs('./data/cleaned_parts', exist_ok=True)
 
@@ -10,7 +11,7 @@ csv_path = './data/combined.csv'
 parquet_path = './data/combined.parquet'
 target_map_path = './data/cleaned_parts/target_map.csv'
 
-# === STEP 1: Convert CSV to Parquet if not exists ===
+# === STEP 1: Convert CSV to Parquet in chunks if not already done ===
 if not os.path.exists(parquet_path):
     print("🔁 Converting CSV to Parquet...")
     first = True
@@ -28,12 +29,15 @@ target_map = pd.read_csv(target_map_path, usecols=['CMPNT_CAT_CD_DESC', 'Final C
 target_map = target_map.drop_duplicates()
 target_map['CMPNT_CAT_CD_DESC'] = target_map['CMPNT_CAT_CD_DESC'].astype('category')
 
-# === STEP 3: Merge in chunks and OVERWRITE combined.parquet ===
+# === STEP 3: Read Parquet in batches, merge, and overwrite Parquet file ===
 print("🔁 Merging with target_map and updating the same file...")
-parquet_reader = pd.read_parquet(parquet_path, engine='pyarrow', chunksize=1_000_000)
+
+# Use PyArrow to read in batches
+pf = pq.ParquetFile(parquet_path)
 first = True
 
-for chunk in parquet_reader:
+for batch in pf.iter_batches(batch_size=1_000_000):
+    chunk = pd.DataFrame(batch.to_pandas())
     chunk = chunk.drop_duplicates()
     chunk['CMPNT_CAT_CD_DESC'] = chunk['CMPNT_CAT_CD_DESC'].astype('category')
     merged = chunk.merge(target_map, how='left', on='CMPNT_CAT_CD_DESC')
