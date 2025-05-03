@@ -1,13 +1,12 @@
 import pandas as pd
 import os
 
-# === CONFIGURATION ===
+# === FILE PATHS ===
 csv_path = './data/combined.csv'
 parquet_path = './data/combined.parquet'
 target_map_path = './data/cleaned_parts/target_map.csv'
-output_parquet_path = './data/combined_with_target.parquet'
 
-# === STEP 1: Convert huge CSV to single Parquet ===
+# === STEP 1: Convert CSV to Parquet if not exists ===
 if not os.path.exists(parquet_path):
     print("🔁 Converting CSV to Parquet...")
     chunk_list = []
@@ -19,14 +18,14 @@ if not os.path.exists(parquet_path):
     del chunk_list, combined_df
     print("✅ CSV converted to Parquet:", parquet_path)
 
-# === STEP 2: Load target_map ===
+# === STEP 2: Load target map ===
 print("📥 Loading target map...")
 target_map = pd.read_csv(target_map_path, usecols=['CMPNT_CAT_CD_DESC', 'Final Category'])
 target_map = target_map.drop_duplicates()
 target_map['CMPNT_CAT_CD_DESC'] = target_map['CMPNT_CAT_CD_DESC'].astype('category')
 
-# === STEP 3: Merge in chunks and write to new Parquet ===
-print("🔁 Merging with target_map in chunks...")
+# === STEP 3: Merge in chunks and OVERWRITE combined.parquet ===
+print("🔁 Merging with target_map and updating the same file...")
 parquet_reader = pd.read_parquet(parquet_path, engine='pyarrow', chunksize=1_000_000)
 first = True
 
@@ -35,8 +34,8 @@ for chunk in parquet_reader:
     chunk['CMPNT_CAT_CD_DESC'] = chunk['CMPNT_CAT_CD_DESC'].astype('category')
     merged = chunk.merge(target_map, how='left', on='CMPNT_CAT_CD_DESC')
 
-    # Save the first chunk with headers, then append others
-    merged.to_parquet(output_parquet_path, index=False, engine='pyarrow', append=not first)
+    # Overwrite combined.parquet on first write, append afterwards
+    merged.to_parquet(parquet_path, index=False, engine='pyarrow', append=not first)
     first = False
 
-print("✅ Merging complete. Output saved to:", output_parquet_path)
+print("✅ Done. File updated:", parquet_path)
