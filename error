@@ -7,6 +7,11 @@ CMPNT_UOM_CD
 885900059 rows × 5 columns
 azure machine : 8 core, 56 GB (RAM) , 400 GB (DISK)
 
+🔁 Converting CSV to Parquet...
+/tmp/ipykernel_3352/2570715897.py:10: DtypeWarning: Columns (3) have mixed types. Specify dtype option on import or set low_memory=False.
+  for chunk in pd.read_csv(csv_path, chunksize=1_000_000):
+
+
 target_map= pd.read_csv('./data/cleaned_parts/target_map.csv',usecols=['CMPNT_CAT_CD_DESC','Final Category'])
 combined_df= pd.read_csv('./data/combined.csv')
 target_map= target_map.drop_duplicates()
