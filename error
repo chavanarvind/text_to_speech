@@ -4,7 +4,8 @@ CMPNT_MATL_DESC
 CMPNT_MATL_TYPE_CD
 CMPNT_CAT_CD_DESC
 CMPNT_UOM_CD 
-
+885900059 rows × 5 columns
+azure machine : 8 core, 56 GB (RAM) , 400 GB (DISK)
 
 New Column	Description
 has_api	Keyword flag for active pharmaceutical ingredients
