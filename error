@@ -9,6 +9,8 @@ azure machine : 8 core, 56 GB (RAM) , 400 GB (DISK)
 
 TypeError: __cinit__() got an unexpected keyword argument 'append'
 
+FileNotFoundError: [Errno 2] Failed to open local file './data/combined.parquet'. Detail: [errno 2] No such file or directory
+
 🔁 Converting CSV to Parquet...
 /tmp/ipykernel_3352/2570715897.py:10: DtypeWarning: Columns (3) have mixed types. Specify dtype option on import or set low_memory=False.
   for chunk in pd.read_csv(csv_path, chunksize=1_000_000):
