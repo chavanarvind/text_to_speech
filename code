@@ -7,13 +7,18 @@ import shutil
 # === Ensure required folders exist ===
 os.makedirs('./data', exist_ok=True)
 os.makedirs('./data/cleaned_parts', exist_ok=True)
-os.makedirs('./data/temp_chunks', exist_ok=True)  # temporary storage
+os.makedirs('./data/temp_chunks', exist_ok=True)
 
 # === FILE PATHS ===
 csv_path = './data/combined.csv'
 temp_parquet_dir = './data/temp_chunks'
 final_parquet_path = './data/combined.parquet'
 target_map_path = './data/cleaned_parts/target_map.csv'
+
+# === STEP 0: Delete old output if it exists ===
+if os.path.exists(final_parquet_path):
+    print("🗑️ Existing combined.parquet found. Removing...")
+    os.remove(final_parquet_path)
 
 # === STEP 1: Convert CSV to temporary Parquet chunks ===
 print("🔁 Converting CSV to temporary Parquet chunks...")
@@ -31,15 +36,15 @@ target_map = pd.read_csv(target_map_path, usecols=['CMPNT_CAT_CD_DESC', 'Final C
 target_map = target_map.drop_duplicates()
 target_map['CMPNT_CAT_CD_DESC'] = target_map['CMPNT_CAT_CD_DESC'].astype('category')
 
-# === STEP 3: Merge each chunk and write to final Parquet ===
-print("🔁 Merging chunks and writing to final Parquet...")
+# === STEP 3: Merge chunks and write to final Parquet (overwrite) ===
+print("🔁 Merging chunks and writing to combined.parquet...")
 writer = None
 
 for chunk_file in chunk_files:
     chunk = pd.read_parquet(chunk_file)
     chunk = chunk.drop_duplicates()
     chunk['CMPNT_CAT_CD_DESC'] = chunk['CMPNT_CAT_CD_DESC'].astype('category')
-    
+
     merged = chunk.merge(target_map, how='left', on='CMPNT_CAT_CD_DESC')
     table = pa.Table.from_pandas(merged)
 
@@ -50,10 +55,10 @@ for chunk_file in chunk_files:
 
 if writer:
     writer.close()
-    print("✅ Final merged Parquet file created at:", final_parquet_path)
+    print("✅ Final Parquet file written at:", final_parquet_path)
 else:
-    print("⚠️ No chunks processed. Final file not created.")
+    print("⚠️ No chunks processed. Final file not written.")
 
-# === STEP 4: Optional cleanup of temporary chunk files ===
+# === STEP 4: Clean up temporary chunks ===
 shutil.rmtree(temp_parquet_dir)
 print("🧹 Temporary chunk files deleted.")
