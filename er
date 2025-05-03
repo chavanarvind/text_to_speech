@@ -1,14 +1,1 @@
-# azureml-core of version 1.0.72 or higher is required
-from azureml.core import Workspace, Dataset
-
-subscription_id = 
-resource_group = 
-workspace_name = 
-
-workspace = Workspace(subscription_id, resource_group, workspace_name)
-
-dataset = Dataset.get_by_name(workspace, name='harmonized_bom_data_asset')
-# Download dataset locally
-download_path = './parquet_files'
-os.makedirs(download_path, exist_ok=True)
-dataset.download(target_path=download_path, overwrite=True)
+create new column 'mapping_column' . Add values in CMPNT_CAT_CD_DESC as it is. If CMPNT_CAT_CD_DESC is blank and CMPNT_MATL_TYPE_CD have value then replace that cell  with CMPNT_MATL_TYPE_CD and if CMPNT_CAT_CD_DESC and CMPNT_MATL_TYPE_CD is blank then replace with CMPNT_MATL_DESC values and if all three cols are blank then value will be 'No data for prediction'
