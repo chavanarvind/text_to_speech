@@ -1,1 +1,23 @@
-create new column 'mapping_column' . Add values in CMPNT_CAT_CD_DESC as it is. If CMPNT_CAT_CD_DESC is blank and CMPNT_MATL_TYPE_CD have value then replace that cell  with CMPNT_MATL_TYPE_CD and if CMPNT_CAT_CD_DESC and CMPNT_MATL_TYPE_CD is blank then replace with CMPNT_MATL_DESC values and if all three cols are blank then value will be 'No data for prediction'
+import pandas as pd
+import glob
+import os
+
+input_path = './data/target_map_parquet'
+
+# Process each existing mapped Parquet file
+for file in glob.glob(os.path.join(input_path, '*.parquet')):
+    try:
+        df = pd.read_parquet(file)
+
+        # ✅ Create 'mapping_column' with fallback logic
+        df['mapping_column'] = df['CMPNT_CAT_CD_DESC'].fillna('').replace('', pd.NA)
+        df['mapping_column'] = df['mapping_column'].fillna(df['CMPNT_MATL_TYPE_CD'].fillna('').replace('', pd.NA))
+        df['mapping_column'] = df['mapping_column'].fillna(df['CMPNT_MATL_DESC'].fillna('').replace('', pd.NA))
+        df['mapping_column'] = df['mapping_column'].fillna('No data for prediction')
+
+        # Overwrite the same file with the new column added
+        df.to_parquet(file, index=False)
+        print(f"Updated: {file}")
+
+    except Exception as e:
+        print(f"Error updating {file}: {e}")
