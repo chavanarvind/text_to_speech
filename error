@@ -1,37 +1,39 @@
-Columns
-MATL_SHRT_DESC 
-CMPNT_MATL_DESC
-CMPNT_MATL_TYPE_CD
-CMPNT_CAT_CD_DESC
-CMPNT_UOM_CD 
-885900059 rows × 5 columns
-azure machine : 8 core, 56 GB (RAM) , 400 GB (DISK)
+import os
+import pandas as pd
+import pyarrow.parquet as pq
 
-TypeError: __cinit__() got an unexpected keyword argument 'append'
+# Paths
+input_path = './data/parquet_files'
+output_path = './data/target_map_parquet'
+os.makedirs(output_path, exist_ok=True)
 
-FileNotFoundError: [Errno 2] Failed to open local file './data/combined.parquet'. Detail: [errno 2] No such file or directory
-FileNotFoundError: [Errno 2] Failed to open local file './data/combined.parquet'. Detail: [errno 2] No such file or directory
-🔁 Converting CSV to Parquet...
-/tmp/ipykernel_3352/2570715897.py:10: DtypeWarning: Columns (3) have mixed types. Specify dtype option on import or set low_memory=False.
-  for chunk in pd.read_csv(csv_path, chunksize=1_000_000):
+# Load the target map
+target_map_df = pd.read_csv('./data/target_map.csv')
 
+# Required columns
+columns_to_read = [
+    'MATL_SHRT_DESC',
+    'CMPNT_MATL_DESC',
+    'CMPNT_MATL_TYPE_CD',
+    'CMPNT_CAT_CD_DESC',
+    'CMPNT_UOM_CD'
+]
 
-target_map= pd.read_csv('./data/cleaned_parts/target_map.csv',usecols=['CMPNT_CAT_CD_DESC','Final Category'])
-combined_df= pd.read_csv('./data/combined.csv')
-target_map= target_map.drop_duplicates()
-combined_df= combined_df.drop_duplicates()
-combined_df = combined_df.merge(target_map, how='left', on='CMPNT_CAT_CD_DESC')
+# Process each Parquet file with chunked reads
+for file_idx, file in enumerate(glob.glob(os.path.join(input_path, '*.parquet'))):
+    try:
+        parquet_file = pq.ParquetFile(file)
+        for row_group_idx in range(parquet_file.num_row_groups):
+            # Read current chunk (row group)
+            table = parquet_file.read_row_group(row_group_idx, columns=columns_to_read)
+            df_chunk = table.to_pandas()
 
+            # Left join with target map
+            joined_chunk = df_chunk.merge(target_map_df, how='left', on='CMPNT_CAT_CD_DESC')
 
-
-
-
-New Column	Description
-has_api	Keyword flag for active pharmaceutical ingredients
-has_pkg	Package-related keywords
-has_chem	Chemical-related keywords
-has_liquid	Liquid/cream-related keywords
-matl_type_mapped	Interpreted material type from SAP codes
-is_liquid_uom	UOM indicates liquid
-is_count_uom	UOM indicates discrete count
-desc_len, word_count, has_numeric	Descriptive complexity
+            # Save to output as a separate parquet file
+            out_file = os.path.join(output_path, f'mapped_file{file_idx}_chunk{row_group_idx}.parquet')
+            joined_chunk.to_parquet(out_file, index=False)
+            print(f"Saved: {out_file}")
+    except Exception as e:
+        print(f"Error in file {file}: {e}")
