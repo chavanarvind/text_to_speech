@@ -1,92 +1,14 @@
-import pandas as pd
-import pyarrow as pa
-import pyarrow.parquet as pq
-import os
-import shutil
+# azureml-core of version 1.0.72 or higher is required
+from azureml.core import Workspace, Dataset
 
-# === FILE PATHS ===
-csv_path = './data/combined.csv'
-temp_parquet_dir = './data/temp_chunks'
-final_parquet_path = './data/combined.parquet'
-target_map_path = './data/cleaned_parts/target_map.csv'
+subscription_id = 
+resource_group = 
+workspace_name = 
 
-# === STEP -1: Fail-fast Precheck ===
-print("🔍 Running prechecks...")
+workspace = Workspace(subscription_id, resource_group, workspace_name)
 
-if not os.path.exists(csv_path):
-    raise FileNotFoundError(f"❌ CSV file not found: {csv_path}")
-
-if not os.path.exists(target_map_path):
-    raise FileNotFoundError(f"❌ Target map CSV not found: {target_map_path}")
-
-final_dir = os.path.dirname(final_parquet_path)
-if not os.path.exists(final_dir):
-    print(f"📁 Final output directory not found. Creating: {final_dir}")
-    os.makedirs(final_dir, exist_ok=True)
-
-try:
-    test_file = os.path.join(final_dir, '.__test_write__.tmp')
-    with open(test_file, 'w') as f:
-        f.write('test')
-    os.remove(test_file)
-except Exception as e:
-    raise PermissionError(f"❌ Cannot write to directory: {final_dir} — {e}")
-
-# === STEP 0: Ensure folders exist ===
-os.makedirs('./data', exist_ok=True)
-os.makedirs('./data/cleaned_parts', exist_ok=True)
-
-# === STEP 0.5: Clean previous temp and output files ===
-if os.path.exists(temp_parquet_dir):
-    print(f"🧹 Removing existing temp folder: {temp_parquet_dir}")
-    shutil.rmtree(temp_parquet_dir)
-os.makedirs(temp_parquet_dir, exist_ok=True)
-print("✅ Temp chunk folder created fresh.")
-
-if os.path.exists(final_parquet_path):
-    print(f"🗑️ Removing existing Parquet file: {final_parquet_path}")
-    os.remove(final_parquet_path)
-    print("✅ Existing combined.parquet removed.")
-
-# === STEP 1: Convert CSV to temporary Parquet chunks ===
-print("🔁 Converting CSV to temporary Parquet chunks...")
-chunk_files = []
-for i, chunk in enumerate(pd.read_csv(csv_path, chunksize=1_000_000, dtype=str)):
-    chunk = chunk.drop_duplicates()
-    chunk_path = os.path.join(temp_parquet_dir, f"chunk_{i}.parquet")
-    chunk.to_parquet(chunk_path, index=False, engine='pyarrow')
-    chunk_files.append(chunk_path)
-print(f"✅ {len(chunk_files)} chunks written to {temp_parquet_dir}")
-
-# === STEP 2: Load and prepare target map ===
-print("📥 Loading target map...")
-target_map = pd.read_csv(target_map_path, usecols=['CMPNT_CAT_CD_DESC', 'Final Category'], dtype=str)
-target_map = target_map.drop_duplicates()
-target_map['CMPNT_CAT_CD_DESC'] = target_map['CMPNT_CAT_CD_DESC'].astype('category')
-
-# === STEP 3: Merge chunks and write to final Parquet (overwrite) ===
-print("🔁 Merging chunks and writing to combined.parquet...")
-writer = None
-
-for chunk_file in chunk_files:
-    chunk = pd.read_parquet(chunk_file)
-    chunk = chunk.drop_duplicates()
-    chunk['CMPNT_CAT_CD_DESC'] = chunk['CMPNT_CAT_CD_DESC'].astype('category')
-
-    merged = chunk.merge(target_map, how='left', on='CMPNT_CAT_CD_DESC')
-    table = pa.Table.from_pandas(merged)
-
-    if writer is None:
-        writer = pq.ParquetWriter(final_parquet_path, table.schema, compression='snappy')
-
-    writer.write_table(table)
-
-if writer:
-    writer.close()
-    print("✅ Final Parquet file written at:", final_parquet_path)
-else:
-    print("⚠️ No chunks processed. Final file not written.")
-
-# === STEP 4: Clean up temporary chunks ===
-shutil.rmtree(temp_parquet_dir)
-print("🧹 Temporary chunk files deleted.")
+dataset = Dataset.get_by_name(workspace, name='harmonized_bom_data_asset')
+# Download dataset locally
+download_path = './parquet_files'
+os.makedirs(download_path, exist_ok=True)
+dataset.download(target_path=download_path, overwrite=True)
