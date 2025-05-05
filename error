@@ -1,1 +1,11 @@
-print(df[['CMPNT_CAT_CD_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_MATL_DESC', 'mapping_column']].head(10))
+MATL_SHRT_DESC (Material Short Description)
+
+CMPNT_MATL_DESC (Component Material Description)
+
+CMPNT_MATL_TYPE_CD (Material Type Code)
+
+CMPNT_CAT_CD_DESC (Material Category Description)
+
+CMPNT_UOM_CD (Unit of Measure)
+
+Final Category (target: CHM, PKG, Liquids and Creams, FNW, FNW or CHM, API
