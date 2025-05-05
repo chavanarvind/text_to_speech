@@ -1,13 +1,1 @@
-MATL_SHRT_DESC                 CMPNT_MATL_DESC CMPNT_MATL_TYPE_CD  \
-0           None  Pepcid Tropical FruitTest Bulk                      
-1           None     Shipper, #38, 18x12x12, New                      
-2           None     Test Pepcid 38mm CT Closure                      
-3           None     Test Pepcid 12g Cotton Coil                      
-4           None             Pepcid 200cc Bottle                      
-
-  CMPNT_CAT_CD_DESC CMPNT_UOM_CD Final Category mapping_column  
-0              None           EA           None                 
-1              None           EA           None                 
-2              None           EA           None                 
-3              None           LB           None                 
-4              None           EA           None                 
+print(df[['CMPNT_CAT_CD_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_MATL_DESC', 'mapping_column']].head(10))
