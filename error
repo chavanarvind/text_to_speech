@@ -1,9 +1,44 @@
-SELECT
-  COUNT(*) AS total_records,
-  COUNT(*) - COUNT(MATL_SHRT_DESC) AS null_MATL_SHRT_DESC,
-  COUNT(*) - COUNT(CMPNT_MATL_DESC) AS null_CMPNT_MATL_DESC,
-  COUNT(*) - COUNT(CMPNT_MATL_TYPE_CD) AS null_CMPNT_MATL_TYPE_CD,
-  COUNT(*) - COUNT(CMPNT_CAT_CD_DESC) AS null_CMPNT_CAT_CD_DESC,
-  COUNT(*) - COUNT(CMPNT_UOM_CD) AS null_CMPNT_UOM_CD,
-  COUNT(*) - COUNT("Final Category") AS null_Final_Category
-FROM your_table_name;
+# Load SpaCy NLP model
+nlp = spacy.load("en_core_web_sm")
+
+# Rule hint logic
+def get_rule_hint(text):
+    if pd.isna(text): return None
+    doc = nlp(text)
+    lemmas = set(token.lemma_ for token in doc)
+    if lemmas & {'api', 'active'}:
+        return 'API'
+    elif lemmas & {'cream', 'gel', 'emulsion', 'ointment', 'moisturiser','oil','gel','liquid'}:
+        return 'Liquids and Creams'
+    elif lemmas & {'bottle', 'cap', 'carton', 'label', 'cotton','lotion','mouthwash','pkg','pack','karton','package'}:
+        return 'PKG'
+    elif lemmas & {'excipient', 'binder', 'bind', 'filler', 'fill', 'lubricant', 'lubricate','acid','shampoos','alcohol'}:
+        return 'CHM'
+    return None
+
+# Sample clean_text function
+def clean_text(text):
+    if pd.isna(text): return ''
+    return re.sub(r'\s+', ' ', str(text).strip().lower())
+
+# Apply to all Parquet files
+input_path = './data/target_map_parquet_files'
+for file in glob.glob(os.path.join(input_path, '*.parquet')):
+    try:
+        df = pd.read_parquet(file)
+
+        # Combine and clean the relevant columns
+        df['COMBINED_TEXT'] = (
+            df['CMPNT_MATL_TYPE_CD'].fillna('') + ' ' +
+            df['CMPNT_CAT_CD_DESC'].fillna('')
+        ).apply(clean_text).replace('', pd.NA)
+
+        # Apply RULE_HINT on cleaned, combined text
+        df['RULE_HINT'] = df['COMBINED_TEXT'].apply(get_rule_hint)
+
+        # Save the updated file
+        df.to_parquet(file, index=False)
+        print(f"RULE_HINT added to: {file}")
+
+    except Exception as e:
+        print(f"Error updating RULE_HINT in {file}: {e}")
