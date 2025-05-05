@@ -1,54 +1,102 @@
-input_path = './data/target_map_parquet_files'
-abbrev_csv_path = './data/abbreviation_expension_updated.csv'  # path to your abbreviation file
-
-
-# Load abbreviation mappings (case-insensitive)
-abbrev_df = pd.read_csv(abbrev_csv_path)
-abbrev_map = {k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])}
-
-# Pre-compiled regex for case-insensitive word replacement
-abbrev_pattern = re.compile(r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b', flags=re.IGNORECASE)
-
-# Function to expand abbreviations
-def expand_abbreviations(text):
-    if pd.isna(text):
-        return text
-    return abbrev_pattern.sub(lambda m: abbrev_map[m.group(0).lower()], text)
-
-# Excluded material type codes
-exclusion = ["FERT", "EPF", "ZHBG", "30AC", "HALB", "HAWA", "IM", "EPC", "PROM", "40MP", "ROH", "IG", "UNBW",
-             "SAPR", "VERP", "20SF", "ZEXI", "ZROH", "ERSA", "EDUC", "ZEXR", "DISP", "41MP", "TPF", "G", "73",
-             "N", "B", "62", "32AC", "I", "91", "0", "6", "D", "02PF", "Z", "61", "7", "71", "H", "M", "41",
-             "JM01", "95", "X", "A", "3", "8", "P", "F", "V", "U", "2", "50PM", "TRAD", "42", "R", "5", "92",
-             "79", "W", "72", "Z001", "Y", "93"]
-
-# Process each Parquet file
-for file in glob.glob(os.path.join(input_path, '*.parquet')):
-    try:
-        df = pd.read_parquet(file)
-
-        # Expand abbreviations in MATL_SHRT_DESC and CMPNT_MATL_DESC
-        df['MATL_SHRT_DESC'] = df['MATL_SHRT_DESC'].apply(expand_abbreviations)
-        df['CMPNT_MATL_DESC'] = df['CMPNT_MATL_DESC'].apply(expand_abbreviations)
-
-        # Create 'mapping_column' with fallback logic
-        df['mapping_column'] = df['CMPNT_CAT_CD_DESC'].fillna('').replace('', pd.NA)
-
-        df['mapping_column'] = df['mapping_column'].fillna(
-            df.apply(
-                lambda row: row['CMPNT_MATL_DESC'] if row['CMPNT_MATL_TYPE_CD'] in exclusion else row['CMPNT_MATL_TYPE_CD'],
-                axis=1
-            )
-        )
-
-        df['mapping_column'] = df['mapping_column'].fillna(df['CMPNT_MATL_DESC'].fillna('').replace('', pd.NA))
-        df['mapping_column'] = df['mapping_column'].fillna('No data for prediction')
-
-        print(df[['CMPNT_CAT_CD_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_MATL_DESC', 'mapping_column']].head(10))
-
-        # Save updated parquet
-        df.to_parquet(file, index=False)
-        print(f"Updated: {file}")
-
-    except Exception as e:
-        print(f"Error updating {file}: {e}")
+CMPNT_UOM_CD
+G
+DZ
+KAR
+FT
+PC
+MYD
+RL
+CSE
+FT3
+MIO
+M2
+YD2
+null
+LF
+MR
+KN
+SM
+ME
+CC
+M
+TH
+TON
+T3
+ST
+MU
+KI
+KGS
+KG
+GR
+KGW
+KM
+CCM
+ROL
+L
+KM2
+EA
+OZA
+GLL
+PAK
+CS
+LT
+LB
+KGA
+YD
+OZ
+GRO
+GW
+CM
+PCK
+ML
+BOT
+UM
+ZCT
+0%
+CA
+UN
+HU
+KS
+CT
+MT
+MI
+M1
+-
+DM
+KA
+ZPC
+ea
+sqm
+Kgs
+GM
+m2
+CH
+REEL
+LM
+ml
+MH
+pc
+THU
+IM
+SQM
+ç‰‡
+NOS
+ROLL
+TS
+KAI
+Kg
+DR
+g
+BX
+lb
+MG
+PCS
+Roll
+GP
+Pcs
+mg
+CL
+KP
+kg
+SY
+NO
