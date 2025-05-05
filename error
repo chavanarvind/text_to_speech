@@ -1,6 +1,19 @@
-Hi Katie,
+input_path = './data/target_map_parquet_files'
 
-As discussed, could you please help us identify the Finished Products from the harmonized_bom_data_asset dataset using the CMPNT_MATL_TYPE_CD column?
+# Process each existing mapped Parquet file
+for file in glob.glob(os.path.join(input_path, '*.parquet')):
+    try:
+        df = pd.read_parquet(file)
 
-Thanks and regards,
-Arvind
+        # ✅ Create 'mapping_column' with fallback logic
+        df['mapping_column'] = df['CMPNT_CAT_CD_DESC'].fillna('').replace('', pd.NA)
+        df['mapping_column'] = df['mapping_column'].fillna(df['CMPNT_MATL_TYPE_CD'].fillna('').replace('', pd.NA))
+        df['mapping_column'] = df['mapping_column'].fillna(df['CMPNT_MATL_DESC'].fillna('').replace('', pd.NA))
+        df['mapping_column'] = df['mapping_column'].fillna('No data for prediction')
+        print(df.head())
+        # Overwrite the same file with the new column added
+        df.to_parquet(file, index=False)
+        print(f"Updated: {file}")
+
+    except Exception as e:
+        print(f"Error updating {file}: {e}")
