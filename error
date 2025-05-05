@@ -1,4 +1,5 @@
 input_path = './data/target_map_parquet_files'
+exclusion= ["FERT","EPF","ZHBG","30AC","HALB","HAWA","IM","EPC","PROM","40MP","ROH","IG","UNBW","SAPR","VERP","20SF","ZEXI","ZROH","ERSA","EDUC","ZEXR","DISP","41MP","TPF","G","73","N","B","62","32AC","I","91","0","6","D","02PF","Z","61","7","71","H","M","41","JM01","95","X","A","3","8","P","F","V","U","2","50PM","TRAD","42","R","5","92","79","W","72","Z001","Y","93"]
 
 # Process each existing mapped Parquet file
 for file in glob.glob(os.path.join(input_path, '*.parquet')):
