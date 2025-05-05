@@ -1,58 +1,13 @@
-import os
-import glob
-import pandas as pd
-import re
+MATL_SHRT_DESC                 CMPNT_MATL_DESC CMPNT_MATL_TYPE_CD  \
+0           None  Pepcid Tropical FruitTest Bulk                      
+1           None     Shipper, #38, 18x12x12, New                      
+2           None     Test Pepcid 38mm CT Closure                      
+3           None     Test Pepcid 12g Cotton Coil                      
+4           None             Pepcid 200cc Bottle                      
 
-input_path = './data/target_map_parquet_files'
-abbrev_csv_path = './data/abbreviation_map.csv'  # path to your abbreviation file
-
-# Load abbreviation mappings (case-insensitive)
-abbrev_df = pd.read_csv(abbrev_csv_path)
-abbrev_map = {k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])}
-
-# Pre-compiled regex for case-insensitive word replacement
-abbrev_pattern = re.compile(r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b', flags=re.IGNORECASE)
-
-# Function to expand abbreviations
-def expand_abbreviations(text):
-    if pd.isna(text):
-        return text
-    return abbrev_pattern.sub(lambda m: abbrev_map[m.group(0).lower()], text)
-
-# Excluded material type codes
-exclusion = ["FERT", "EPF", "ZHBG", "30AC", "HALB", "HAWA", "IM", "EPC", "PROM", "40MP", "ROH", "IG", "UNBW",
-             "SAPR", "VERP", "20SF", "ZEXI", "ZROH", "ERSA", "EDUC", "ZEXR", "DISP", "41MP", "TPF", "G", "73",
-             "N", "B", "62", "32AC", "I", "91", "0", "6", "D", "02PF", "Z", "61", "7", "71", "H", "M", "41",
-             "JM01", "95", "X", "A", "3", "8", "P", "F", "V", "U", "2", "50PM", "TRAD", "42", "R", "5", "92",
-             "79", "W", "72", "Z001", "Y", "93"]
-
-# Process each Parquet file
-for file in glob.glob(os.path.join(input_path, '*.parquet')):
-    try:
-        df = pd.read_parquet(file)
-
-        # Expand abbreviations in MATL_SHRT_DESC and CMPNT_MATL_DESC
-        df['MATL_SHRT_DESC'] = df['MATL_SHRT_DESC'].apply(expand_abbreviations)
-        df['CMPNT_MATL_DESC'] = df['CMPNT_MATL_DESC'].apply(expand_abbreviations)
-
-        # Create 'mapping_column' with fallback logic
-        df['mapping_column'] = df['CMPNT_CAT_CD_DESC'].fillna('').replace('', pd.NA)
-
-        df['mapping_column'] = df['mapping_column'].fillna(
-            df.apply(
-                lambda row: row['CMPNT_MATL_DESC'] if row['CMPNT_MATL_TYPE_CD'] in exclusion else row['CMPNT_MATL_TYPE_CD'],
-                axis=1
-            )
-        )
-
-        df['mapping_column'] = df['mapping_column'].fillna(df['CMPNT_MATL_DESC'].fillna('').replace('', pd.NA))
-        df['mapping_column'] = df['mapping_column'].fillna('No data for prediction')
-
-        print(df.head())
-
-        # Save updated parquet
-        df.to_parquet(file, index=False)
-        print(f"Updated: {file}")
-
-    except Exception as e:
-        print(f"Error updating {file}: {e}")
+  CMPNT_CAT_CD_DESC CMPNT_UOM_CD Final Category mapping_column  
+0              None           EA           None                 
+1              None           EA           None                 
+2              None           EA           None                 
+3              None           LB           None                 
+4              None           EA           None                 
