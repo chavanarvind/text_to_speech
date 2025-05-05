@@ -1,150 +1,82 @@
-CMPNT_MATL_TYPE_CD
-FERT
-EPF
-ZHBG
-30AC
-HALB
-HAWA
-IM
-EPC
-null
-PROM
-40MP
-ROH
-IG
-UNBW
-SAPR
-VERP
-20SF
-ZEXI
-ZROH
-ERSA
-EDUC
-PACK
-ZEXR
-DISP
-41MP
-TPF
-G
-73
-N
-B
-62
-32AC
-I
-91
-0
-6
-D
-02PF
-Z
-61
-7
-71
-H
-M
-41
-JM01
-95
-X
-A
-3
-8
-P
-F
-V
-U
-2
-50PM
-TRAD
-42
-R
-5
-92
-79
-W
-72
-Z001
-Y
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# Final Category mapping based on CMPNT_MATL_TYPE_CD
+type_category_map = {
+    # Raw Chemicals or Active Materials
+    'ROH': 'CHM',
+    'ZROH': 'CHM',
+    'ZEXI': 'CHM',
+    'ZEXR': 'CHM',
+    'Z': 'CHM',
+    'ZHBG': 'CHM',
+    'UNBW': 'CHM',
+    'SAPR': 'CHM',
+    'ERSA': 'CHM',
+
+    # Active Pharmaceutical Ingredient (flagged via custom business logic, e.g. in MATL_DESC too)
+    # (you may refine this further if needed)
+    'API': 'API',
+
+    # Packaging materials
+    'VERP': 'PKG',
+    'PACK': 'PKG',
+    'DISP': 'PKG',
+    'EPF': 'PKG',
+    'EPC': 'PKG',
+    'EDUC': 'PKG',
+
+    # Finished or tradable goods – typically FNW or helper components
+    'FERT': 'FNW',
+    'TRAD': 'FNW',
+    'PROM': 'FNW',
+    'TPF': 'FNW',
+    'G': 'FNW',
+    'HALB': 'FNW',
+    'HAWA': 'FNW',
+    'IM': 'FNW',
+    'IG': 'FNW',
+    'JM01': 'FNW',
+    'SAPR': 'FNW',  # context-dependent
+
+    # Ambiguous or custom material types (assign 'FNW' as safe default)
+    '30AC': 'FNW',
+    '32AC': 'FNW',
+    '40MP': 'FNW',
+    '41MP': 'FNW',
+    '02PF': 'FNW',
+    '61': 'FNW',
+    '62': 'FNW',
+    '50PM': 'FNW',
+    '41': 'FNW',
+    '42': 'FNW',
+    '73': 'FNW',
+    '71': 'FNW',
+    '72': 'FNW',
+    '79': 'FNW',
+    '91': 'FNW',
+    '92': 'FNW',
+    '95': 'FNW',
+    'X': 'FNW',
+    'Y': 'FNW',
+    '0': 'FNW',
+    '2': 'FNW',
+    '3': 'FNW',
+    '5': 'FNW',
+    '6': 'FNW',
+    '7': 'FNW',
+    '8': 'FNW',
+    'A': 'FNW',
+    'B': 'FNW',
+    'D': 'FNW',
+    'F': 'FNW',
+    'H': 'FNW',
+    'I': 'FNW',
+    'M': 'FNW',
+    'N': 'FNW',
+    'P': 'FNW',
+    'R': 'FNW',
+    'U': 'FNW',
+    'V': 'FNW',
+    'Z001': 'FNW',
+}
+
+# Apply the mapping
+df['TYPE_BASED_CATEGORY'] = df['CMPNT_MATL_TYPE_CD'].map(type_category_map).fillna('FNW')
