@@ -1,7 +1,33 @@
+
 import spacy
 nlp = spacy.load("en_core_web_sm")
 
+input_path = './data/target_map_parquet_files'
+abbrev_csv_path = './data/abbreviation_expension_updated.csv'
 
+# Load abbreviation mappings (case-insensitive)
+abbrev_df = pd.read_csv(abbrev_csv_path)
+abbrev_map = {k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])}
+
+# Pre-compiled regex for case-insensitive word replacement
+abbrev_pattern = re.compile(r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b', flags=re.IGNORECASE)
+
+# Function to expand abbreviations
+def expand_abbreviations(text):
+    if pd.isna(text):
+        return text
+    return abbrev_pattern.sub(lambda m: abbrev_map[m.group(0).lower()], text)
+
+# NLP cleaning function
+def clean_text(text):
+    if pd.isna(text):
+        return text
+    text = text.lower()
+    text = re.sub(r'[^a-z0-9\s]', ' ', text)
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
+
+# RULE_HINT based on CMPNT_CAT_CLEAN
 def get_rule_hint(text):
     if pd.isna(text):
         return None
@@ -12,10 +38,88 @@ def get_rule_hint(text):
     # Final priority: API > Liquids and Creams > PKG > CHM
     if lemmas & {'api', 'active'}:
         return 'API'
-    elif lemmas & {'cream', 'gel', 'emulsion', 'ointment'}:
+    elif lemmas & {'cream', 'gel', 'emulsion', 'ointment,moisturiser'}:
         return 'Liquids and Creams'
-    elif lemmas & {'bottle', 'cap', 'carton', 'label', 'cotton'}:
+    elif lemmas & {'bottle', 'cap', 'carton', 'label', 'cotton','lotion','mouthwash','pkg','pack','karton','package'}:
         return 'PKG'
-    elif lemmas & {'excipient', 'binder', 'bind', 'filler', 'fill', 'lubricant', 'lubricate'}:
+    elif lemmas & {'excipient', 'binder', 'bind', 'filler', 'fill', 'lubricant', 'lubricate','acid'}:
         return 'CHM'
     return None
+
+# UNIT_GROUP logic
+def get_unit_group(unit):
+    if pd.isna(unit):
+        return None
+    unit = str(unit).strip().upper()
+
+    chem_units = {
+        'KG', 'KGS', 'KGA', 'KGW', 'G', 'GR', 'GM', 'MG', 'LB', 'LBS', 'OZ', 'OZA', 'GW', 'TON', 'DR'
+    }
+    liquid_units = {
+        'L', 'LT', 'ML', 'CC', 'CL', 'CCM', 'GLL'
+    }
+    discrete_units = {
+        'EA', 'PC', 'PCS', 'Pcs', 'PKT', 'PK', 'PAK', 'PCK', 'CS', 'CSE', 'CT', 'CA',
+        'ST', 'GRO', 'BX'
+    }
+    container_units = {
+        'BOT', 'BOTTLE', 'ROLL', 'ROL', 'REEL', 'KAR'
+    }
+    dimensional_units = {
+        'FT', 'YD', 'KM', 'DM', 'M', 'M1', 'M2', 'KM2', 'YD2', 'FT3', 'SQM', 'sqm',
+        'MYD', 'MI', 'SM', 'LM', 'LF', 'MH', 'KN', 'CH'
+    }
+    unclassified_units = {
+        'TH', 'THU', 'IM', 'NOS', 'NO', 'TS', 'KA', 'ZPC', 'ZCT', '0%', 'KP', 'GP',
+        'KAI', 'SY', 'UN', 'MU', 'UM', 'HU'
+    }
+
+    if unit in chem_units:
+        return 'CHM'
+    elif unit in liquid_units:
+        return 'Liquid'
+    elif unit in discrete_units:
+        return 'Discrete'
+    elif unit in container_units:
+        return 'Containers'
+    elif unit in dimensional_units:
+        return 'Dimensional'
+    elif unit in unclassified_units:
+        return 'Unclassified'
+    else:
+        return 'Unclassified'
+
+# Process each Parquet file
+for file in glob.glob(os.path.join(input_path, '*.parquet')):
+    try:
+        df = pd.read_parquet(file)
+
+        # Step 1: Expand abbreviations
+        df['MATL_SHRT_DESC'] = df['MATL_SHRT_DESC'].apply(expand_abbreviations)
+        df['CMPNT_MATL_DESC'] = df['CMPNT_MATL_DESC'].apply(expand_abbreviations)
+
+        # Step 2: Clean text
+        df['MATL_SHRT_DESC'] = df['MATL_SHRT_DESC'].apply(clean_text)
+        df['CMPNT_MATL_DESC'] = df['CMPNT_MATL_DESC'].apply(clean_text)
+
+        # Step 3: Create TEXT_INPUT
+        df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'] = (
+            df['MATL_SHRT_DESC'].fillna('') + ' ' + df['CMPNT_MATL_DESC'].fillna('')
+        ).str.strip().replace('', pd.NA)
+
+        # Step 4: Clean component category + rule-based category hint
+        df['CMPNT_CAT_CLEAN'] = df['CMPNT_CAT_CD_DESC'].fillna('').apply(clean_text).replace('', pd.NA)
+        df['RULE_HINT'] = df['CMPNT_CAT_CLEAN'].apply(get_rule_hint)
+
+        # Step 5: Unit-based categorization
+        df['UNIT_GROUP'] = df['CMPNT_UOM_CD'].apply(get_unit_group)
+
+        # Optional preview
+        print(df[['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC', 'CMPNT_CAT_CLEAN', 'RULE_HINT', 'CMPNT_UOM_CD', 'UNIT_GROUP']].head(10))
+
+        # Save to same parquet
+        df.to_parquet(file, index=False)
+        print(f"Updated: {file}")
+
+    except Exception as e:
+        print(f"Error updating {file}: {e}")
