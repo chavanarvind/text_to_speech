@@ -1,8 +1,3 @@
-
-#CMPNT_MATL_TYPE_CD
-
-
-#step 2
 # Load SpaCy NLP model
 nlp = spacy.load("en_core_web_sm")
 
@@ -21,20 +16,27 @@ def get_rule_hint(text):
         return 'CHM'
     return None
 
+# Sample clean_text function
+def clean_text(text):
+    if pd.isna(text): return ''
+    return re.sub(r'\s+', ' ', str(text).strip().lower())
+
 # Apply to all Parquet files
 input_path = './data/target_map_parquet_files'
 for file in glob.glob(os.path.join(input_path, '*.parquet')):
     try:
         df = pd.read_parquet(file)
 
-        # Ensure CMPNT_CAT_CLEAN exists
-        if 'CMPNT_CAT_CLEAN' not in df.columns:
-            df['CMPNT_CAT_CLEAN'] = df['CMPNT_CAT_CD_DESC'].fillna('').apply(clean_text).replace('', pd.NA)
+        # Combine and clean the relevant columns
+        df['COMBINED_TEXT'] = (
+            df['CMPNT_MATL_TYPE_CD'].fillna('') + ' ' +
+            df['CMPNT_CAT_CD_DESC'].fillna('')
+        ).apply(clean_text).replace('', pd.NA)
 
-        # Apply RULE_HINT
-        df['RULE_HINT'] = df['CMPNT_CAT_CLEAN'].apply(get_rule_hint)
+        # Apply RULE_HINT on cleaned, combined text
+        df['RULE_HINT'] = df['COMBINED_TEXT'].apply(get_rule_hint)
 
-        # Save
+        # Save the updated file
         df.to_parquet(file, index=False)
         print(f"RULE_HINT added to: {file}")
 
