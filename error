@@ -38,13 +38,28 @@ def get_unit_group(unit):
         'Unclassified'
     )
 
-# File processing
+# Required input columns
+required_cols = [
+    'CMPNT_CAT_CD_DESC',
+    'CMPNT_MATL_DESC',
+    'CMPNT_MATL_TYPE_CD',
+    'CMPNT_UOM_CD',
+    'Final Category',
+    'MATL_SHRT_DESC'
+]
+
+# Processing function
 def process_file(file):
     try:
-        print(f"\n Processing: {os.path.basename(file)}")
+        print(f"\n📁 Processing: {os.path.basename(file)}")
         start = time.time()
 
         df = pl.read_parquet(file)
+
+        # Keep only required columns
+        df = df.select([col for col in required_cols if col in df.columns])
+
+        # Convert to dicts for row-wise text transformation
         df_dicts = df.to_dicts()
 
         for row in df_dicts:
@@ -57,21 +72,21 @@ def process_file(file):
             row['CMPNT_CAT_CLEAN'] = clean_text(cat_desc.lower()) if cat_desc else None
             row['UNIT_GROUP'] = get_unit_group(row.get('CMPNT_UOM_CD'))
 
+        # Ensure consistent string typing
+        all_cols = list(set(required_cols + ['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC', 'CMPNT_CAT_CLEAN', 'UNIT_GROUP']))
         safe_rows = [
-            {k: str(v) if v is not None else None for k, v in row.items()}
+            {col: str(row.get(col)) if row.get(col) is not None else None for col in all_cols}
             for row in df_dicts
         ]
+
         new_df = pl.DataFrame(safe_rows)
 
-        print(" Sample records:")
-        print(new_df.head(5))
-
+        # Overwrite the same file
         new_df.write_parquet(file)
-
-        print(f" Updated: {os.path.basename(file)} |  Time: {time.time() - start:.2f}s")
+        print(f"✅ Updated: {os.path.basename(file)} | ⏱️ Time: {time.time() - start:.2f}s")
 
     except Exception as e:
-        print(f" Error: {os.path.basename(file)} -> {e}")
+        print(f"❌ Error: {os.path.basename(file)} -> {e}")
 
 # Run in parallel
 input_path = './data/target_map_parquet_files'
