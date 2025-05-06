@@ -1,48 +1,59 @@
-import pandas as pd
-import spacy
-from collections import Counter
-from itertools import islice
-from pathlib import Path
+#step 1
+# Load abbreviation map
 
-# Load SpaCy (disable unneeded components)
-nlp = spacy.load("en_core_web_sm", disable=["ner", "parser", "tagger"])
+def clean_text(text):
+    if pd.isna(text): return text
+    text = re.sub(r'[^a-z0-9\s]', ' ', text.lower())
+    return re.sub(r'\s+', ' ', text).strip()
 
-# Define paths
+abbrev_df = pd.read_csv('./data/abbreviation_expension_updated.csv')
+abbrev_map = {k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])}
+abbrev_pattern = re.compile(r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b', flags=re.IGNORECASE)
+
+# Utils
+def expand_abbreviations(text):
+    if pd.isna(text): return text
+    return abbrev_pattern.sub(lambda m: abbrev_map[m.group(0).lower()], text)
+
+def clean_text(text):
+    if pd.isna(text): return text
+    text = re.sub(r'[^a-z0-9\s]', ' ', text.lower())
+    return re.sub(r'\s+', ' ', text).strip()
+
+def get_unit_group(unit):
+    if pd.isna(unit): return None
+    unit = str(unit).strip().upper()
+    chem = {'KG', 'KGS', 'KGA', 'KGW', 'G', 'GR', 'GM', 'MG', 'LB', 'LBS', 'OZ', 'OZA', 'GW', 'TON', 'DR'}
+    liquid = {'L', 'LT', 'ML', 'CC', 'CL', 'CCM', 'GLL'}
+    discrete = {'EA', 'PC', 'PCS', 'PKT', 'PK', 'PAK', 'PCK', 'CS', 'CSE', 'CT', 'CA', 'ST', 'GRO', 'BX'}
+    containers = {'BOT', 'BOTTLE', 'ROLL', 'ROL', 'REEL', 'KAR'}
+    dimensional = {'FT', 'YD', 'KM', 'DM', 'M', 'M1', 'M2', 'KM2', 'YD2', 'FT3', 'SQM', 'MYD', 'MI', 'SM', 'LM', 'LF', 'MH', 'KN', 'CH'}
+    return (
+        'CHM' if unit in chem else
+        'Liquid' if unit in liquid else
+        'Discrete' if unit in discrete else
+        'Containers' if unit in containers else
+        'Dimensional' if unit in dimensional else
+        'Unclassified'
+    )
+
+# Process files
 input_path = './data/target_map_parquet_files'
-output_path = Path('./outputs/frequent_terms_by_category')
-output_path.mkdir(parents=True, exist_ok=True)
+for file in glob.glob(os.path.join(input_path, '*.parquet')):
+    try:
+        df = pd.read_parquet(file)
 
-# Required columns only
-required_cols = ['Final Category', 'CMPNT_MATL_DESC']
-all_files = list(Path(input_path).glob("*.parquet"))
-df = pd.concat([pd.read_parquet(f, columns=required_cols) for f in all_files], ignore_index=True)
+        df['MATL_SHRT_DESC'] = df['MATL_SHRT_DESC'].apply(expand_abbreviations).apply(clean_text)
+        df['CMPNT_MATL_DESC'] = df['CMPNT_MATL_DESC'].apply(expand_abbreviations).apply(clean_text)
+        df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'] = (
+            df['MATL_SHRT_DESC'].fillna('') + ' ' + df['CMPNT_MATL_DESC'].fillna('')
+        ).str.strip().replace('', pd.NA)
 
-# Filter valid Final Category
-df = df[df['Final Category'].notna()]
-df['CMPNT_MATL_DESC'] = df['CMPNT_MATL_DESC'].fillna('').str.lower()
+        df['CMPNT_CAT_CLEAN'] = df['CMPNT_CAT_CD_DESC'].fillna('').apply(clean_text).replace('', pd.NA)
+        df['UNIT_GROUP'] = df['CMPNT_UOM_CD'].apply(get_unit_group)
 
-# Initialize results
-all_unigrams = []
-all_bigrams = []
+        df.to_parquet(file, index=False)
+        print(f"Updated: {file}")
 
-# Process each category
-for category, group in df.groupby('Final Category'):
-    text = ' '.join(group['CMPNT_MATL_DESC'].tolist())
-    doc = nlp(text)
-    words = [token.lemma_ for token in doc if token.is_alpha and not token.is_stop]
-
-    # Unigrams with threshold
-    unigram_counts = Counter(words)
-    for word, count in unigram_counts.items():
-        if count >= 10:
-            all_unigrams.append({'category': category, 'word': word, 'count': count})
-
-    # Bigrams with threshold
-    bigram_counts = Counter(zip(words, islice(words, 1, None)))
-    for (w1, w2), count in bigram_counts.items():
-        if count >= 10:
-            all_bigrams.append({'category': category, 'bigram': f'{w1} {w2}', 'count': count})
-
-# Save combined CSVs
-pd.DataFrame(all_unigrams).to_csv(output_path / "all_categories_unigrams.csv", index=False)
-pd.DataFrame(all_bigrams).to_csv(output_path / "all_categories_bigrams.csv", index=False)
+    except Exception as e:
+        print(f"Error updating {file}: {e}")
