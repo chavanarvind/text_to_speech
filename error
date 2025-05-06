@@ -1,46 +1,46 @@
-import os
-import glob
-import pyarrow.parquet as pq
-import polars as pl
-import pandas as pd
-from concurrent.futures import ThreadPoolExecutor
+# required_cols = [
+#     'CMPNT_CAT_CD_DESC',
+#     'CMPNT_MATL_DESC',
+#     'CMPNT_MATL_TYPE_CD',
+#     'CMPNT_UOM_CD',
+#     'Final Category',
+#     'MATL_SHRT_DESC'
+# ]
 
-# Paths
-input_path = './data/parquet_files'
-output_path = './data/target_map_parquet_files'
-os.makedirs(output_path, exist_ok=True)
-
-# Load mapping as Polars DataFrame
-target_map_df = pl.read_csv('./data/target_map.csv', columns=['CMPNT_CAT_CD_DESC', 'Final Category']).unique()
-
-# Required columns
-columns_to_read = [
-    'MATL_SHRT_DESC',
-    'CMPNT_MATL_DESC',
-    'CMPNT_MATL_TYPE_CD',
-    'CMPNT_CAT_CD_DESC',
-    'CMPNT_UOM_CD'
-]
-
-def process_file(file_idx, file):
+def process_one_file(file):
     try:
-        parquet_file = pq.ParquetFile(file)
-        for row_group_idx in range(parquet_file.num_row_groups):
-            table = parquet_file.read_row_group(row_group_idx, columns=columns_to_read)
-            df_chunk = pl.from_arrow(table).unique()
+        print(f" Processing: {os.path.basename(file)}")
+        start = time.time()
 
-            # Left join with mapping
-            joined_chunk = df_chunk.join(target_map_df, on='CMPNT_CAT_CD_DESC', how='left')
+        all_cols = pl.read_parquet(file).columns
+        #df = pl.read_parquet(file, columns=[col for col in required_cols if col in all_cols])
+        df = pl.read_parquet(file)
 
-            # Save output
-            out_file = os.path.join(output_path, f'mapped_file{file_idx}_chunk{row_group_idx}.parquet')
-            joined_chunk.write_parquet(out_file)
-            print(f"✅ Saved: {out_file}")
+        for col in required_cols:
+            if col not in df.columns:
+                df = df.with_columns(pl.lit(None).alias(col))
+
+        # Phase 1: Clean MATL_SHRT_DESC
+        df = df.with_columns([
+            pl.col("MATL_SHRT_DESC").map_elements(lambda x: clean_text(expand_abbreviations(x)) if x else None, return_dtype=pl.Utf8)
+        ])
+
+        # Phase 2: Clean CMPNT_MATL_DESC and combine
+        df = df.with_columns([
+            pl.col("CMPNT_MATL_DESC").map_elements(lambda x: clean_text(expand_abbreviations(x)) if x else None, return_dtype=pl.Utf8),
+            (pl.col("MATL_SHRT_DESC").fill_null('') + pl.lit(" ") + pl.col("CMPNT_MATL_DESC").fill_null(''))
+                .str.strip_chars()
+                .alias("MATL_SHRT_DESC_AND_CMPNT_MATL_DESC")
+        ])
+
+        # Phase 3: Clean category and group
+        df = df.with_columns([
+            pl.col("CMPNT_CAT_CD_DESC").map_elements(lambda x: clean_text(x.lower()) if x else None, return_dtype=pl.Utf8),
+            pl.col("CMPNT_UOM_CD").map_elements(lambda x: get_unit_group(x), return_dtype=pl.Utf8)
+        ])
+
+        df.write_parquet(file)
+        print(f"Done: {os.path.basename(file)} |  {time.time() - start:.2f}s")
+
     except Exception as e:
-        print(f"❌ Error processing {file}: {e}")
-
-# Multithreaded execution
-all_files = glob.glob(os.path.join(input_path, '*.parquet'))
-with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
-    for file_idx, file in enumerate(all_files):
-        executor.submit(process_file, file_idx, file)
+        print(f" Failed: {os.path.basename(file)} -> {e}")
