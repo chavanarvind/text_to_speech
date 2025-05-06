@@ -2,15 +2,14 @@ import os
 import time
 import polars as pl
 
-def process_one_file(file):
+def process_abbreviation_and_combine(file):
     try:
-        print(f"🔄 Processing: {os.path.basename(file)}")
+        print(f"🔄 Processing (abbreviation+combine): {os.path.basename(file)}")
         start = time.time()
 
-        # Read entire Parquet file
         df = pl.read_parquet(file)
 
-        # Phase 1: Clean MATL_SHRT_DESC
+        # Clean MATL_SHRT_DESC
         df = df.with_columns([
             pl.col("MATL_SHRT_DESC").map_elements(
                 lambda x: clean_text(expand_abbreviations(x)) if x else None,
@@ -18,7 +17,7 @@ def process_one_file(file):
             )
         ])
 
-        # Phase 2: Clean CMPNT_MATL_DESC and create combined column
+        # Clean CMPNT_MATL_DESC and combine
         df = df.with_columns([
             pl.col("CMPNT_MATL_DESC").map_elements(
                 lambda x: clean_text(expand_abbreviations(x)) if x else None,
@@ -29,21 +28,8 @@ def process_one_file(file):
                 .alias("MATL_SHRT_DESC_AND_CMPNT_MATL_DESC")
         ])
 
-        # Phase 3: Clean CMPNT_CAT_CD_DESC and create CMPNT_UOM_CD_GROUP
-        df = df.with_columns([
-            pl.col("CMPNT_CAT_CD_DESC").map_elements(
-                lambda x: clean_text(x.lower()) if x else None,
-                return_dtype=pl.Utf8
-            ),
-            pl.col("CMPNT_UOM_CD").map_elements(
-                lambda x: get_unit_group(x),
-                return_dtype=pl.Utf8
-            ).alias("CMPNT_UOM_CD_GROUP")
-        ])
-
-        # Overwrite the original file
         df.write_parquet(file)
-        print(f"✅ Done: {os.path.basename(file)} | ⏱️ {time.time() - start:.2f}s")
+        print(f"✅ Done (abbreviation+combine): {os.path.basename(file)} | ⏱️ {time.time() - start:.2f}s")
 
     except Exception as e:
-        print(f"❌ Failed: {os.path.basename(file)} -> {e}")
+        print(f"❌ Failed (abbreviation+combine): {os.path.basename(file)} -> {e}")
