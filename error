@@ -1,45 +1,41 @@
-required_cols = [
-    'CMPNT_CAT_CD_DESC',
+
+
+# Paths
+input_path = './data/parquet_files'
+output_path = './data/target_map_parquet_files'
+os.makedirs(output_path, exist_ok=True)
+
+# Load mapping once
+target_map_df = pd.read_csv('./data/target_map.csv',usecols=['CMPNT_CAT_CD_DESC','Final Category']).drop_duplicates()
+
+# Required columns
+columns_to_read = [
+    'MATL_SHRT_DESC',
     'CMPNT_MATL_DESC',
     'CMPNT_MATL_TYPE_CD',
-    'CMPNT_UOM_CD',
-    'Final Category',
-    'MATL_SHRT_DESC'
+    'CMPNT_CAT_CD_DESC',
+    'CMPNT_UOM_CD'
 ]
 
-def process_one_file(file):
+# Process each Parquet file
+for file_idx, file in enumerate(glob.glob(os.path.join(input_path, '*.parquet'))):
     try:
-        print(f" Processing: {os.path.basename(file)}")
-        start = time.time()
+        parquet_file = pq.ParquetFile(file)
+        for row_group_idx in range(parquet_file.num_row_groups):
+            # Read selected columns from current row group
+            table = parquet_file.read_row_group(row_group_idx, columns=columns_to_read)
+            df_chunk = table.to_pandas()
 
-        all_cols = pl.read_parquet(file).columns
-        df = pl.read_parquet(file, columns=[col for col in required_cols if col in all_cols])
+            # Drop duplicates
+            df_chunk = df_chunk.drop_duplicates()
 
-        for col in required_cols:
-            if col not in df.columns:
-                df = df.with_columns(pl.lit(None).alias(col))
+            # Left join with mapping
+            joined_chunk = df_chunk.merge(target_map_df, how='left', on='CMPNT_CAT_CD_DESC')
 
-        # Phase 1: Clean MATL_SHRT_DESC
-        df = df.with_columns([
-            pl.col("MATL_SHRT_DESC").map_elements(lambda x: clean_text(expand_abbreviations(x)) if x else None, return_dtype=pl.Utf8)
-        ])
-
-        # Phase 2: Clean CMPNT_MATL_DESC and combine
-        df = df.with_columns([
-            pl.col("CMPNT_MATL_DESC").map_elements(lambda x: clean_text(expand_abbreviations(x)) if x else None, return_dtype=pl.Utf8),
-            (pl.col("MATL_SHRT_DESC").fill_null('') + pl.lit(" ") + pl.col("CMPNT_MATL_DESC").fill_null(''))
-                .str.strip_chars()
-                .alias("MATL_SHRT_DESC_AND_CMPNT_MATL_DESC")
-        ])
-
-        # Phase 3: Clean category and group
-        df = df.with_columns([
-            pl.col("CMPNT_CAT_CD_DESC").map_elements(lambda x: clean_text(x.lower()) if x else None, return_dtype=pl.Utf8),
-            pl.col("CMPNT_UOM_CD").map_elements(lambda x: get_unit_group(x), return_dtype=pl.Utf8)
-        ])
-
-        df.write_parquet(file)
-        print(f"Done: {os.path.basename(file)} |  {time.time() - start:.2f}s")
+            # Save to output
+            out_file = os.path.join(output_path, f'mapped_file{file_idx}_chunk{row_group_idx}.parquet')
+            joined_chunk.to_parquet(out_file, index=False)
+            print(f"Saved: {out_file}")
 
     except Exception as e:
-        print(f" Failed: {os.path.basename(file)} -> {e}")
+        print(f"Error processing {file}: {e}")
