@@ -1,26 +1,13 @@
-import polars as pl
-import glob
-import os
-from collections import defaultdict
+- mapped_file36_chunk3.parquet
+  - mapped_file370_chunk0.parquet
+  - mapped_file370_chunk1.parquet
 
-input_path = './data/target_map_parquet_files'
-files = glob.glob(os.path.join(input_path, '*.parquet'))
-
-# Map: frozenset of columns → list of files with that schema
-schema_groups = defaultdict(list)
-
-for f in files:
-    try:
-        df = pl.read_parquet(f)
-        col_set = frozenset(df.columns)
-        schema_groups[col_set].append(os.path.basename(f))
-    except Exception as e:
-        print(f"❌ Failed to read {os.path.basename(f)}: {e}")
-
-# Print grouped results
-for i, (col_set, file_list) in enumerate(schema_groups.items(), 1):
-    print(f"\n🔹 Schema Group {i} - {len(file_list)} file(s)")
-    print("Columns:", sorted(col_set))
-    print("Files:")
-    for fname in file_list:
-        print(f"  - {fname}")
+🔹 Schema Group 3 - 938 file(s)
+Columns: ['CMPNT_CAT_CD_DESC', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_UOM_CD', 'Final Category', 'MATL_SHRT_DESC', 'mapping_column']
+Files:
+  - mapped_file370_chunk2.parquet
+  - mapped_file370_chunk3.parquet
+  - mapped_file371_chunk0.parquet
+  - mapped_file371_chunk1.parquet
+  - mapped_file371_chunk2.parquet
+  - mapped_file371_chunk3.parquet
