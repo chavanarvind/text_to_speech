@@ -1,4 +1,22 @@
- Processing: mapped_file100_chunk0.parquet
+import polars as pl
+import glob
+import os
+
+input_path = './data/target_map_parquet_files'
+files = glob.glob(os.path.join(input_path, '*.parquet'))
+
+for f in files[:5]:
+    df = pl.read_parquet(f)
+    print(f"{os.path.basename(f)} ➤ Columns: {df.columns}")
+
+
+
+
+
+
+
+
+Processing: mapped_file100_chunk0.parquet
  Error: mapped_file0_chunk0.parquet -> could not append value: "API" of type: str to the builder; make sure that all rows have the same schema or consider increasing `infer_schema_length`
 
 it might also be that a value overflows the data-type's capacity
