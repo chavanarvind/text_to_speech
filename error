@@ -1,7 +1,12 @@
-from multiprocessing.dummy import Pool as ThreadPool
+from multiprocessing import Pool, cpu_count
+import glob
+import os
 
 input_path = './data/target_map_parquet_files'
 files = glob.glob(os.path.join(input_path, '*.parquet'))
 
-with ThreadPool(4) as pool:  # You can tune this to 6 or 8 if RAM allows
+# Try using 80% of your cores
+num_procs = max(1, int(cpu_count() * 0.8))
+
+with Pool(processes=num_procs) as pool:
     pool.map(process_one_file, files)
