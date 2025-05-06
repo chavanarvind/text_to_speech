@@ -1,21 +1,17 @@
- Error: mapped_file0_chunk0.parquet -> could not append value: "API" of type: str to the builder; make sure that all rows have the same schema or consider increasing `infer_schema_length`
-
-it might also be that a value overflows the data-type's capacity
-
-
-
 import polars as pl
+import pandas as pd
 import re
 import os
 import glob
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 # Load abbreviation map
-import pandas as pd  # Only for reading the CSV
 abbrev_df = pd.read_csv('./data/abbreviation_expension_updated.csv')
 abbrev_map = {k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])}
 abbrev_pattern = re.compile(r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b', flags=re.IGNORECASE)
 
+# Text utils
 def expand_abbreviations(text):
     if text is None: return text
     return abbrev_pattern.sub(lambda m: abbrev_map[m.group(0).lower()], text)
@@ -42,34 +38,42 @@ def get_unit_group(unit):
         'Unclassified'
     )
 
-# Processing function
+# File processing
 def process_file(file):
     try:
-        df = pl.read_parquet(file)
+        print(f"\n📁 Processing: {os.path.basename(file)}")
+        start = time.time()
 
-        # Convert to list of dicts to apply Python functions
+        df = pl.read_parquet(file)
         df_dicts = df.to_dicts()
 
         for row in df_dicts:
             row['MATL_SHRT_DESC'] = clean_text(expand_abbreviations(row.get('MATL_SHRT_DESC')))
             row['CMPNT_MATL_DESC'] = clean_text(expand_abbreviations(row.get('CMPNT_MATL_DESC')))
             row['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'] = (
-                ((row['MATL_SHRT_DESC'] or '') + ' ' + (row['CMPNT_MATL_DESC'] or '')).strip()
-                or None
+                ((row['MATL_SHRT_DESC'] or '') + ' ' + (row['CMPNT_MATL_DESC'] or '')).strip() or None
             )
             cat_desc = row.get('CMPNT_CAT_CD_DESC')
             row['CMPNT_CAT_CLEAN'] = clean_text(cat_desc.lower()) if cat_desc else None
             row['UNIT_GROUP'] = get_unit_group(row.get('CMPNT_UOM_CD'))
 
-        # Convert back to polars and write
-        new_df = pl.DataFrame(df_dicts)
-        new_df.write_parquet(file)
-        print(f" Updated: {os.path.basename(file)}")
-        print(new_df.head(5))
-    except Exception as e:
-        print(f" Error: {os.path.basename(file)} -> {e}")
+        safe_rows = [
+            {k: str(v) if v is not None else None for k, v in row.items()}
+            for row in df_dicts
+        ]
+        new_df = pl.DataFrame(safe_rows)
 
-# Parallel processing
+        print("🔎 Sample records:")
+        print(new_df.head(5))
+
+        new_df.write_parquet(file)
+
+        print(f"✅ Updated: {os.path.basename(file)} | ⏱️ Time: {time.time() - start:.2f}s")
+
+    except Exception as e:
+        print(f"❌ Error: {os.path.basename(file)} -> {e}")
+
+# Run in parallel
 input_path = './data/target_map_parquet_files'
 files = glob.glob(os.path.join(input_path, '*.parquet'))
 
