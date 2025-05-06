@@ -1,90 +1,29 @@
-import pandas as pd
-import spacy
-from collections import Counter
-from itertools import islice
-from pathlib import Path
-import os
-import time
-from multiprocessing import Pool, cpu_count
-
-
-nlp = spacy.load("en_core_web_sm", disable=["ner", "parser", "tagger"])
-
-
-input_path = './data/target_map_parquet_files'
-output_path = Path('./data/outputs/frequent_terms_by_category')
-output_path.mkdir(parents=True, exist_ok=True)
-
-required_cols = ['Final Category', 'CMPNT_MATL_DESC']
-threshold = 10
-
-
-
 def process_category(category, descriptions, threshold):
-    text = ' '.join(descriptions)
-    doc = nlp(text)
-    words = [token.lemma_ for token in doc if token.is_alpha and not token.is_stop]
+    unique_words = []
+
+    for desc in descriptions:
+        doc = nlp(desc)
+        words = {token.lemma_ for token in doc if token.is_alpha and not token.is_stop}
+        unique_words.extend(words)
+
+    unigram_counts = Counter(unique_words)
 
     unigrams = [
         {'category': category, 'word': word, 'count': count}
-        for word, count in Counter(words).items() if count >= threshold
+        for word, count in unigram_counts.items() if count >= threshold
     ]
 
+    # For bigrams, deduplication per row isn’t typical — skip or ask if needed
+    bigram_words = []
+    for desc in descriptions:
+        doc = nlp(desc)
+        words = [token.lemma_ for token in doc if token.is_alpha and not token.is_stop]
+        bigram_words.extend(zip(words, islice(words, 1, None)))
+
+    bigram_counts = Counter(bigram_words)
     bigrams = [
         {'category': category, 'bigram': f'{w1} {w2}', 'count': count}
-        for (w1, w2), count in Counter(zip(words, islice(words, 1, None))).items()
-        if count >= threshold
+        for (w1, w2), count in bigram_counts.items() if count >= threshold
     ]
 
     return unigrams, bigrams
-
-
-def process_file(file_path_str):
-    from pathlib import Path
-    file_path = Path(file_path_str)
-    start_time = time.time()
-
-    try:
-        df = pd.read_parquet(file_path, columns=required_cols)
-        df = df[df['Final Category'].notna()]
-        df['CMPNT_MATL_DESC'] = df['CMPNT_MATL_DESC'].fillna('').str.lower()
-
-        file_unigrams = []
-        file_bigrams = []
-
-        for category, group in df.groupby('Final Category'):
-            unigrams, bigrams = process_category(category, group['CMPNT_MATL_DESC'].tolist(), threshold)
-            file_unigrams.extend(unigrams)
-            file_bigrams.extend(bigrams)
-
-        duration = time.time() - start_time
-        print(f"✅ Processed {file_path.name} in {duration:.2f}s")
-
-        return file_unigrams, file_bigrams
-
-    except Exception as e:
-        print(f"❌ Failed on {file_path.name}: {e}")
-        return [], []
-
-
-
-
-
-from pathlib import Path
-
-all_files = [str(f) for f in Path(input_path).glob("*.parquet")]
-print(f"📁 Total files to process: {len(all_files)}")
-
-all_unigrams, all_bigrams = [], []
-
-with Pool(processes=cpu_count()) as pool:
-    for unigrams, bigrams in pool.map(process_file, all_files):
-        all_unigrams.extend(unigrams)
-        all_bigrams.extend(bigrams)
-
-
-
-pd.DataFrame(all_unigrams).to_csv(output_path / "all_categories_unigrams.csv", index=False)
-pd.DataFrame(all_bigrams).to_csv(output_path / "all_categories_bigrams.csv", index=False)
-print("✅ Saved unigrams and bigrams.")
-
