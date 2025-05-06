@@ -1,17 +1,26 @@
 import polars as pl
 import glob
 import os
+from collections import defaultdict
 
 input_path = './data/target_map_parquet_files'
-output_path = './data/csv_outputs'
-os.makedirs(output_path, exist_ok=True)
-
 files = glob.glob(os.path.join(input_path, '*.parquet'))
 
-for f in files[:5]:
-    df = pl.read_parquet(f)
-    print(f"{os.path.basename(f)} ➤ Columns: {df.columns}")
+# Map: frozenset of columns → list of files with that schema
+schema_groups = defaultdict(list)
 
-    # Save as CSV (comma-separated)
-    csv_filename = os.path.splitext(os.path.basename(f))[0] + '.csv'
-    df.write_csv(os.path.join(output_path, csv_filename))
+for f in files:
+    try:
+        df = pl.read_parquet(f)
+        col_set = frozenset(df.columns)
+        schema_groups[col_set].append(os.path.basename(f))
+    except Exception as e:
+        print(f"❌ Failed to read {os.path.basename(f)}: {e}")
+
+# Print grouped results
+for i, (col_set, file_list) in enumerate(schema_groups.items(), 1):
+    print(f"\n🔹 Schema Group {i} - {len(file_list)} file(s)")
+    print("Columns:", sorted(col_set))
+    print("Files:")
+    for fname in file_list:
+        print(f"  - {fname}")
