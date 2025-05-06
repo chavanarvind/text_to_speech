@@ -1,3 +1,19 @@
+
+
+
+
+🔹 Schema Group 1 - 2 file(s)
+Columns: ['CMPNT_CAT_CD_DESC', 'CMPNT_CAT_CLEAN', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_UOM_CD', 'Final Category', 'MATL_SHRT_DESC', 'MATL_SHRT_DESC_AND_CMPNT_MATL_DESC', 'RULE_HINT', 'UNIT_GROUP', 'mapping_column']
+Files:
+  - mapped_file0_chunk0.parquet
+  - mapped_file0_chunk1.parquet
+
+🔹 Schema Group 2 - 1200 file(s)
+Columns: ['CMPNT_CAT_CD_DESC', 'CMPNT_CAT_CLEAN', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_UOM_CD', 'Final Category', 'MATL_SHRT_DESC', 'MATL_SHRT_DESC_AND_CMPNT_MATL_DESC', 'UNIT_GROUP', 'mapping_column']
+Files:
+
+
+
 - mapped_file36_chunk3.parquet
   - mapped_file370_chunk0.parquet
   - mapped_file370_chunk1.parquet
