@@ -1,19 +1,11 @@
 c1
-import polars as pl
-import pandas as pd
-import re
-import os
-import glob
-import time
-from concurrent.futures import ThreadPoolExecutor
-
-c2
 
 abbrev_df = pd.read_csv('./data/abbreviation_expension_updated.csv')
 abbrev_map = {k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])}
 abbrev_pattern = re.compile(r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b', flags=re.IGNORECASE)
 
-c3
+
+c2
 
 def expand_abbreviations(text):
     if text is None: return text
@@ -41,8 +33,7 @@ def get_unit_group(unit):
         'Unclassified'
     )
 
-
-c4
+c3
 
 required_cols = [
     'CMPNT_CAT_CD_DESC',
@@ -53,12 +44,11 @@ required_cols = [
     'MATL_SHRT_DESC'
 ]
 
-def process_file(file):
+def process_one_file(file):
     try:
-        print(f"\n📁 Processing: {os.path.basename(file)}")
+        print(f"🔄 Processing: {os.path.basename(file)}")
         start = time.time()
 
-        # Read only needed columns (fallback-safe)
         all_cols = pl.read_parquet(file).columns
         df = pl.read_parquet(file, columns=[col for col in required_cols if col in all_cols])
 
@@ -66,29 +56,36 @@ def process_file(file):
             if col not in df.columns:
                 df = df.with_columns(pl.lit(None).alias(col))
 
+        # Phase 1: Clean MATL_SHRT_DESC
         df = df.with_columns([
-            pl.col("MATL_SHRT_DESC").map_elements(lambda x: clean_text(expand_abbreviations(x)) if x else None, return_dtype=pl.Utf8).alias("MATL_SHRT_DESC"),
-            pl.col("CMPNT_MATL_DESC").map_elements(lambda x: clean_text(expand_abbreviations(x)) if x else None, return_dtype=pl.Utf8).alias("CMPNT_MATL_DESC"),
-            (pl.col("MATL_SHRT_DESC").fill_null('') + pl.lit(" ") + pl.col("CMPNT_MATL_DESC").fill_null(''))
-                .str.strip_chars()
-                .alias("MATL_SHRT_DESC_AND_CMPNT_MATL_DESC"),
-            pl.col("CMPNT_CAT_CD_DESC").map_elements(lambda x: clean_text(x.lower()) if x else None, return_dtype=pl.Utf8).alias("CMPNT_CAT_CLEAN"),
-            pl.col("CMPNT_UOM_CD").map_elements(lambda x: get_unit_group(x), return_dtype=pl.Utf8).alias("UNIT_GROUP")
+            pl.col("MATL_SHRT_DESC").map_elements(lambda x: clean_text(expand_abbreviations(x)) if x else None, return_dtype=pl.Utf8)
         ])
 
-        print("🔎 Sample records:")
-        print(df.head(5))
+        # Phase 2: Clean CMPNT_MATL_DESC and combine
+        df = df.with_columns([
+            pl.col("CMPNT_MATL_DESC").map_elements(lambda x: clean_text(expand_abbreviations(x)) if x else None, return_dtype=pl.Utf8),
+            (pl.col("MATL_SHRT_DESC").fill_null('') + pl.lit(" ") + pl.col("CMPNT_MATL_DESC").fill_null(''))
+                .str.strip_chars()
+                .alias("MATL_SHRT_DESC_AND_CMPNT_MATL_DESC")
+        ])
+
+        # Phase 3: Clean category and group
+        df = df.with_columns([
+            pl.col("CMPNT_CAT_CD_DESC").map_elements(lambda x: clean_text(x.lower()) if x else None, return_dtype=pl.Utf8),
+            pl.col("CMPNT_UOM_CD").map_elements(lambda x: get_unit_group(x), return_dtype=pl.Utf8)
+        ])
 
         df.write_parquet(file)
-        print(f"✅ Updated: {os.path.basename(file)} | ⏱️ Time: {time.time() - start:.2f}s")
+        print(f"✅ Done: {os.path.basename(file)} | ⏱️ {time.time() - start:.2f}s")
 
     except Exception as e:
-        print(f"❌ Error: {os.path.basename(file)} -> {e}")
+        print(f"❌ Failed: {os.path.basename(file)} -> {e}")
+
 c5
 
 input_path = './data/target_map_parquet_files'
 files = glob.glob(os.path.join(input_path, '*.parquet'))
 
-# Adjust thread count to match your notebook VM size (4–8 is usually safe)
-with ThreadPoolExecutor(max_workers=4) as executor:
-    executor.map(process_file, files)
+# Use all available cores or limit manually (e.g., processes=4)
+with Pool(processes=cpu_count()) as pool:
+    pool.map(process_one_file, files)
