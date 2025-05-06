@@ -1,9 +1,90 @@
-df = df.with_columns([
-    pl.col("MATL_SHRT_DESC").map_elements(lambda x: clean_text(expand_abbreviations(x)) if x else None, return_dtype=pl.Utf8).alias("MATL_SHRT_DESC"),
-    pl.col("CMPNT_MATL_DESC").map_elements(lambda x: clean_text(expand_abbreviations(x)) if x else None, return_dtype=pl.Utf8).alias("CMPNT_MATL_DESC"),
-    (pl.col("MATL_SHRT_DESC").fill_null('') + pl.lit(" ") + pl.col("CMPNT_MATL_DESC").fill_null(''))
+import polars as pl
+import pandas as pd
+import re
+import os
+import glob
+import time
+from concurrent.futures import ThreadPoolExecutor
+
+# Load abbreviation map
+abbrev_df = pd.read_csv('./data/abbreviation_expension_updated.csv')
+abbrev_map = {k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])}
+abbrev_pattern = re.compile(r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b', flags=re.IGNORECASE)
+
+# Text processing functions
+def expand_abbreviations(text):
+    if text is None: return text
+    return abbrev_pattern.sub(lambda m: abbrev_map[m.group(0).lower()], text)
+
+def clean_text(text):
+    if text is None: return text
+    text = re.sub(r'[^a-z0-9\s]', ' ', text.lower())
+    return re.sub(r'\s+', ' ', text).strip()
+
+def get_unit_group(unit):
+    if unit is None: return None
+    unit = str(unit).strip().upper()
+    chem = {'KG', 'KGS', 'KGA', 'KGW', 'G', 'GR', 'GM', 'MG', 'LB', 'LBS', 'OZ', 'OZA', 'GW', 'TON', 'DR'}
+    liquid = {'L', 'LT', 'ML', 'CC', 'CL', 'CCM', 'GLL'}
+    discrete = {'EA', 'PC', 'PCS', 'PKT', 'PK', 'PAK', 'PCK', 'CS', 'CSE', 'CT', 'CA', 'ST', 'GRO', 'BX'}
+    containers = {'BOT', 'BOTTLE', 'ROLL', 'ROL', 'REEL', 'KAR'}
+    dimensional = {'FT', 'YD', 'KM', 'DM', 'M', 'M1', 'M2', 'KM2', 'YD2', 'FT3', 'SQM', 'MYD', 'MI', 'SM', 'LM', 'LF', 'MH', 'KN', 'CH'}
+    return (
+        'CHM' if unit in chem else
+        'Liquid' if unit in liquid else
+        'Discrete' if unit in discrete else
+        'Containers' if unit in containers else
+        'Dimensional' if unit in dimensional else
+        'Unclassified'
+    )
+
+# Only these columns will be read and used
+required_cols = [
+    'CMPNT_CAT_CD_DESC',
+    'CMPNT_MATL_DESC',
+    'CMPNT_MATL_TYPE_CD',
+    'CMPNT_UOM_CD',
+    'Final Category',
+    'MATL_SHRT_DESC'
+]
+
+# File processor
+def process_file(file):
+    try:
+        print(f"\n Processing: {os.path.basename(file)}")
+        start = time.time()
+
+        # Read only necessary columns
+        df = pl.read_parquet(file, columns=[col for col in required_cols if col in pl.read_parquet(file).columns])
+
+        # Fill missing columns with null
+        for col in required_cols:
+            if col not in df.columns:
+                df = df.with_columns(pl.lit(None).alias(col))
+
+        # Apply vectorized transformations
+        df = df.with_columns([
+             pl.col("MATL_SHRT_DESC").map_elements(lambda x: clean_text(expand_abbreviations(x)) if x else None, return_dtype=pl.Utf8).alias("MATL_SHRT_DESC"),
+             pl.col("CMPNT_MATL_DESC").map_elements(lambda x: clean_text(expand_abbreviations(x)) if x else None, return_dtype=pl.Utf8).alias("CMPNT_MATL_DESC"),
+            (pl.col("MATL_SHRT_DESC").fill_null('') + pl.lit(" ") + pl.col("CMPNT_MATL_DESC").fill_null(''))
         .str.strip_chars()
         .alias("MATL_SHRT_DESC_AND_CMPNT_MATL_DESC"),
-    pl.col("CMPNT_CAT_CD_DESC").map_elements(lambda x: clean_text(x.lower()) if x else None, return_dtype=pl.Utf8).alias("CMPNT_CAT_CLEAN"),
-    pl.col("CMPNT_UOM_CD").map_elements(lambda x: get_unit_group(x), return_dtype=pl.Utf8).alias("UNIT_GROUP")
-])
+            pl.col("CMPNT_CAT_CD_DESC").map_elements(lambda x: clean_text(x.lower()) if x else None, return_dtype=pl.Utf8).alias("CMPNT_CAT_CLEAN"),
+            pl.col("CMPNT_UOM_CD").map_elements(lambda x: get_unit_group(x), return_dtype=pl.Utf8).alias("UNIT_GROUP")])
+
+        # Print sample and overwrite the same parquet
+        print("Sample records:")
+        print(df.head(5))
+
+        df.write_parquet(file)
+        print(f" Updated: {os.path.basename(file)} | Time: {time.time() - start:.2f}s")
+
+    except Exception as e:
+        print(f" Error: {os.path.basename(file)} -> {e}")
+
+# Run all files in parallel
+input_path = './data/target_map_parquet_files'
+files = glob.glob(os.path.join(input_path, '*.parquet'))
+
+with ThreadPoolExecutor(max_workers=4) as executor:
+    executor.map(process_file, files)
