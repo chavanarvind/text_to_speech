@@ -1,8 +1,9 @@
- Processing: mapped_file136_chunk0.parquet
- Error: mapped_file134_chunk2.parquet -> 'Expr' object has no attribute 'apply'
-
- Processing: mapped_file136_chunk1.parquet
- Error: mapped_file135_chunk3.parquet -> 'Expr' object has no attribute 'apply'
-
- Processing: mapped_file136_chunk2.parquet
- Error: mapped_file136_chunk0.parquet -> 'Expr' object has no attribute 'apply'
+df = df.with_columns([
+    pl.col("MATL_SHRT_DESC").map_elements(lambda x: clean_text(expand_abbreviations(x)) if x else None, return_dtype=pl.Utf8).alias("MATL_SHRT_DESC"),
+    pl.col("CMPNT_MATL_DESC").map_elements(lambda x: clean_text(expand_abbreviations(x)) if x else None, return_dtype=pl.Utf8).alias("CMPNT_MATL_DESC"),
+    (pl.col("MATL_SHRT_DESC").fill_null('') + pl.lit(" ") + pl.col("CMPNT_MATL_DESC").fill_null(''))
+        .str.strip_chars()
+        .alias("MATL_SHRT_DESC_AND_CMPNT_MATL_DESC"),
+    pl.col("CMPNT_CAT_CD_DESC").map_elements(lambda x: clean_text(x.lower()) if x else None, return_dtype=pl.Utf8).alias("CMPNT_CAT_CLEAN"),
+    pl.col("CMPNT_UOM_CD").map_elements(lambda x: get_unit_group(x), return_dtype=pl.Utf8).alias("UNIT_GROUP")
+])
