@@ -1,3 +1,11 @@
+Move out of apply to a vectorized version of the code
+Processing the files in parallel: multithread library
+Use polars instead of pandas
+Use azure ml pipeline (parallel script run)
+
+
+
+
 #step 1
 # Load abbreviation map
 
