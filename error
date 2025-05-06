@@ -1,3 +1,9 @@
+ Error: mapped_file0_chunk0.parquet -> could not append value: "API" of type: str to the builder; make sure that all rows have the same schema or consider increasing `infer_schema_length`
+
+it might also be that a value overflows the data-type's capacity
+
+
+
 import polars as pl
 import re
 import os
