@@ -1,5 +1,5 @@
 c1
-
+from multiprocessing import Pool, cpu_count
 abbrev_df = pd.read_csv('./data/abbreviation_expension_updated.csv')
 abbrev_map = {k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])}
 abbrev_pattern = re.compile(r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b', flags=re.IGNORECASE)
