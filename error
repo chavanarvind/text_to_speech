@@ -1,7 +1,27 @@
 import os
 import time
 import polars as pl
+import pandas as pd
+import re
 
+# Load abbreviation map once
+def prepare_abbreviation_map():
+    abbrev_df = pd.read_csv('./data/abbreviation_expension_updated.csv')
+    abbrev_map = {k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])}
+    pattern = re.compile(r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b', flags=re.IGNORECASE)
+
+    def expand(text):
+        return pattern.sub(lambda m: abbrev_map[m.group(0).lower()], text)
+    
+    return expand
+
+expand_abbrev = prepare_abbreviation_map()
+
+# Example clean_text function
+def clean_text(text):
+    return re.sub(r'[^a-zA-Z0-9 ]+', '', text).strip().lower()
+
+# Process one file
 def process_abbreviation_and_combine(file):
     try:
         print(f"🔄 Processing (abbreviation+combine): {os.path.basename(file)}")
@@ -9,27 +29,32 @@ def process_abbreviation_and_combine(file):
 
         df = pl.read_parquet(file)
 
-        # Clean MATL_SHRT_DESC
+        # Get all unique values across both columns
+        unique_values = set(df["MATL_SHRT_DESC"].unique().to_list() + df["CMPNT_MATL_DESC"].unique().to_list())
+        value_map = {
+            val: clean_text(expand_abbrev(val))
+            for val in unique_values if val is not None
+        }
+
+        # Apply mapping using fast .map_dict()
         df = df.with_columns([
-            pl.col("MATL_SHRT_DESC").map_elements(
-                lambda x: clean_text(expand_abbreviations(x)) if x else None,
-                return_dtype=pl.Utf8
-            )
+            pl.col("MATL_SHRT_DESC").map_dict(value_map, return_dtype=pl.Utf8),
+            pl.col("CMPNT_MATL_DESC").map_dict(value_map, return_dtype=pl.Utf8)
         ])
 
-        # Clean CMPNT_MATL_DESC and combine
+        # Combine cleaned columns
         df = df.with_columns([
-            pl.col("CMPNT_MATL_DESC").map_elements(
-                lambda x: clean_text(expand_abbreviations(x)) if x else None,
-                return_dtype=pl.Utf8
-            ),
             (pl.col("MATL_SHRT_DESC").fill_null('') + pl.lit(" ") + pl.col("CMPNT_MATL_DESC").fill_null(''))
                 .str.strip_chars()
                 .alias("MATL_SHRT_DESC_AND_CMPNT_MATL_DESC")
         ])
 
-        df.write_parquet(file)
-        print(f"✅ Done (abbreviation+combine): {os.path.basename(file)} | ⏱️ {time.time() - start:.2f}s")
+        # Save to new folder
+        output_dir = './data/abbreviation_combined_cleaned'
+        os.makedirs(output_dir, exist_ok=True)
+        output_file = os.path.join(output_dir, os.path.basename(file))
+        df.write_parquet(output_file)
 
+        print(f"✅ Done (abbreviation+combine): {os.path.basename(file)} | ⏱️ {time.time() - start:.2f}s")
     except Exception as e:
         print(f"❌ Failed (abbreviation+combine): {os.path.basename(file)} -> {e}")
