@@ -1,48 +1,893 @@
-import pandas as pd
-import spacy
-from collections import Counter
-from itertools import islice
-from pathlib import Path
+🔄 Processing: mapped_file12_chunk2.parquet🔄 Processing: mapped_file0_chunk0.parquet🔄 Processing: mapped_file145_chunk1.parquet🔄 Processing: mapped_file175_chunk3.parquet🔄 Processing: mapped_file160_chunk0.parquet🔄 Processing: mapped_file205_chunk1.parquet🔄 Processing: mapped_file190_chunk2.parquet🔄 Processing: mapped_file114_chunk3.parquet
 
-# Load SpaCy (disable unneeded components)
-nlp = spacy.load("en_core_web_sm", disable=["ner", "parser", "tagger"])
 
-# Define paths
-input_path = './data/target_map_parquet_files'
-output_path = Path('./data/outputs/frequent_terms_by_category')
-output_path.mkdir(parents=True, exist_ok=True)
 
-# Required columns only
-required_cols = ['Final Category', 'CMPNT_MATL_DESC']
-all_files = list(Path(input_path).glob("*.parquet"))
-df = pd.concat([pd.read_parquet(f, columns=required_cols) for f in all_files], ignore_index=True)
 
-# Filter valid Final Category
-df = df[df['Final Category'].notna()]
-df['CMPNT_MATL_DESC'] = df['CMPNT_MATL_DESC'].fillna('').str.lower()
 
-# Initialize results
-all_unigrams = []
-all_bigrams = []
 
-# Process each category
-for category, group in df.groupby('Final Category'):
-    text = ' '.join(group['CMPNT_MATL_DESC'].tolist())
-    doc = nlp(text)
-    words = [token.lemma_ for token in doc if token.is_alpha and not token.is_stop]
 
-    # Unigrams with threshold
-    unigram_counts = Counter(words)
-    for word, count in unigram_counts.items():
-        if count >= 10:
-            all_unigrams.append({'category': category, 'word': word, 'count': count})
+✅ Done: mapped_file175_chunk3.parquet | ⏱️ 45.03s
+🔄 Processing: mapped_file176_chunk0.parquet
+✅ Done: mapped_file114_chunk3.parquet | ⏱️ 48.30s
+🔄 Processing: mapped_file115_chunk0.parquet
+✅ Done: mapped_file0_chunk0.parquet | ⏱️ 50.15s
+🔄 Processing: mapped_file0_chunk1.parquet
+✅ Done: mapped_file160_chunk0.parquet | ⏱️ 55.65s
+🔄 Processing: mapped_file160_chunk1.parquet
+✅ Done: mapped_file205_chunk1.parquet | ⏱️ 92.02s
+🔄 Processing: mapped_file205_chunk2.parquet
+✅ Done: mapped_file145_chunk1.parquet | ⏱️ 93.39s
+🔄 Processing: mapped_file145_chunk2.parquet
+✅ Done: mapped_file176_chunk0.parquet | ⏱️ 53.37s
+🔄 Processing: mapped_file176_chunk1.parquet
+✅ Done: mapped_file115_chunk0.parquet | ⏱️ 52.16s
+🔄 Processing: mapped_file115_chunk1.parquet
+✅ Done: mapped_file190_chunk2.parquet | ⏱️ 131.71s
+🔄 Processing: mapped_file190_chunk3.parquet
+✅ Done: mapped_file12_chunk2.parquet | ⏱️ 131.84s
+🔄 Processing: mapped_file12_chunk3.parquet
+✅ Done: mapped_file0_chunk1.parquet | ⏱️ 83.44s
+🔄 Processing: mapped_file0_chunk2.parquet
+✅ Done: mapped_file160_chunk1.parquet | ⏱️ 84.64s
+🔄 Processing: mapped_file160_chunk2.parquet
+✅ Done: mapped_file190_chunk3.parquet | ⏱️ 41.77s
+🔄 Processing: mapped_file191_chunk0.parquet
+✅ Done: mapped_file12_chunk3.parquet | ⏱️ 41.67s
+🔄 Processing: mapped_file130_chunk0.parquet
+✅ Done: mapped_file115_chunk1.parquet | ⏱️ 83.83s
+🔄 Processing: mapped_file115_chunk2.parquet
+✅ Done: mapped_file176_chunk1.parquet | ⏱️ 86.12s
+🔄 Processing: mapped_file176_chunk2.parquet
+✅ Done: mapped_file205_chunk2.parquet | ⏱️ 125.00s
+🔄 Processing: mapped_file205_chunk3.parquet
+✅ Done: mapped_file130_chunk0.parquet | ⏱️ 53.97s
+🔄 Processing: mapped_file130_chunk1.parquet
+✅ Done: mapped_file145_chunk2.parquet | ⏱️ 138.91s
+🔄 Processing: mapped_file145_chunk3.parquet
+✅ Done: mapped_file191_chunk0.parquet | ⏱️ 65.49s
+🔄 Processing: mapped_file191_chunk1.parquet
+✅ Done: mapped_file0_chunk2.parquet | ⏱️ 127.11s
+🔄 Processing: mapped_file0_chunk3.parquet
+✅ Done: mapped_file160_chunk2.parquet | ⏱️ 129.84s
+🔄 Processing: mapped_file160_chunk3.parquet
+✅ Done: mapped_file145_chunk3.parquet | ⏱️ 39.35s
+🔄 Processing: mapped_file146_chunk0.parquet
+✅ Done: mapped_file205_chunk3.parquet | ⏱️ 70.49s
+🔄 Processing: mapped_file206_chunk0.parquet
+✅ Done: mapped_file0_chunk3.parquet | ⏱️ 46.07s
+🔄 Processing: mapped_file100_chunk0.parquet
+✅ Done: mapped_file130_chunk1.parquet | ⏱️ 82.66s
+🔄 Processing: mapped_file130_chunk2.parquet
+✅ Done: mapped_file160_chunk3.parquet | ⏱️ 42.40s
+🔄 Processing: mapped_file161_chunk0.parquet
+✅ Done: mapped_file115_chunk2.parquet | ⏱️ 128.55s
+🔄 Processing: mapped_file115_chunk3.parquet
+✅ Done: mapped_file176_chunk2.parquet | ⏱️ 131.96s
+🔄 Processing: mapped_file176_chunk3.parquet
+✅ Done: mapped_file146_chunk0.parquet | ⏱️ 51.20s
+🔄 Processing: mapped_file146_chunk1.parquet
+✅ Done: mapped_file191_chunk1.parquet | ⏱️ 97.75s
+🔄 Processing: mapped_file191_chunk2.parquet
+✅ Done: mapped_file206_chunk0.parquet | ⏱️ 57.55s
+🔄 Processing: mapped_file206_chunk1.parquet
+✅ Done: mapped_file176_chunk3.parquet | ⏱️ 40.73s
+🔄 Processing: mapped_file177_chunk0.parquet
+✅ Done: mapped_file115_chunk3.parquet | ⏱️ 46.09s
+🔄 Processing: mapped_file116_chunk0.parquet
+✅ Done: mapped_file100_chunk0.parquet | ⏱️ 52.39s
 
-    # Bigrams with threshold
-    bigram_counts = Counter(zip(words, islice(words, 1, None)))
-    for (w1, w2), count in bigram_counts.items():
-        if count >= 10:
-            all_bigrams.append({'category': category, 'bigram': f'{w1} {w2}', 'count': count})
+🔄 Processing: mapped_file100_chunk1.parquet✅ Done: mapped_file161_chunk0.parquet | ⏱️ 48.69s
+🔄 Processing: mapped_file161_chunk1.parquet
+✅ Done: mapped_file146_chunk1.parquet | ⏱️ 84.33s
+🔄 Processing: mapped_file146_chunk2.parquet
+✅ Done: mapped_file116_chunk0.parquet | ⏱️ 53.59s
+🔄 Processing: mapped_file116_chunk1.parquet
+✅ Done: mapped_file177_chunk0.parquet | ⏱️ 64.71s
+🔄 Processing: mapped_file177_chunk1.parquet
+✅ Done: mapped_file206_chunk1.parquet | ⏱️ 96.10s
+🔄 Processing: mapped_file206_chunk2.parquet
+✅ Done: mapped_file130_chunk2.parquet | ⏱️ 132.53s
+🔄 Processing: mapped_file130_chunk3.parquet
+✅ Done: mapped_file161_chunk1.parquet | ⏱️ 85.07s
+🔄 Processing: mapped_file161_chunk2.parquet
+✅ Done: mapped_file100_chunk1.parquet | ⏱️ 90.30s
+🔄 Processing: mapped_file100_chunk2.parquet
+✅ Done: mapped_file191_chunk2.parquet | ⏱️ 134.71s
+🔄 Processing: mapped_file191_chunk3.parquet
+✅ Done: mapped_file130_chunk3.parquet | ⏱️ 42.64s
+🔄 Processing: mapped_file131_chunk0.parquet
+✅ Done: mapped_file116_chunk1.parquet | ⏱️ 85.92s
+🔄 Processing: mapped_file116_chunk2.parquet
+✅ Done: mapped_file191_chunk3.parquet | ⏱️ 46.11s
+🔄 Processing: mapped_file192_chunk0.parquet
+✅ Done: mapped_file177_chunk1.parquet | ⏱️ 98.60s
+🔄 Processing: mapped_file177_chunk2.parquet
+✅ Done: mapped_file131_chunk0.parquet | ⏱️ 47.77s
+🔄 Processing: mapped_file131_chunk1.parquet
+✅ Done: mapped_file146_chunk2.parquet | ⏱️ 127.66s
+🔄 Processing: mapped_file146_chunk3.parquet
+✅ Done: mapped_file161_chunk2.parquet | ⏱️ 123.63s
+🔄 Processing: mapped_file161_chunk3.parquet
+✅ Done: mapped_file192_chunk0.parquet | ⏱️ 52.66s
+🔄 Processing: mapped_file192_chunk1.parquet
+✅ Done: mapped_file100_chunk2.parquet | ⏱️ 123.41s
+🔄 Processing: mapped_file100_chunk3.parquet
+✅ Done: mapped_file206_chunk2.parquet | ⏱️ 139.15s
+🔄 Processing: mapped_file206_chunk3.parquet
+✅ Done: mapped_file146_chunk3.parquet | ⏱️ 47.48s
+🔄 Processing: mapped_file147_chunk0.parquet
+✅ Done: mapped_file206_chunk3.parquet | ⏱️ 34.47s
+🔄 Processing: mapped_file207_chunk0.parquet
+✅ Done: mapped_file131_chunk1.parquet | ⏱️ 82.63s
+🔄 Processing: mapped_file131_chunk2.parquet
+✅ Done: mapped_file161_chunk3.parquet | ⏱️ 50.98s
+🔄 Processing: mapped_file162_chunk0.parquet
+✅ Done: mapped_file116_chunk2.parquet | ⏱️ 132.05s
+🔄 Processing: mapped_file116_chunk3.parquet
+✅ Done: mapped_file147_chunk0.parquet | ⏱️ 50.13s
+🔄 Processing: mapped_file147_chunk1.parquet
+✅ Done: mapped_file100_chunk3.parquet | ⏱️ 68.52s
+🔄 Processing: mapped_file101_chunk0.parquet
+✅ Done: mapped_file192_chunk1.parquet | ⏱️ 84.12s
+🔄 Processing: mapped_file192_chunk2.parquet
+✅ Done: mapped_file177_chunk2.parquet | ⏱️ 134.53s
+🔄 Processing: mapped_file177_chunk3.parquet
+✅ Done: mapped_file116_chunk3.parquet | ⏱️ 41.76s
+🔄 Processing: mapped_file117_chunk0.parquet
+✅ Done: mapped_file207_chunk0.parquet | ⏱️ 57.61s
+🔄 Processing: mapped_file207_chunk1.parquet
+✅ Done: mapped_file162_chunk0.parquet | ⏱️ 54.19s
+🔄 Processing: mapped_file162_chunk1.parquet
+✅ Done: mapped_file101_chunk0.parquet | ⏱️ 51.16s
+🔄 Processing: mapped_file101_chunk1.parquet
+✅ Done: mapped_file177_chunk3.parquet | ⏱️ 48.09s
+🔄 Processing: mapped_file178_chunk0.parquet
+✅ Done: mapped_file147_chunk1.parquet | ⏱️ 86.27s
+🔄 Processing: mapped_file147_chunk2.parquet
+✅ Done: mapped_file117_chunk0.parquet | ⏱️ 51.74s
+🔄 Processing: mapped_file117_chunk1.parquet
+✅ Done: mapped_file131_chunk2.parquet | ⏱️ 130.39s
+🔄 Processing: mapped_file131_chunk3.parquet
+✅ Done: mapped_file178_chunk0.parquet | ⏱️ 55.34s
+🔄 Processing: mapped_file178_chunk1.parquet
+✅ Done: mapped_file162_chunk1.parquet | ⏱️ 91.87s
+🔄 Processing: mapped_file162_chunk2.parquet
+✅ Done: mapped_file207_chunk1.parquet | ⏱️ 95.54s
+🔄 Processing: mapped_file207_chunk2.parquet
+✅ Done: mapped_file101_chunk1.parquet | ⏱️ 86.26s
+🔄 Processing: mapped_file101_chunk2.parquet
+✅ Done: mapped_file192_chunk2.parquet | ⏱️ 130.63s
+🔄 Processing: mapped_file192_chunk3.parquet
+✅ Done: mapped_file131_chunk3.parquet | ⏱️ 50.64s
+🔄 Processing: mapped_file132_chunk0.parquet
+✅ Done: mapped_file117_chunk1.parquet | ⏱️ 84.66s
+🔄 Processing: mapped_file117_chunk2.parquet
+✅ Done: mapped_file192_chunk3.parquet | ⏱️ 45.26s
+🔄 Processing: mapped_file193_chunk0.parquet
+✅ Done: mapped_file178_chunk1.parquet | ⏱️ 84.61s
+🔄 Processing: mapped_file178_chunk2.parquet
+✅ Done: mapped_file132_chunk0.parquet | ⏱️ 54.49s
+🔄 Processing: mapped_file132_chunk1.parquet
+✅ Done: mapped_file147_chunk2.parquet | ⏱️ 132.65s
+🔄 Processing: mapped_file147_chunk3.parquet
+✅ Done: mapped_file193_chunk0.parquet | ⏱️ 51.33s
+🔄 Processing: mapped_file193_chunk1.parquet
+✅ Done: mapped_file162_chunk2.parquet | ⏱️ 124.35s
+🔄 Processing: mapped_file162_chunk3.parquet
+✅ Done: mapped_file147_chunk3.parquet | ⏱️ 41.99s
+🔄 Processing: mapped_file148_chunk0.parquet
+✅ Done: mapped_file207_chunk2.parquet | ⏱️ 138.06s
+🔄 Processing: mapped_file207_chunk3.parquet
+✅ Done: mapped_file101_chunk2.parquet | ⏱️ 129.02s
+🔄 Processing: mapped_file101_chunk3.parquet
+✅ Done: mapped_file132_chunk1.parquet | ⏱️ 85.06s
+🔄 Processing: mapped_file132_chunk2.parquet
+✅ Done: mapped_file117_chunk2.parquet | ⏱️ 129.15s
+🔄 Processing: mapped_file117_chunk3.parquet
+✅ Done: mapped_file207_chunk3.parquet | ⏱️ 36.06s
+🔄 Processing: mapped_file208_chunk0.parquet
+✅ Done: mapped_file148_chunk0.parquet | ⏱️ 51.53s
+🔄 Processing: mapped_file148_chunk1.parquet
+✅ Done: mapped_file101_chunk3.parquet | ⏱️ 43.77s
+🔄 Processing: mapped_file102_chunk0.parquet
+✅ Done: mapped_file162_chunk3.parquet | ⏱️ 70.29s
+🔄 Processing: mapped_file163_chunk0.parquet
+✅ Done: mapped_file193_chunk1.parquet | ⏱️ 84.81s
+🔄 Processing: mapped_file193_chunk2.parquet
+✅ Done: mapped_file178_chunk2.parquet | ⏱️ 130.26s
+🔄 Processing: mapped_file178_chunk3.parquet
+✅ Done: mapped_file117_chunk3.parquet | ⏱️ 45.87s
+🔄 Processing: mapped_file118_chunk0.parquet
+✅ Done: mapped_file208_chunk0.parquet | ⏱️ 51.41s
+🔄 Processing: mapped_file208_chunk1.parquet
+✅ Done: mapped_file102_chunk0.parquet | ⏱️ 50.93s
+🔄 Processing: mapped_file102_chunk1.parquet
+✅ Done: mapped_file178_chunk3.parquet | ⏱️ 41.86s
+🔄 Processing: mapped_file179_chunk0.parquet
+✅ Done: mapped_file163_chunk0.parquet | ⏱️ 65.46s
+🔄 Processing: mapped_file163_chunk1.parquet
+✅ Done: mapped_file148_chunk1.parquet | ⏱️ 84.77s
+🔄 Processing: mapped_file148_chunk2.parquet
+✅ Done: mapped_file118_chunk0.parquet | ⏱️ 50.91s
+🔄 Processing: mapped_file118_chunk1.parquet
+✅ Done: mapped_file132_chunk2.parquet | ⏱️ 128.93s
+🔄 Processing: mapped_file132_chunk3.parquet
+✅ Done: mapped_file179_chunk0.parquet | ⏱️ 53.09s
+🔄 Processing: mapped_file179_chunk1.parquet
+✅ Done: mapped_file208_chunk1.parquet | ⏱️ 84.64s
+🔄 Processing: mapped_file208_chunk2.parquet
+✅ Done: mapped_file102_chunk1.parquet | ⏱️ 83.73s
+🔄 Processing: mapped_file102_chunk2.parquet
+✅ Done: mapped_file193_chunk2.parquet | ⏱️ 128.87s
+🔄 Processing: mapped_file193_chunk3.parquet
+✅ Done: mapped_file132_chunk3.parquet | ⏱️ 43.87s
+🔄 Processing: mapped_file133_chunk0.parquet
+✅ Done: mapped_file118_chunk1.parquet | ⏱️ 85.55s
+🔄 Processing: mapped_file118_chunk2.parquet
+✅ Done: mapped_file163_chunk1.parquet | ⏱️ 98.47s
+🔄 Processing: mapped_file163_chunk2.parquet
+✅ Done: mapped_file193_chunk3.parquet | ⏱️ 46.55s
+🔄 Processing: mapped_file194_chunk0.parquet
+✅ Done: mapped_file179_chunk1.parquet | ⏱️ 84.04s
+🔄 Processing: mapped_file179_chunk2.parquet
+✅ Done: mapped_file148_chunk2.parquet | ⏱️ 130.53s
+🔄 Processing: mapped_file148_chunk3.parquet
+✅ Done: mapped_file133_chunk0.parquet | ⏱️ 56.28s
+🔄 Processing: mapped_file133_chunk1.parquet
+✅ Done: mapped_file194_chunk0.parquet | ⏱️ 53.55s
+🔄 Processing: mapped_file194_chunk1.parquet
+✅ Done: mapped_file148_chunk3.parquet | ⏱️ 45.60s
+🔄 Processing: mapped_file149_chunk0.parquet
+✅ Done: mapped_file208_chunk2.parquet | ⏱️ 129.90s
+🔄 Processing: mapped_file208_chunk3.parquet
+✅ Done: mapped_file102_chunk2.parquet | ⏱️ 129.18s
+🔄 Processing: mapped_file102_chunk3.parquet
+✅ Done: mapped_file118_chunk2.parquet | ⏱️ 128.15s
+🔄 Processing: mapped_file118_chunk3.parquet
+✅ Done: mapped_file208_chunk3.parquet | ⏱️ 45.24s
+🔄 Processing: mapped_file209_chunk0.parquet
+✅ Done: mapped_file149_chunk0.parquet | ⏱️ 51.23s
+🔄 Processing: mapped_file149_chunk1.parquet
+✅ Done: mapped_file133_chunk1.parquet | ⏱️ 93.02s
+🔄 Processing: mapped_file133_chunk2.parquet
+✅ Done: mapped_file163_chunk2.parquet | ⏱️ 133.57s
+🔄 Processing: mapped_file163_chunk3.parquet
+✅ Done: mapped_file102_chunk3.parquet | ⏱️ 44.80s
+🔄 Processing: mapped_file103_chunk0.parquet
+✅ Done: mapped_file194_chunk1.parquet | ⏱️ 85.52s
+🔄 Processing: mapped_file194_chunk2.parquet
+✅ Done: mapped_file179_chunk2.parquet | ⏱️ 129.76s
+🔄 Processing: mapped_file179_chunk3.parquet
+✅ Done: mapped_file118_chunk3.parquet | ⏱️ 46.76s
+🔄 Processing: mapped_file119_chunk0.parquet
+✅ Done: mapped_file209_chunk0.parquet | ⏱️ 50.82s
+🔄 Processing: mapped_file209_chunk1.parquet
+✅ Done: mapped_file163_chunk3.parquet | ⏱️ 47.97s
+🔄 Processing: mapped_file164_chunk0.parquet
+✅ Done: mapped_file103_chunk0.parquet | ⏱️ 51.81s
+🔄 Processing: mapped_file103_chunk1.parquet
+✅ Done: mapped_file179_chunk3.parquet | ⏱️ 44.98s
+🔄 Processing: mapped_file17_chunk0.parquet
+✅ Done: mapped_file149_chunk1.parquet | ⏱️ 84.62s
+🔄 Processing: mapped_file149_chunk2.parquet
+✅ Done: mapped_file119_chunk0.parquet | ⏱️ 49.10s
+🔄 Processing: mapped_file119_chunk1.parquet
+✅ Done: mapped_file164_chunk0.parquet | ⏱️ 48.45s
+🔄 Processing: mapped_file164_chunk1.parquet
+✅ Done: mapped_file17_chunk0.parquet | ⏱️ 51.29s
+🔄 Processing: mapped_file17_chunk1.parquet
+✅ Done: mapped_file133_chunk2.parquet | ⏱️ 121.68s
+🔄 Processing: mapped_file133_chunk3.parquet
+✅ Done: mapped_file209_chunk1.parquet | ⏱️ 84.29s
+🔄 Processing: mapped_file209_chunk2.parquet
+✅ Done: mapped_file103_chunk1.parquet | ⏱️ 84.74s
+🔄 Processing: mapped_file103_chunk2.parquet
+✅ Done: mapped_file194_chunk2.parquet | ⏱️ 129.93s
+🔄 Processing: mapped_file194_chunk3.parquet
+✅ Done: mapped_file119_chunk1.parquet | ⏱️ 83.48s
+🔄 Processing: mapped_file119_chunk2.parquet
+✅ Done: mapped_file164_chunk1.parquet | ⏱️ 83.37s
+🔄 Processing: mapped_file164_chunk2.parquet
+✅ Done: mapped_file133_chunk3.parquet | ⏱️ 72.21s
+🔄 Processing: mapped_file134_chunk0.parquet
+✅ Done: mapped_file194_chunk3.parquet | ⏱️ 42.67s
+🔄 Processing: mapped_file195_chunk0.parquet
+✅ Done: mapped_file17_chunk1.parquet | ⏱️ 84.34s
+🔄 Processing: mapped_file17_chunk2.parquet
+✅ Done: mapped_file149_chunk2.parquet | ⏱️ 128.86s
+🔄 Processing: mapped_file149_chunk3.parquet
+✅ Done: mapped_file134_chunk0.parquet | ⏱️ 51.69s
+🔄 Processing: mapped_file134_chunk1.parquet
+✅ Done: mapped_file195_chunk0.parquet | ⏱️ 54.31s
+🔄 Processing: mapped_file195_chunk1.parquet
+✅ Done: mapped_file209_chunk2.parquet | ⏱️ 124.34s
+🔄 Processing: mapped_file209_chunk3.parquet
+✅ Done: mapped_file149_chunk3.parquet | ⏱️ 45.25s
+🔄 Processing: mapped_file14_chunk0.parquet
+✅ Done: mapped_file103_chunk2.parquet | ⏱️ 129.39s
+🔄 Processing: mapped_file103_chunk3.parquet
+✅ Done: mapped_file119_chunk2.parquet | ⏱️ 123.19s
+🔄 Processing: mapped_file119_chunk3.parquet
+✅ Done: mapped_file164_chunk2.parquet | ⏱️ 124.93s
+🔄 Processing: mapped_file164_chunk3.parquet
+✅ Done: mapped_file209_chunk3.parquet | ⏱️ 52.91s
+🔄 Processing: mapped_file20_chunk0.parquet
+✅ Done: mapped_file103_chunk3.parquet | ⏱️ 43.48s
+🔄 Processing: mapped_file104_chunk0.parquet
+✅ Done: mapped_file14_chunk0.parquet | ⏱️ 54.88s
+🔄 Processing: mapped_file14_chunk1.parquet
+✅ Done: mapped_file134_chunk1.parquet | ⏱️ 84.76s
+🔄 Processing: mapped_file134_chunk2.parquet
+✅ Done: mapped_file17_chunk2.parquet | ⏱️ 128.40s
+🔄 Processing: mapped_file17_chunk3.parquet
+✅ Done: mapped_file195_chunk1.parquet | ⏱️ 93.01s
+🔄 Processing: mapped_file195_chunk2.parquet
+✅ Done: mapped_file119_chunk3.parquet | ⏱️ 55.23s
+🔄 Processing: mapped_file11_chunk0.parquet
+✅ Done: mapped_file164_chunk3.parquet | ⏱️ 53.50s
+🔄 Processing: mapped_file165_chunk0.parquet
+✅ Done: mapped_file20_chunk0.parquet | ⏱️ 52.89s
+🔄 Processing: mapped_file20_chunk1.parquet
+✅ Done: mapped_file104_chunk0.parquet | ⏱️ 49.30s
+🔄 Processing: mapped_file104_chunk1.parquet
+✅ Done: mapped_file17_chunk3.parquet | ⏱️ 47.53s
+🔄 Processing: mapped_file180_chunk0.parquet
+✅ Done: mapped_file14_chunk1.parquet | ⏱️ 84.91s
+🔄 Processing: mapped_file14_chunk2.parquet
+✅ Done: mapped_file11_chunk0.parquet | ⏱️ 52.92s
+🔄 Processing: mapped_file11_chunk1.parquet
+✅ Done: mapped_file165_chunk0.parquet | ⏱️ 54.54s
+🔄 Processing: mapped_file165_chunk1.parquet
+✅ Done: mapped_file180_chunk0.parquet | ⏱️ 50.00s
+🔄 Processing: mapped_file180_chunk1.parquet
+✅ Done: mapped_file104_chunk1.parquet | ⏱️ 83.22s
+🔄 Processing: mapped_file104_chunk2.parquet
+❌ Failed: mapped_file104_chunk2.parquet -> parquet: File out of specification: The file must end with PAR1
 
-# Save combined CSVs
-pd.DataFrame(all_unigrams).to_csv(output_path / "all_categories_unigrams.csv", index=False)
-pd.DataFrame(all_bigrams).to_csv(output_path / "all_categories_bigrams.csv", index=False)
+This error occurred with the following context stack:
+	[1] 'parquet scan'
+	[2] 'sink'
+
+🔄 Processing: mapped_file104_chunk3.parquet
+✅ Done: mapped_file20_chunk1.parquet | ⏱️ 88.16s
+🔄 Processing: mapped_file20_chunk2.parquet
+✅ Done: mapped_file134_chunk2.parquet | ⏱️ 127.50s
+🔄 Processing: mapped_file134_chunk3.parquet
+✅ Done: mapped_file195_chunk2.parquet | ⏱️ 122.70s
+🔄 Processing: mapped_file195_chunk3.parquet
+✅ Done: mapped_file11_chunk1.parquet | ⏱️ 88.88s
+🔄 Processing: mapped_file11_chunk2.parquet
+✅ Done: mapped_file104_chunk3.parquet | ⏱️ 47.65s
+🔄 Processing: mapped_file105_chunk0.parquet
+✅ Done: mapped_file165_chunk1.parquet | ⏱️ 84.89s
+🔄 Processing: mapped_file165_chunk2.parquet
+✅ Done: mapped_file134_chunk3.parquet | ⏱️ 47.23s
+🔄 Processing: mapped_file135_chunk0.parquet
+✅ Done: mapped_file180_chunk1.parquet | ⏱️ 85.55s
+🔄 Processing: mapped_file180_chunk2.parquet
+✅ Done: mapped_file14_chunk2.parquet | ⏱️ 131.55s
+🔄 Processing: mapped_file14_chunk3.parquet
+✅ Done: mapped_file195_chunk3.parquet | ⏱️ 72.67s
+🔄 Processing: mapped_file196_chunk0.parquet
+✅ Done: mapped_file105_chunk0.parquet | ⏱️ 47.16s
+🔄 Processing: mapped_file105_chunk1.parquet
+✅ Done: mapped_file20_chunk2.parquet | ⏱️ 106.26s
+🔄 Processing: mapped_file20_chunk3.parquet
+✅ Done: mapped_file135_chunk0.parquet | ⏱️ 51.60s
+🔄 Processing: mapped_file135_chunk1.parquet
+✅ Done: mapped_file14_chunk3.parquet | ⏱️ 41.85s
+🔄 Processing: mapped_file150_chunk0.parquet
+✅ Done: mapped_file196_chunk0.parquet | ⏱️ 52.08s
+🔄 Processing: mapped_file196_chunk1.parquet
+✅ Done: mapped_file11_chunk2.parquet | ⏱️ 124.18s
+🔄 Processing: mapped_file11_chunk3.parquet
+✅ Done: mapped_file105_chunk1.parquet | ⏱️ 80.97s
+🔄 Processing: mapped_file105_chunk2.parquet
+✅ Done: mapped_file165_chunk2.parquet | ⏱️ 128.71s
+🔄 Processing: mapped_file165_chunk3.parquet
+✅ Done: mapped_file150_chunk0.parquet | ⏱️ 56.89s
+🔄 Processing: mapped_file150_chunk1.parquet
+✅ Done: mapped_file20_chunk3.parquet | ⏱️ 77.68s
+🔄 Processing: mapped_file210_chunk0.parquet
+✅ Done: mapped_file135_chunk1.parquet | ⏱️ 88.80s
+🔄 Processing: mapped_file135_chunk2.parquet
+✅ Done: mapped_file180_chunk2.parquet | ⏱️ 132.50s
+🔄 Processing: mapped_file180_chunk3.parquet
+✅ Done: mapped_file165_chunk3.parquet | ⏱️ 44.25s
+🔄 Processing: mapped_file166_chunk0.parquet
+✅ Done: mapped_file11_chunk3.parquet | ⏱️ 58.64s
+🔄 Processing: mapped_file120_chunk0.parquet
+✅ Done: mapped_file196_chunk1.parquet | ⏱️ 84.70s
+🔄 Processing: mapped_file196_chunk2.parquet
+✅ Done: mapped_file210_chunk0.parquet | ⏱️ 51.72s
+🔄 Processing: mapped_file210_chunk1.parquet
+✅ Done: mapped_file180_chunk3.parquet | ⏱️ 41.76s
+🔄 Processing: mapped_file181_chunk0.parquet
+✅ Done: mapped_file150_chunk1.parquet | ⏱️ 92.93s
+🔄 Processing: mapped_file150_chunk2.parquet
+✅ Done: mapped_file120_chunk0.parquet | ⏱️ 51.18s
+🔄 Processing: mapped_file120_chunk1.parquet
+✅ Done: mapped_file166_chunk0.parquet | ⏱️ 53.35s
+🔄 Processing: mapped_file166_chunk1.parquet
+✅ Done: mapped_file105_chunk2.parquet | ⏱️ 118.70s
+🔄 Processing: mapped_file105_chunk3.parquet
+✅ Done: mapped_file181_chunk0.parquet | ⏱️ 49.78s
+🔄 Processing: mapped_file181_chunk1.parquet
+✅ Done: mapped_file210_chunk1.parquet | ⏱️ 84.59s
+🔄 Processing: mapped_file210_chunk2.parquet
+✅ Done: mapped_file135_chunk2.parquet | ⏱️ 123.20s
+🔄 Processing: mapped_file135_chunk3.parquet
+✅ Done: mapped_file105_chunk3.parquet | ⏱️ 55.64s
+🔄 Processing: mapped_file106_chunk0.parquet
+✅ Done: mapped_file196_chunk2.parquet | ⏱️ 131.20s
+🔄 Processing: mapped_file196_chunk3.parquet
+✅ Done: mapped_file120_chunk1.parquet | ⏱️ 84.46s
+🔄 Processing: mapped_file120_chunk2.parquet
+✅ Done: mapped_file166_chunk1.parquet | ⏱️ 88.82s
+🔄 Processing: mapped_file166_chunk2.parquet
+✅ Done: mapped_file181_chunk1.parquet | ⏱️ 85.85s
+🔄 Processing: mapped_file181_chunk2.parquet
+✅ Done: mapped_file135_chunk3.parquet | ⏱️ 60.40s
+🔄 Processing: mapped_file136_chunk0.parquet
+✅ Done: mapped_file106_chunk0.parquet | ⏱️ 51.65s
+🔄 Processing: mapped_file106_chunk1.parquet
+✅ Done: mapped_file196_chunk3.parquet | ⏱️ 42.82s
+🔄 Processing: mapped_file197_chunk0.parquet
+✅ Done: mapped_file150_chunk2.parquet | ⏱️ 138.53s
+🔄 Processing: mapped_file150_chunk3.parquet
+✅ Done: mapped_file136_chunk0.parquet | ⏱️ 51.08s
+🔄 Processing: mapped_file136_chunk1.parquet
+✅ Done: mapped_file210_chunk2.parquet | ⏱️ 127.82s
+🔄 Processing: mapped_file210_chunk3.parquet
+✅ Done: mapped_file150_chunk3.parquet | ⏱️ 39.39s
+🔄 Processing: mapped_file151_chunk0.parquet
+✅ Done: mapped_file197_chunk0.parquet | ⏱️ 53.91s
+🔄 Processing: mapped_file197_chunk1.parquet
+✅ Done: mapped_file106_chunk1.parquet | ⏱️ 85.52s
+🔄 Processing: mapped_file106_chunk2.parquet
+✅ Done: mapped_file166_chunk2.parquet | ⏱️ 123.61s
+🔄 Processing: mapped_file166_chunk3.parquet
+✅ Done: mapped_file120_chunk2.parquet | ⏱️ 129.56s
+🔄 Processing: mapped_file120_chunk3.parquet
+✅ Done: mapped_file210_chunk3.parquet | ⏱️ 46.78s
+🔄 Processing: mapped_file211_chunk0.parquet
+✅ Done: mapped_file151_chunk0.parquet | ⏱️ 52.74s
+🔄 Processing: mapped_file151_chunk1.parquet
+✅ Done: mapped_file181_chunk2.parquet | ⏱️ 129.66s
+🔄 Processing: mapped_file181_chunk3.parquet
+✅ Done: mapped_file136_chunk1.parquet | ⏱️ 84.97s
+🔄 Processing: mapped_file136_chunk2.parquet
+✅ Done: mapped_file120_chunk3.parquet | ⏱️ 45.02s
+🔄 Processing: mapped_file121_chunk0.parquet
+✅ Done: mapped_file211_chunk0.parquet | ⏱️ 50.89s
+🔄 Processing: mapped_file211_chunk1.parquet
+✅ Done: mapped_file197_chunk1.parquet | ⏱️ 91.84s
+🔄 Processing: mapped_file197_chunk2.parquet
+✅ Done: mapped_file166_chunk3.parquet | ⏱️ 58.17s
+🔄 Processing: mapped_file167_chunk0.parquet
+✅ Done: mapped_file181_chunk3.parquet | ⏱️ 43.91s
+🔄 Processing: mapped_file182_chunk0.parquet
+✅ Done: mapped_file121_chunk0.parquet | ⏱️ 52.44s
+🔄 Processing: mapped_file121_chunk1.parquet
+✅ Done: mapped_file151_chunk1.parquet | ⏱️ 88.26s
+🔄 Processing: mapped_file151_chunk2.parquet
+✅ Done: mapped_file167_chunk0.parquet | ⏱️ 54.50s
+🔄 Processing: mapped_file167_chunk1.parquet
+✅ Done: mapped_file182_chunk0.parquet | ⏱️ 53.63s
+🔄 Processing: mapped_file182_chunk1.parquet
+✅ Done: mapped_file106_chunk2.parquet | ⏱️ 130.72s
+🔄 Processing: mapped_file106_chunk3.parquet
+✅ Done: mapped_file211_chunk1.parquet | ⏱️ 87.67s
+🔄 Processing: mapped_file211_chunk2.parquet
+✅ Done: mapped_file136_chunk2.parquet | ⏱️ 128.71s
+🔄 Processing: mapped_file136_chunk3.parquet
+✅ Done: mapped_file106_chunk3.parquet | ⏱️ 41.21s
+🔄 Processing: mapped_file107_chunk0.parquet
+✅ Done: mapped_file121_chunk1.parquet | ⏱️ 84.03s
+🔄 Processing: mapped_file121_chunk2.parquet✅ Done: mapped_file197_chunk2.parquet | ⏱️ 124.65s
+
+🔄 Processing: mapped_file197_chunk3.parquet
+✅ Done: mapped_file182_chunk1.parquet | ⏱️ 85.91s
+🔄 Processing: mapped_file182_chunk2.parquet
+✅ Done: mapped_file136_chunk3.parquet | ⏱️ 45.05s
+🔄 Processing: mapped_file137_chunk0.parquet
+✅ Done: mapped_file167_chunk1.parquet | ⏱️ 92.71s
+🔄 Processing: mapped_file167_chunk2.parquet
+✅ Done: mapped_file107_chunk0.parquet | ⏱️ 49.11s
+🔄 Processing: mapped_file107_chunk1.parquet
+✅ Done: mapped_file151_chunk2.parquet | ⏱️ 123.10s
+🔄 Processing: mapped_file151_chunk3.parquet
+✅ Done: mapped_file137_chunk0.parquet | ⏱️ 51.59s
+🔄 Processing: mapped_file137_chunk1.parquet
+✅ Done: mapped_file197_chunk3.parquet | ⏱️ 72.37s
+🔄 Processing: mapped_file198_chunk0.parquet
+✅ Done: mapped_file211_chunk2.parquet | ⏱️ 125.84s
+🔄 Processing: mapped_file211_chunk3.parquet
+✅ Done: mapped_file151_chunk3.parquet | ⏱️ 60.19s
+🔄 Processing: mapped_file152_chunk0.parquet
+✅ Done: mapped_file107_chunk1.parquet | ⏱️ 83.34s
+🔄 Processing: mapped_file107_chunk2.parquet
+✅ Done: mapped_file198_chunk0.parquet | ⏱️ 57.41s
+🔄 Processing: mapped_file198_chunk1.parquet
+✅ Done: mapped_file121_chunk2.parquet | ⏱️ 130.15s
+🔄 Processing: mapped_file121_chunk3.parquet
+✅ Done: mapped_file211_chunk3.parquet | ⏱️ 47.60s
+🔄 Processing: mapped_file212_chunk0.parquet
+✅ Done: mapped_file167_chunk2.parquet | ⏱️ 125.37s
+🔄 Processing: mapped_file167_chunk3.parquet
+✅ Done: mapped_file182_chunk2.parquet | ⏱️ 132.62s
+🔄 Processing: mapped_file182_chunk3.parquet
+✅ Done: mapped_file137_chunk1.parquet | ⏱️ 84.95s
+🔄 Processing: mapped_file137_chunk2.parquet
+✅ Done: mapped_file152_chunk0.parquet | ⏱️ 55.29s
+🔄 Processing: mapped_file152_chunk1.parquet
+✅ Done: mapped_file121_chunk3.parquet | ⏱️ 47.02s
+🔄 Processing: mapped_file122_chunk0.parquet
+✅ Done: mapped_file212_chunk0.parquet | ⏱️ 50.73s
+🔄 Processing: mapped_file212_chunk1.parquet
+✅ Done: mapped_file182_chunk3.parquet | ⏱️ 40.37s
+🔄 Processing: mapped_file183_chunk0.parquet
+✅ Done: mapped_file167_chunk3.parquet | ⏱️ 69.73s
+🔄 Processing: mapped_file168_chunk0.parquet
+✅ Done: mapped_file198_chunk1.parquet | ⏱️ 94.97s
+🔄 Processing: mapped_file198_chunk2.parquet
+✅ Done: mapped_file122_chunk0.parquet | ⏱️ 57.44s
+🔄 Processing: mapped_file122_chunk1.parquet
+✅ Done: mapped_file152_chunk1.parquet | ⏱️ 82.54s
+🔄 Processing: mapped_file152_chunk2.parquet
+✅ Done: mapped_file183_chunk0.parquet | ⏱️ 50.06s
+🔄 Processing: mapped_file183_chunk1.parquet
+✅ Done: mapped_file107_chunk2.parquet | ⏱️ 130.34s
+🔄 Processing: mapped_file107_chunk3.parquet
+✅ Done: mapped_file168_chunk0.parquet | ⏱️ 51.34s
+🔄 Processing: mapped_file168_chunk1.parquet
+✅ Done: mapped_file212_chunk1.parquet | ⏱️ 84.74s
+🔄 Processing: mapped_file212_chunk2.parquet
+✅ Done: mapped_file137_chunk2.parquet | ⏱️ 129.55s
+🔄 Processing: mapped_file137_chunk3.parquet
+✅ Done: mapped_file107_chunk3.parquet | ⏱️ 44.33s
+🔄 Processing: mapped_file108_chunk0.parquet
+✅ Done: mapped_file183_chunk1.parquet | ⏱️ 85.90s
+🔄 Processing: mapped_file183_chunk2.parquet
+✅ Done: mapped_file122_chunk1.parquet | ⏱️ 96.23s
+🔄 Processing: mapped_file122_chunk2.parquet
+✅ Done: mapped_file137_chunk3.parquet | ⏱️ 45.15s
+🔄 Processing: mapped_file138_chunk0.parquet
+✅ Done: mapped_file108_chunk0.parquet | ⏱️ 52.22s
+🔄 Processing: mapped_file108_chunk1.parquet
+✅ Done: mapped_file168_chunk1.parquet | ⏱️ 84.75s
+🔄 Processing: mapped_file168_chunk2.parquet
+✅ Done: mapped_file198_chunk2.parquet | ⏱️ 136.44s
+🔄 Processing: mapped_file198_chunk3.parquet
+✅ Done: mapped_file152_chunk2.parquet | ⏱️ 132.86s
+🔄 Processing: mapped_file152_chunk3.parquet
+✅ Done: mapped_file138_chunk0.parquet | ⏱️ 54.79s
+🔄 Processing: mapped_file138_chunk1.parquet
+✅ Done: mapped_file198_chunk3.parquet | ⏱️ 37.91s
+🔄 Processing: mapped_file199_chunk0.parquet
+✅ Done: mapped_file212_chunk2.parquet | ⏱️ 129.29s
+🔄 Processing: mapped_file212_chunk3.parquet
+✅ Done: mapped_file152_chunk3.parquet | ⏱️ 42.59s
+🔄 Processing: mapped_file153_chunk0.parquet
+✅ Done: mapped_file108_chunk1.parquet | ⏱️ 83.04s
+🔄 Processing: mapped_file108_chunk2.parquet
+✅ Done: mapped_file212_chunk3.parquet | ⏱️ 44.99s
+🔄 Processing: mapped_file213_chunk0.parquet
+✅ Done: mapped_file183_chunk2.parquet | ⏱️ 130.12s
+🔄 Processing: mapped_file183_chunk3.parquet
+✅ Done: mapped_file199_chunk0.parquet | ⏱️ 65.31s
+🔄 Processing: mapped_file199_chunk1.parquet
+✅ Done: mapped_file153_chunk0.parquet | ⏱️ 51.38s
+🔄 Processing: mapped_file153_chunk1.parquet
+✅ Done: mapped_file122_chunk2.parquet | ⏱️ 138.67s
+🔄 Processing: mapped_file122_chunk3.parquet
+✅ Done: mapped_file138_chunk1.parquet | ⏱️ 92.00s
+🔄 Processing: mapped_file138_chunk2.parquet
+✅ Done: mapped_file168_chunk2.parquet | ⏱️ 126.60s
+🔄 Processing: mapped_file168_chunk3.parquet
+✅ Done: mapped_file213_chunk0.parquet | ⏱️ 51.01s
+🔄 Processing: mapped_file213_chunk1.parquet
+✅ Done: mapped_file183_chunk3.parquet | ⏱️ 44.08s
+🔄 Processing: mapped_file184_chunk0.parquet
+✅ Done: mapped_file122_chunk3.parquet | ⏱️ 35.31s
+🔄 Processing: mapped_file123_chunk0.parquet
+✅ Done: mapped_file168_chunk3.parquet | ⏱️ 48.27s
+🔄 Processing: mapped_file169_chunk0.parquet
+✅ Done: mapped_file108_chunk2.parquet | ⏱️ 121.86s
+🔄 Processing: mapped_file108_chunk3.parquet
+✅ Done: mapped_file153_chunk1.parquet | ⏱️ 85.76s
+🔄 Processing: mapped_file153_chunk2.parquet
+✅ Done: mapped_file184_chunk0.parquet | ⏱️ 53.51s
+🔄 Processing: mapped_file184_chunk1.parquet
+✅ Done: mapped_file123_chunk0.parquet | ⏱️ 56.49s
+🔄 Processing: mapped_file123_chunk1.parquet
+✅ Done: mapped_file199_chunk1.parquet | ⏱️ 98.30s
+🔄 Processing: mapped_file199_chunk2.parquet
+✅ Done: mapped_file213_chunk1.parquet | ⏱️ 84.93s
+🔄 Processing: mapped_file213_chunk2.parquet
+✅ Done: mapped_file169_chunk0.parquet | ⏱️ 64.46s
+🔄 Processing: mapped_file169_chunk1.parquet
+✅ Done: mapped_file108_chunk3.parquet | ⏱️ 51.13s
+🔄 Processing: mapped_file109_chunk0.parquet
+✅ Done: mapped_file138_chunk2.parquet | ⏱️ 125.09s
+🔄 Processing: mapped_file138_chunk3.parquet
+✅ Done: mapped_file184_chunk1.parquet | ⏱️ 86.08s
+🔄 Processing: mapped_file184_chunk2.parquet
+✅ Done: mapped_file109_chunk0.parquet | ⏱️ 46.65s
+🔄 Processing: mapped_file109_chunk1.parquet
+✅ Done: mapped_file123_chunk1.parquet | ⏱️ 92.69s
+🔄 Processing: mapped_file123_chunk2.parquet
+✅ Done: mapped_file138_chunk3.parquet | ⏱️ 70.05s
+🔄 Processing: mapped_file139_chunk0.parquet
+✅ Done: mapped_file153_chunk2.parquet | ⏱️ 130.59s
+🔄 Processing: mapped_file153_chunk3.parquet
+✅ Done: mapped_file169_chunk1.parquet | ⏱️ 98.47s
+🔄 Processing: mapped_file169_chunk2.parquet
+✅ Done: mapped_file199_chunk2.parquet | ⏱️ 134.51s
+🔄 Processing: mapped_file199_chunk3.parquet
+✅ Done: mapped_file213_chunk2.parquet | ⏱️ 129.65s
+🔄 Processing: mapped_file213_chunk3.parquet
+✅ Done: mapped_file139_chunk0.parquet | ⏱️ 54.20s
+🔄 Processing: mapped_file139_chunk1.parquet
+✅ Done: mapped_file109_chunk1.parquet | ⏱️ 83.62s
+🔄 Processing: mapped_file109_chunk2.parquet
+❌ Failed: mapped_file109_chunk2.parquet -> parquet: File out of specification: The file must end with PAR1
+
+This error occurred with the following context stack:
+	[1] 'parquet scan'
+	[2] 'sink'
+
+🔄 Processing: mapped_file109_chunk3.parquet
+✅ Done: mapped_file153_chunk3.parquet | ⏱️ 45.48s
+🔄 Processing: mapped_file154_chunk0.parquet
+✅ Done: mapped_file199_chunk3.parquet | ⏱️ 46.05s
+🔄 Processing: mapped_file19_chunk0.parquet
+✅ Done: mapped_file213_chunk3.parquet | ⏱️ 45.10s
+🔄 Processing: mapped_file214_chunk0.parquet
+✅ Done: mapped_file184_chunk2.parquet | ⏱️ 130.84s
+🔄 Processing: mapped_file184_chunk3.parquet
+✅ Done: mapped_file109_chunk3.parquet | ⏱️ 50.95s
+🔄 Processing: mapped_file10_chunk0.parquet
+✅ Done: mapped_file154_chunk0.parquet | ⏱️ 54.76s
+🔄 Processing: mapped_file154_chunk1.parquet
+✅ Done: mapped_file123_chunk2.parquet | ⏱️ 138.90s
+🔄 Processing: mapped_file123_chunk3.parquet
+✅ Done: mapped_file214_chunk0.parquet | ⏱️ 48.40s
+🔄 Processing: mapped_file214_chunk1.parquet
+✅ Done: mapped_file19_chunk0.parquet | ⏱️ 66.68s
+🔄 Processing: mapped_file19_chunk1.parquet
+✅ Done: mapped_file139_chunk1.parquet | ⏱️ 85.89s
+🔄 Processing: mapped_file139_chunk2.parquet
+✅ Done: mapped_file184_chunk3.parquet | ⏱️ 41.69s
+🔄 Processing: mapped_file185_chunk0.parquet
+✅ Done: mapped_file169_chunk2.parquet | ⏱️ 134.65s
+🔄 Processing: mapped_file169_chunk3.parquet
+✅ Done: mapped_file123_chunk3.parquet | ⏱️ 39.09s
+🔄 Processing: mapped_file124_chunk0.parquet
+✅ Done: mapped_file10_chunk0.parquet | ⏱️ 51.79s
+🔄 Processing: mapped_file10_chunk1.parquet
+✅ Done: mapped_file154_chunk1.parquet | ⏱️ 82.43s
+🔄 Processing: mapped_file154_chunk2.parquet
+✅ Done: mapped_file169_chunk3.parquet | ⏱️ 47.83s
+🔄 Processing: mapped_file16_chunk0.parquet
+✅ Done: mapped_file185_chunk0.parquet | ⏱️ 66.35s
+🔄 Processing: mapped_file185_chunk1.parquet
+✅ Done: mapped_file214_chunk1.parquet | ⏱️ 83.47s
+🔄 Processing: mapped_file214_chunk2.parquet
+✅ Done: mapped_file124_chunk0.parquet | ⏱️ 56.45s
+🔄 Processing: mapped_file124_chunk1.parquet
+✅ Done: mapped_file19_chunk1.parquet | ⏱️ 101.20s
+🔄 Processing: mapped_file19_chunk2.parquet
+✅ Done: mapped_file10_chunk1.parquet | ⏱️ 85.40s
+🔄 Processing: mapped_file10_chunk2.parquet
+✅ Done: mapped_file16_chunk0.parquet | ⏱️ 51.87s
+🔄 Processing: mapped_file16_chunk1.parquet
+✅ Done: mapped_file139_chunk2.parquet | ⏱️ 132.83s
+🔄 Processing: mapped_file139_chunk3.parquet
+✅ Done: mapped_file124_chunk1.parquet | ⏱️ 92.93s
+🔄 Processing: mapped_file124_chunk2.parquet
+✅ Done: mapped_file185_chunk1.parquet | ⏱️ 101.02s
+🔄 Processing: mapped_file185_chunk2.parquet
+✅ Done: mapped_file139_chunk3.parquet | ⏱️ 41.00s
+🔄 Processing: mapped_file13_chunk0.parquet
+✅ Done: mapped_file154_chunk2.parquet | ⏱️ 132.87s
+🔄 Processing: mapped_file154_chunk3.parquet
+✅ Done: mapped_file16_chunk1.parquet | ⏱️ 84.59s
+🔄 Processing: mapped_file16_chunk2.parquet
+✅ Done: mapped_file214_chunk2.parquet | ⏱️ 125.72s
+🔄 Processing: mapped_file214_chunk3.parquet
+✅ Done: mapped_file13_chunk0.parquet | ⏱️ 50.33s
+🔄 Processing: mapped_file13_chunk1.parquet
+✅ Done: mapped_file154_chunk3.parquet | ⏱️ 42.82s
+🔄 Processing: mapped_file155_chunk0.parquet
+✅ Done: mapped_file19_chunk2.parquet | ⏱️ 133.10s
+🔄 Processing: mapped_file19_chunk3.parquet
+✅ Done: mapped_file10_chunk2.parquet | ⏱️ 133.34s
+🔄 Processing: mapped_file10_chunk3.parquet
+✅ Done: mapped_file214_chunk3.parquet | ⏱️ 52.97s
+🔄 Processing: mapped_file215_chunk0.parquet
+✅ Done: mapped_file19_chunk3.parquet | ⏱️ 44.21s
+🔄 Processing: mapped_file1_chunk0.parquet
+✅ Done: mapped_file10_chunk3.parquet | ⏱️ 40.93s
+🔄 Processing: mapped_file110_chunk0.parquet
+✅ Done: mapped_file155_chunk0.parquet | ⏱️ 54.00s
+🔄 Processing: mapped_file155_chunk1.parquet
+✅ Done: mapped_file185_chunk2.parquet | ⏱️ 133.36s
+🔄 Processing: mapped_file185_chunk3.parquet
+✅ Done: mapped_file124_chunk2.parquet | ⏱️ 138.67s
+🔄 Processing: mapped_file124_chunk3.parquet
+✅ Done: mapped_file215_chunk0.parquet | ⏱️ 53.00s
+🔄 Processing: mapped_file215_chunk1.parquet
+✅ Done: mapped_file13_chunk1.parquet | ⏱️ 85.33s
+🔄 Processing: mapped_file13_chunk2.parquet
+✅ Done: mapped_file1_chunk0.parquet | ⏱️ 51.08s
+🔄 Processing: mapped_file1_chunk1.parquet
+✅ Done: mapped_file16_chunk2.parquet | ⏱️ 129.81s
+🔄 Processing: mapped_file16_chunk3.parquet
+✅ Done: mapped_file110_chunk0.parquet | ⏱️ 53.89s
+🔄 Processing: mapped_file110_chunk1.parquet
+✅ Done: mapped_file124_chunk3.parquet | ⏱️ 39.09s
+🔄 Processing: mapped_file125_chunk0.parquet
+✅ Done: mapped_file185_chunk3.parquet | ⏱️ 44.53s
+🔄 Processing: mapped_file186_chunk0.parquet
+✅ Done: mapped_file16_chunk3.parquet | ⏱️ 44.26s
+🔄 Processing: mapped_file170_chunk0.parquet
+✅ Done: mapped_file155_chunk1.parquet | ⏱️ 91.91s
+🔄 Processing: mapped_file155_chunk2.parquet
+✅ Done: mapped_file215_chunk1.parquet | ⏱️ 83.34s
+🔄 Processing: mapped_file215_chunk2.parquet
+✅ Done: mapped_file186_chunk0.parquet | ⏱️ 48.68s
+🔄 Processing: mapped_file186_chunk1.parquet
+✅ Done: mapped_file125_chunk0.parquet | ⏱️ 53.22s
+🔄 Processing: mapped_file125_chunk1.parquet
+✅ Done: mapped_file1_chunk1.parquet | ⏱️ 85.00s
+🔄 Processing: mapped_file1_chunk2.parquet
+✅ Done: mapped_file170_chunk0.parquet | ⏱️ 56.26s
+🔄 Processing: mapped_file170_chunk1.parquet
+✅ Done: mapped_file110_chunk1.parquet | ⏱️ 96.97s
+🔄 Processing: mapped_file110_chunk2.parquet
+✅ Done: mapped_file13_chunk2.parquet | ⏱️ 126.17s
+🔄 Processing: mapped_file13_chunk3.parquet
+✅ Done: mapped_file186_chunk1.parquet | ⏱️ 83.35s
+🔄 Processing: mapped_file186_chunk2.parquet
+✅ Done: mapped_file13_chunk3.parquet | ⏱️ 51.83s
+🔄 Processing: mapped_file140_chunk0.parquet
+✅ Done: mapped_file125_chunk1.parquet | ⏱️ 89.14s
+🔄 Processing: mapped_file125_chunk2.parquet
+✅ Done: mapped_file155_chunk2.parquet | ⏱️ 125.64s
+🔄 Processing: mapped_file155_chunk3.parquet
+✅ Done: mapped_file215_chunk2.parquet | ⏱️ 129.88s
+🔄 Processing: mapped_file215_chunk3.parquet
+✅ Done: mapped_file170_chunk1.parquet | ⏱️ 93.02s
+🔄 Processing: mapped_file170_chunk2.parquet
+✅ Done: mapped_file140_chunk0.parquet | ⏱️ 50.00s
+🔄 Processing: mapped_file140_chunk1.parquet
+✅ Done: mapped_file1_chunk2.parquet | ⏱️ 127.49s
+🔄 Processing: mapped_file1_chunk3.parquet
+✅ Done: mapped_file110_chunk2.parquet | ⏱️ 122.98s
+🔄 Processing: mapped_file110_chunk3.parquet
+✅ Done: mapped_file215_chunk3.parquet | ⏱️ 45.11s
+🔄 Processing: mapped_file216_chunk0.parquet
+✅ Done: mapped_file155_chunk3.parquet | ⏱️ 71.27s
+🔄 Processing: mapped_file156_chunk0.parquet
+✅ Done: mapped_file1_chunk3.parquet | ⏱️ 47.02s
+🔄 Processing: mapped_file200_chunk0.parquet
+✅ Done: mapped_file110_chunk3.parquet | ⏱️ 40.09s
+🔄 Processing: mapped_file111_chunk0.parquet
+✅ Done: mapped_file186_chunk2.parquet | ⏱️ 126.85s
+🔄 Processing: mapped_file186_chunk3.parquet
+✅ Done: mapped_file125_chunk2.parquet | ⏱️ 124.29s
+🔄 Processing: mapped_file125_chunk3.parquet
+✅ Done: mapped_file216_chunk0.parquet | ⏱️ 48.89s
+🔄 Processing: mapped_file216_chunk1.parquet
+✅ Done: mapped_file156_chunk0.parquet | ⏱️ 49.73s
+🔄 Processing: mapped_file156_chunk1.parquet
+✅ Done: mapped_file140_chunk1.parquet | ⏱️ 86.45s
+🔄 Processing: mapped_file140_chunk2.parquet
+✅ Done: mapped_file200_chunk0.parquet | ⏱️ 53.76s
+🔄 Processing: mapped_file200_chunk1.parquet
+✅ Done: mapped_file170_chunk2.parquet | ⏱️ 123.03s
+🔄 Processing: mapped_file170_chunk3.parquet
+✅ Done: mapped_file111_chunk0.parquet | ⏱️ 54.92s
+🔄 Processing: mapped_file111_chunk1.parquet
+✅ Done: mapped_file186_chunk3.parquet | ⏱️ 51.52s
+🔄 Processing: mapped_file187_chunk0.parquet
+✅ Done: mapped_file125_chunk3.parquet | ⏱️ 57.68s
+🔄 Processing: mapped_file126_chunk0.parquet
+✅ Done: mapped_file216_chunk1.parquet | ⏱️ 79.99s
+🔄 Processing: mapped_file216_chunk2.parquet
+✅ Done: mapped_file187_chunk0.parquet | ⏱️ 50.79s
+🔄 Processing: mapped_file187_chunk1.parquet
+✅ Done: mapped_file156_chunk1.parquet | ⏱️ 86.16s
+🔄 Processing: mapped_file156_chunk2.parquet
+✅ Done: mapped_file170_chunk3.parquet | ⏱️ 71.06s
+🔄 Processing: mapped_file171_chunk0.parquet
+✅ Done: mapped_file200_chunk1.parquet | ⏱️ 86.65s
+🔄 Processing: mapped_file200_chunk2.parquet
+✅ Done: mapped_file111_chunk1.parquet | ⏱️ 82.44s
+🔄 Processing: mapped_file111_chunk2.parquet
+✅ Done: mapped_file126_chunk0.parquet | ⏱️ 65.77s
+🔄 Processing: mapped_file126_chunk1.parquet
+✅ Done: mapped_file140_chunk2.parquet | ⏱️ 130.21s
+🔄 Processing: mapped_file140_chunk3.parquet
+✅ Done: mapped_file171_chunk0.parquet | ⏱️ 50.65s
+🔄 Processing: mapped_file171_chunk1.parquet
+✅ Done: mapped_file187_chunk1.parquet | ⏱️ 84.49s
+🔄 Processing: mapped_file187_chunk2.parquet
+✅ Done: mapped_file140_chunk3.parquet | ⏱️ 43.69s
+🔄 Processing: mapped_file141_chunk0.parquet
+✅ Done: mapped_file216_chunk2.parquet | ⏱️ 123.67s
+🔄 Processing: mapped_file216_chunk3.parquet
+✅ Done: mapped_file126_chunk1.parquet | ⏱️ 101.45s
+🔄 Processing: mapped_file126_chunk2.parquet
+✅ Done: mapped_file156_chunk2.parquet | ⏱️ 130.99s
+🔄 Processing: mapped_file156_chunk3.parquet
+✅ Done: mapped_file171_chunk1.parquet | ⏱️ 84.49s
+🔄 Processing: mapped_file171_chunk2.parquet
+✅ Done: mapped_file141_chunk0.parquet | ⏱️ 56.02s
+🔄 Processing: mapped_file141_chunk1.parquet
+✅ Done: mapped_file200_chunk2.parquet | ⏱️ 132.47s
+🔄 Processing: mapped_file200_chunk3.parquet
+✅ Done: mapped_file111_chunk2.parquet | ⏱️ 133.13s
+🔄 Processing: mapped_file111_chunk3.parquet
+✅ Done: mapped_file216_chunk3.parquet | ⏱️ 58.83s
+🔄 Processing: mapped_file217_chunk0.parquet
+✅ Done: mapped_file156_chunk3.parquet | ⏱️ 44.06s
+🔄 Processing: mapped_file157_chunk0.parquet
+✅ Done: mapped_file200_chunk3.parquet | ⏱️ 41.12s
+🔄 Processing: mapped_file201_chunk0.parquet
+✅ Done: mapped_file111_chunk3.parquet | ⏱️ 42.44s
+🔄 Processing: mapped_file112_chunk0.parquet
+✅ Done: mapped_file187_chunk2.parquet | ⏱️ 127.94s
+🔄 Processing: mapped_file187_chunk3.parquet
+✅ Done: mapped_file217_chunk0.parquet | ⏱️ 54.29s
+🔄 Processing: mapped_file217_chunk1.parquet
+✅ Done: mapped_file141_chunk1.parquet | ⏱️ 93.03s
+🔄 Processing: mapped_file141_chunk2.parquet
+✅ Done: mapped_file157_chunk0.parquet | ⏱️ 65.00s
+🔄 Processing: mapped_file157_chunk1.parquet
+✅ Done: mapped_file201_chunk0.parquet | ⏱️ 52.87s
+🔄 Processing: mapped_file201_chunk1.parquet
+✅ Done: mapped_file112_chunk0.parquet | ⏱️ 53.61s
+🔄 Processing: mapped_file112_chunk1.parquet
+✅ Done: mapped_file187_chunk3.parquet | ⏱️ 47.25s
+🔄 Processing: mapped_file188_chunk0.parquet
+✅ Done: mapped_file126_chunk2.parquet | ⏱️ 132.90s
+🔄 Processing: mapped_file126_chunk3.parquet
+✅ Done: mapped_file171_chunk2.parquet | ⏱️ 123.13s
+🔄 Processing: mapped_file171_chunk3.parquet
+✅ Done: mapped_file126_chunk3.parquet | ⏱️ 44.22s
+🔄 Processing: mapped_file127_chunk0.parquet
+✅ Done: mapped_file217_chunk1.parquet | ⏱️ 85.77s
+🔄 Processing: mapped_file217_chunk2.parquet
+✅ Done: mapped_file188_chunk0.parquet | ⏱️ 56.17s
+🔄 Processing: mapped_file188_chunk1.parquet
+✅ Done: mapped_file171_chunk3.parquet | ⏱️ 52.06s
+🔄 Processing: mapped_file172_chunk0.parquet
+✅ Done: mapped_file201_chunk1.parquet | ⏱️ 83.63s
+🔄 Processing: mapped_file201_chunk2.parquet
+✅ Done: mapped_file112_chunk1.parquet | ⏱️ 86.65s
+🔄 Processing: mapped_file112_chunk2.parquet
+✅ Done: mapped_file157_chunk1.parquet | ⏱️ 98.69s
+🔄 Processing: mapped_file157_chunk2.parquet
+✅ Done: mapped_file127_chunk0.parquet | ⏱️ 48.79s
+🔄 Processing: mapped_file127_chunk1.parquet
+✅ Done: mapped_file141_chunk2.parquet | ⏱️ 121.30s
+🔄 Processing: mapped_file141_chunk3.parquet
+✅ Done: mapped_file172_chunk0.parquet | ⏱️ 53.73s
+🔄 Processing: mapped_file172_chunk1.parquet
+✅ Done: mapped_file188_chunk1.parquet | ⏱️ 92.68s
+🔄 Processing: mapped_file188_chunk2.parquet
+✅ Done: mapped_file141_chunk3.parquet | ⏱️ 72.27s
+🔄 Processing: mapped_file142_chunk0.parquet
+✅ Done: mapped_file127_chunk1.parquet | ⏱️ 83.06s
+🔄 Processing: mapped_file127_chunk2.parquet
+✅ Done: mapped_file217_chunk2.parquet | ⏱️ 132.17s
+🔄 Processing: mapped_file217_chunk3.parquet
+✅ Done: mapped_file172_chunk1.parquet | ⏱️ 82.88s
+🔄 Processing: mapped_file172_chunk2.parquet
+✅ Done: mapped_file201_chunk2.parquet | ⏱️ 131.20s
+🔄 Processing: mapped_file201_chunk3.parquet
+✅ Done: mapped_file112_chunk2.parquet | ⏱️ 132.65s
+🔄 Processing: mapped_file112_chunk3.parquet
+✅ Done: mapped_file157_chunk2.parquet | ⏱️ 135.17s
