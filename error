@@ -1,19 +1,19 @@
 import os
 import glob
+import time
 import pyarrow.parquet as pq
 import polars as pl
-import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 
-# Paths
+# --- Paths ---
 input_path = './data/parquet_files'
 output_path = './data/target_map_parquet_files'
 os.makedirs(output_path, exist_ok=True)
 
-# Load mapping as Polars DataFrame
+# --- Load mapping ---
 target_map_df = pl.read_csv('./data/target_map.csv', columns=['CMPNT_CAT_CD_DESC', 'Final Category']).unique()
 
-# Required columns
+# --- Required columns to extract ---
 columns_to_read = [
     'MATL_SHRT_DESC',
     'CMPNT_MATL_DESC',
@@ -22,25 +22,28 @@ columns_to_read = [
     'CMPNT_UOM_CD'
 ]
 
+# --- File processor ---
 def process_file(file_idx, file):
     try:
-        parquet_file = pq.ParquetFile(file)
-        for row_group_idx in range(parquet_file.num_row_groups):
-            table = parquet_file.read_row_group(row_group_idx, columns=columns_to_read)
-            df_chunk = pl.from_arrow(table).unique()
+        print(f"🔄 Start: {os.path.basename(file)}")
+        start = time.time()
 
-            # Left join with mapping
-            joined_chunk = df_chunk.join(target_map_df, on='CMPNT_CAT_CD_DESC', how='left')
+        table = pq.read_table(file, columns=columns_to_read)  # Read full file
+        df = pl.from_arrow(table).unique()
 
-            # Save output
-            out_file = os.path.join(output_path, f'mapped_file{file_idx}_chunk{row_group_idx}.parquet')
-            joined_chunk.write_parquet(out_file)
-            print(f"✅ Saved: {out_file}")
+        # Left join with target map
+        joined = df.join(target_map_df, on='CMPNT_CAT_CD_DESC', how='left')
+
+        # Save compressed output
+        out_file = os.path.join(output_path, f'mapped_file{file_idx}.parquet')
+        joined.write_parquet(out_file, compression='snappy')
+
+        print(f"✅ Done: {os.path.basename(file)} → {out_file} | ⏱️ {time.time() - start:.2f}s")
     except Exception as e:
-        print(f"❌ Error processing {file}: {e}")
+        print(f"❌ Error: {os.path.basename(file)} -> {e}")
 
-# Multithreaded execution
+# --- Run with thread pool ---
 all_files = glob.glob(os.path.join(input_path, '*.parquet'))
-with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
-    for file_idx, file in enumerate(all_files):
-        executor.submit(process_file, file_idx, file)
+with ThreadPoolExecutor(max_workers=8) as executor:
+    for idx, file in enumerate(all_files):
+        executor.submit(process_file, idx, file)
