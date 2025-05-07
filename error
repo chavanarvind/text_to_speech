@@ -1,4 +1,4 @@
-
+MATL_SHRT_DESC_AND_CMPNT_MATL_DESC
 import spacy
 nlp = spacy.load("en_core_web_sm")
 
