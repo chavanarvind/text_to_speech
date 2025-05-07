@@ -1,146 +1,64 @@
-import json
-import sys
-from azureml.core import Experiment, RunConfiguration, Environment, Workspace, Dataset
-from azureml.core.authentication import ServicePrincipalAuthentication
+# azureml-core of version 1.0.72 or higher is required
 
-from azureml.pipeline.core import Pipeline
-from azureml.pipeline.steps import PythonScriptStep
-from azureml.data import OutputFileDatasetConfig
+#data is available in below worksapce
+from azureml.core import Workspace, Dataset
 
+subscription_id = 
+resource_group = 
+workspace_name = 
 
-def set_aml_config_for_training(ws, compute_name):
-    compute_target = ws.compute_targets[compute_name]
-    aml_run_config = RunConfiguration()
-    aml_run_config.target = compute_target
-    env = Environment.get(workspace=ws,
-                          name="Bom_X_Evaluator")
-    aml_run_config.environment = env
+workspace = Workspace(subscription_id, resource_group, workspace_name)
 
-    return aml_run_config
+dataset = Dataset.get_by_name(workspace, name='harmonized_bom_data_asset')
+# Download dataset locally
+download_path = './data/parquet_files'
+os.makedirs(download_path, exist_ok=True)
+dataset.download(target_path=download_path, overwrite=True)
 
+#step for chunking parqute and i want to save it in defalt workblob and use it for next step
+import os
+import glob
+import pyarrow.parquet as pq
+import polars as pl
+import pandas as pd
+from concurrent.futures import ThreadPoolExecutor
 
-def workspace_from_cmd(args):
-    print('Reading workspace from command line arguments')
-    tenant_id = args[1]
-    client_id = args[2]
-    client_secret = args[3]
-    config_file = args[4]
+# Paths
+input_path = './data/parquet_files'
+output_path = './data/target_map_parquet_files'
+os.makedirs(output_path, exist_ok=True)
 
-    # Needed when triggering from Jenkins
-    service_principal_auth = ServicePrincipalAuthentication(tenant_id=tenant_id,
-                                                            service_principal_id=client_id,
-                                                            service_principal_password=client_secret)
-    path = '../.azureml/' + config_file
+# Load mapping as Polars DataFrame
+target_map_df = pl.read_csv('./data/target_map.csv', columns=['CMPNT_CAT_CD_DESC', 'Final Category']).unique()
 
-    with open(path) as json_file_obj:
-        config_json = json.load(json_file_obj)
+# Required columns
+columns_to_read = [
+    'MATL_SHRT_DESC',
+    'CMPNT_MATL_DESC',
+    'CMPNT_MATL_TYPE_CD',
+    'CMPNT_CAT_CD_DESC',
+    'CMPNT_UOM_CD'
+]
 
-    return Workspace(subscription_id=config_json['subscription_id'],
-                     resource_group=config_json['resource_group'],
-                     workspace_name=config_json['workspace_name'],
-                     auth=service_principal_auth)
-
-
-def workspace_from_config(path):
-    print('Reading workspace from local config file')
-    with open(path) as json_file_obj:
-        config_json = json.load(json_file_obj)
-
-    return Workspace(subscription_id=config_json['subscription_id'],
-                     resource_group=config_json['resource_group'],
-                     workspace_name=config_json['workspace_name'])
-
-
-#ENV = 'dev'
-ENV = 'dev'
-
-if __name__ == '__main__':
-    if len(sys.argv) > 1:  # Command line args
-        workspace = workspace_from_cmd(sys.argv)
-        # Default to dev when running from jenkins
-        aml_config_file = 'dev_config.json'
-        datastore_name = 'xbomrefadlsg2'
-        compute_name = 'llm-gpu-cluster-2'
-    else:
-        if ENV == 'prod':
-            aml_config_file = 'prod_config.json'
-            datastore_name = 'xbom_prod_adlsgen2'
-            compute_name = 'bom-cluster-2'
-        else:
-            aml_config_file = 'dev_config.json'
-            datastore_name = 'xbomrefadlsg2'
-            compute_name = 'llm-gpu-cluster-2'
-
-        workspace = workspace_from_config(path='../.azureml/' + aml_config_file)
-
-    aml_config = set_aml_config_for_training(workspace, compute_name=compute_name)
-
-    # version = 'aug_2023'
-    # version = 'sep9_2023'
-    # version = '5k'
-    # version = 'sep19_2023'
-    # version = 'oct10_2023'
-    # version = 'nov14_2023'
-    # version = 'may14_2024'
-#    version = 'jun12_2024'
-    version = 'aug20_2024'
-
-    model_type = 'offline_transformer'
-    # model_type = 'open_ai'
-    transformer_model = 'all-roberta-large-kft'
-    db_style = 'pandas'
-
-    sentence_transformer_dir = (Dataset
-                                .get_by_name(workspace, name=transformer_model)
-                                .as_named_input('transformer_model')
-                                .as_mount()
-                                )
+def process_file(file_idx, file):
     try:
-        embeddings_dir = (Dataset
-                          .get_by_name(workspace, name=f'bom_embeddings_{model_type}_{version}')
-                          .as_named_input('embeddings')
-                          .as_mount()
-                          )
+        parquet_file = pq.ParquetFile(file)
+        for row_group_idx in range(parquet_file.num_row_groups):
+            table = parquet_file.read_row_group(row_group_idx, columns=columns_to_read)
+            df_chunk = pl.from_arrow(table).unique()
+
+            # Left join with mapping
+            joined_chunk = df_chunk.join(target_map_df, on='CMPNT_CAT_CD_DESC', how='left')
+
+            # Save output
+            out_file = os.path.join(output_path, f'mapped_file{file_idx}_chunk{row_group_idx}.parquet')
+            joined_chunk.write_parquet(out_file)
+            print(f"✅ Saved: {out_file}")
     except Exception as e:
-        print(e)
-        embeddings_dir = 'new_embd'
+        print(f"❌ Error processing {file}: {e}")
 
-    # This will return the id of the datasets
-    erp_im_data = Dataset.get_by_name(workspace, f'nlp_input_bom_hier_dtls').as_named_input(f'erp_im_bom')
-    erp_em_data = Dataset.get_by_name(workspace, f'nlp_input_bom_hier').as_named_input(f'erp_em_bom')
-    tru_data = Dataset.get_by_name(workspace, f'nlp_input_p360_bom').as_named_input(f'tru_bom')
-    trade_names_data = Dataset.get_by_name(workspace, 'nlp_input_p360_trdnm').as_named_input('trade_names_feb08_2024')
-
-    matches_output = OutputFileDatasetConfig(name='matches')
-    full_training_step = PythonScriptStep(
-        name="Cross Hound Matching",
-        source_directory="src",
-        script_name="cross_hound/matcher.py",
-        arguments=['--erp-im-dataset-name', erp_im_data,
-                   '--erp-em-dataset-name', erp_em_data,
-                   '--tru-dataset-name', tru_data,
-                   '--trade-names-name', trade_names_data,
-                   '--sentence-transformer-dir', sentence_transformer_dir,
-                   '--embeddings-dir', embeddings_dir,
-                   '--output_dir', matches_output,
-                   '--datastore-name', datastore_name,
-                   '--data-version', version,
-                   '--model-type', model_type,
-                   '--db-style', db_style],
-        runconfig=aml_config,
-        allow_reuse=False
-    )
-
-    pipeline = Pipeline(workspace=workspace, steps=[full_training_step])
-    print('Pipeline created and about to be deployed')
-
-    try:
-        from git import Repo
-
-        local_branch = Repo(search_parent_directories=True).active_branch.name
-        local_branch = local_branch.replace('/', '-')
-        local_branch = local_branch.replace(' ', '-')
-    except:
-        local_branch = 'jenkins_run'
-    pipeline_run = Experiment(workspace, name=f'xHound-{local_branch}').submit(pipeline)
-    pipeline_run.wait_for_completion()
+# Multithreaded execution
+all_files = glob.glob(os.path.join(input_path, '*.parquet'))
+with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
+    for file_idx, file in enumerate(all_files):
+        executor.submit(process_file, file_idx, file)
