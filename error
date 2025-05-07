@@ -1,58 +1,61 @@
 import os
 import re
 import time
-import polars as pl
-from concurrent.futures import ThreadPoolExecutor
 import glob
+import pandas as pd
 
-# --- Your cleaning logic ---
-def clean_text_pipeline(text):
-    if not isinstance(text, str):
-        return text
-    try:
-        text = text.lower()
-        text = re.sub('[^A-Za-z0-9&% ]+', '', text).strip()
-        text = re.sub(r"\s*%\s*", "% ", text)
-        text = re.sub(r'(canada|can|(ca\d+)$|ca)', r' \1', text)
-        text = re.sub('canada\s*(\d{2,})|(canada\d+)|canada|can\s*(\d{2,})|(can\d+)|can|(ca\d+)|ca\s(\d{2,})|ca$|(ca\s)', '', text).strip()
-        text = re.sub(r"(\D)(\d+)(\s*)(ml|l|gr|gm|g|ct)", r"\1 \2\3\4 ", text).strip()
-        text = re.sub("(\s)(spf)\s*([\d+])", r"\1\2\3", text).strip()
-        text = re.sub('([\d+])\s*(?:ml|l|gr|gm|g|ct)(?: |$)', lambda z: z.group().replace(" ", ""), text).strip()
-        text = re.sub(r"(\D)(spf\d+)", r'\1 \2 ', text).strip()
-        return text
-    except:
-        return text
+# --- Precompiled regex patterns ---
+patterns = {
+    'non_alphanumeric': re.compile(r'[^A-Za-z0-9&% ]+'),
+    'percent_space': re.compile(r"\s*%\s*"),
+    'canada_variants': re.compile(r'(canada|can|(ca\d+)$|ca)'),
+    'remove_canada': re.compile(r'canada\s*(\d{2,})|(canada\d+)|canada|can\s*(\d{2,})|(can\d+)|can|(ca\d+)|ca\s(\d{2,})|ca$|(ca\s)'),
+    'units': re.compile(r"(\D)(\d+)(\s*)(ml|l|gr|gm|g|ct)"),
+    'spf_space': re.compile(r"(\s)(spf)\s*([\d+])"),
+    'units_no_space': re.compile(r'([\d+])\s*(?:ml|l|gr|gm|g|ct)(?: |$)'),
+    'spf_number': re.compile(r"(\D)(spf\d+)")
+}
 
-# --- Per-file processing with map_elements ---
+# --- Function to clean an entire Series using str.replace chain ---
+def clean_series(series):
+    return (series.str.lower()
+        .str.replace(patterns['non_alphanumeric'], '', regex=True)
+        .str.replace(patterns['percent_space'], '% ', regex=True)
+        .str.replace(patterns['canada_variants'], r' \1', regex=True)
+        .str.replace(patterns['remove_canada'], '', regex=True)
+        .str.replace(patterns['units'], r'\1 \2\3\4 ', regex=True)
+        .str.replace(patterns['spf_space'], r'\1\2\3', regex=True)
+        .str.replace(patterns['units_no_space'], lambda z: z.group().replace(" ", ""), regex=True)
+        .str.replace(patterns['spf_number'], r'\1 \2 ', regex=True)
+    )
+
+# --- Per-file processing ---
 def process_file(file):
     try:
-        print(f" Processing: {os.path.basename(file)}")
+        print(f"🔄 Processing: {os.path.basename(file)}")
         start = time.time()
 
-        df = pl.read_parquet(file)
+        df = pd.read_parquet(file)
 
-        df = df.with_columns([
-            pl.col("MATL_SHRT_DESC").map_elements(clean_text_pipeline, return_dtype=pl.Utf8),
-            pl.col("CMPNT_MATL_DESC").map_elements(clean_text_pipeline, return_dtype=pl.Utf8)
-        ])
+        # Clean both columns
+        df['MATL_SHRT_DESC'] = clean_series(df['MATL_SHRT_DESC'].fillna(''))
+        df['CMPNT_MATL_DESC'] = clean_series(df['CMPNT_MATL_DESC'].fillna(''))
 
-        df = df.with_columns([
-            (pl.col("MATL_SHRT_DESC").fill_null('') + pl.lit(" ") + pl.col("CMPNT_MATL_DESC").fill_null(''))
-            .str.strip_chars()
-            .alias("MATL_SHRT_DESC_AND_CMPNT_MATL_DESC")
-        ])
+        # Create combined column
+        df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'] = (df['MATL_SHRT_DESC'] + ' ' + df['CMPNT_MATL_DESC']).str.strip()
 
-        df.write_parquet(file)
+        # Save to same location (or modify path if needed)
+        df.to_parquet(file, index=False)
 
-        print(f"Done: {os.path.basename(file)} |  {time.time() - start:.2f}s")
+        print(f"✅ Done: {os.path.basename(file)} | ⏱️ {time.time() - start:.2f}s")
     except Exception as e:
-        print(f"Failed: {os.path.basename(file)} -> {e}")
+        print(f"❌ Failed: {os.path.basename(file)} -> {e}")
 
-# --- Threaded execution ---
-def run_multithreaded_parquet_cleaning(folder_path, max_workers=6):
+# --- Process all files in folder ---
+def run_all(folder_path):
     files = glob.glob(os.path.join(folder_path, "*.parquet"))
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        executor.map(process_file, files)
+    for file in files:
+        process_file(file)
 
-# --- Run it ---
-run_multithreaded_parquet_cleaning('./data/target_map_parquet_files', max_workers=4)
+# --- Run script ---
+run_all('./data/target_map_parquet_files')
