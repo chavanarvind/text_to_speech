@@ -3,8 +3,8 @@ import re
 import time
 import glob
 import pandas as pd
-from concurrent.futures import ThreadPoolExecutor
-from threading import Lock
+from multiprocessing import Pool, cpu_count
+from functools import partial
 
 # --- Precompiled regex patterns ---
 patterns = {
@@ -18,7 +18,6 @@ patterns = {
     'spf_number': re.compile(r"(\D)(spf\d+)")
 }
 
-# --- Clean Series ---
 def clean_series(series):
     return (series.str.lower()
         .str.replace(patterns['non_alphanumeric'], '', regex=True)
@@ -31,16 +30,9 @@ def clean_series(series):
         .str.replace(patterns['spf_number'], r'\1 \2 ', regex=True)
     )
 
-# --- Shared progress tracking ---
-counter = 0
-lock = Lock()
-start_time = time.time()
-
-# --- File processing ---
-def text_clean_step(file, total_files):
-    global counter
+def text_clean_step(file, input_path, output_path):
     try:
-        df = pd.read_parquet(file)
+        df = pd.read_parquet(file, columns=["MATL_SHRT_DESC", "CMPNT_MATL_DESC"])
 
         df['MATL_SHRT_DESC'] = clean_series(df['MATL_SHRT_DESC'].fillna(''))
         df['CMPNT_MATL_DESC'] = clean_series(df['CMPNT_MATL_DESC'].fillna(''))
@@ -49,31 +41,25 @@ def text_clean_step(file, total_files):
             df['MATL_SHRT_DESC'] + ' ' + df['CMPNT_MATL_DESC']
         ).str.strip()
 
-        # Save to original file (optional: change to write elsewhere)
-        df.to_parquet(file, index=False)
+        rel_path = os.path.relpath(file, input_path)
+        output_file = os.path.join(output_path, rel_path)
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        df.to_parquet(output_file, index=False)
 
+        print(f"✅ Done: {os.path.basename(file)}")
     except Exception as e:
-        with lock:
-            with open('failures.log', 'a') as log:
-                log.write(f"{file} -> {e}\n")
-        print(f" Failed: {os.path.basename(file)} -> {e}")
-    finally:
-        with lock:
-            counter += 1
-            elapsed = time.time() - start_time
-            percent_remaining = 100 * (total_files - counter) / total_files
-            avg_time = elapsed / counter
-            eta = avg_time * (total_files - counter)
-            print(f" Done: {os.path.basename(file)} | {counter}/{total_files} completed "
-                  f"({percent_remaining:.2f}% remaining, ETA: {eta:.1f}s)")
+        print(f"❌ Failed: {os.path.basename(file)} -> {e}")
 
 # --- Setup & execution ---
-input_path = './data/target_map_parquet_files'
-max_workers = 8  #  Change as needed
+if __name__ == '__main__':
+    input_path = './data/target_map_parquet_files'
+    output_path = './data/target_map_cleaned'
+    max_processes = cpu_count()  # Or set manually
 
-all_files = glob.glob(os.path.join(input_path, '*.parquet'))
-total_files = len(all_files)
+    all_files = glob.glob(os.path.join(input_path, '*.parquet'))
 
-with ThreadPoolExecutor(max_workers=max_workers) as executor:
-    for file in all_files:
-        executor.submit(text_clean_step, file, total_files)
+    # Use functools.partial to pass static args to worker
+    worker_func = partial(text_clean_step, input_path=input_path, output_path=output_path)
+
+    with Pool(processes=max_processes) as pool:
+        pool.map(worker_func, all_files)
