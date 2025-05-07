@@ -3,6 +3,7 @@ import re
 import time
 import glob
 import pandas as pd
+from concurrent.futures import ThreadPoolExecutor
 
 # --- Precompiled regex patterns ---
 patterns = {
@@ -30,7 +31,7 @@ def clean_series(series):
     )
 
 # --- Per-file processing ---
-def process_file(file):
+def text_clean_step(file):
     try:
         print(f"🔄 Processing: {os.path.basename(file)}")
         start = time.time()
@@ -51,11 +52,10 @@ def process_file(file):
     except Exception as e:
         print(f"❌ Failed: {os.path.basename(file)} -> {e}")
 
-# --- Process all files in folder ---
-def run_all(folder_path):
-    files = glob.glob(os.path.join(folder_path, "*.parquet"))
-    for file in files:
-        process_file(file)
 
-# --- Run script ---
-run_all('./data/target_map_parquet_files')
+# Multithreaded execution
+input_path = './data/target_map_parquet_files'
+all_files = glob.glob(os.path.join(input_path, '*.parquet'))
+with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
+    for file_idx, file in enumerate(all_files):
+        executor.submit(text_clean_step, file_idx, file)
