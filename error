@@ -1,9 +1,54 @@
-import polars as pl
-import glob
-import os
+### function for data pre process
 
-input_path = './data/target_map_parquet_files'
-files = glob.glob(os.path.join(input_path, '*.parquet'))
+    # 1.   ## to convert into lower case
+    def convert_to_lower(string):
+        return string.lower()
 
-df = pl.read_parquet(files[0])
-print(df)
+
+    # 2 . ## removing special char except space and &
+    def remove_special_characters(string):
+        return re.sub('[^A-Za-z0-9&% ]+', '', string).strip()
+
+
+
+    # 4  # add space after % (ex - 1%shower --> 1% shower)
+    def add_space_after_percentage_chr(string):
+        return re.sub(r"\s*%\s*", "% ", string)
+
+
+    # 5  # adding space before ca/can/ pattern
+    def add_space(string):
+        clean = re.compile(r'(canada|can|(ca\d+)$|ca)')
+        return re.sub(clean, ' \\1', string)
+
+
+    # 6 to remove ca pattern
+    def revmove_can_patter(string1):
+        return re.sub('canada\s*(\d{2,})|(canada\d+)|canada|can\s*(\d{2,})|(can\d+)|can|(ca\d+)|ca\s(\d{2,})|ca$|(ca\s)',
+                      '', string1).strip()
+
+
+    # 10  # add_space_btwn_word_and_unit ( ex-  34mlget --> 34ml get)
+    def add_space_after_unit(string):
+        return re.sub(r"(\D)(\d+)(\s*)(ml|l|gr|gm|g|ct)", r"\1 \2\3\4 ", string).strip()
+
+
+    # 7 #remove the pattern which had digit followed by oz,s,z and then follwed by space or end of line.
+    #def remove_other_unit(string1):
+     #   return re.sub(r"(\D)([\d]+)\s*(?:oz|s|z|yd|fz)(?: |$)", '', string1).strip()
+
+
+    # 8   Remove space between spf string (ex-  spf 50  -->  spf50)
+    def remove_space_btwn_spf(string):
+        return re.sub("(\s)(spf)\s*([\d+])", r"\1\2\3", string).strip()
+
+
+    # 9 Remove space between unit (ex-  34 ml  -->  34ml)
+    def remove_space_btwn_unit(string):
+        return re.sub('([\d+])\s*(?:ml|l|gr|gm|g|ct)(?: |$)', lambda z: z.group().replace(" ", ""), string).strip()
+
+
+    # 11   add space before and after spf pattern (ex-  creamspf50ltn   -->  cream spf50 ltn)
+    def add_space_spf_bothside(string):
+        return re.sub(r"(\D)(spf\d+)", r'\1 \2 ', string).strip()
+
