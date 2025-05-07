@@ -5,6 +5,7 @@ import polars as pl
 from concurrent.futures import ThreadPoolExecutor
 import glob
 
+# --- Clean text using your custom rules ---
 def clean_text_pipeline(text):
     if not isinstance(text, str):
         return text
@@ -22,41 +23,36 @@ def clean_text_pipeline(text):
     except:
         return text
 
-def process_file_lazy(file):
+# --- Process a single parquet file ---
+def process_file_apply(file):
     try:
         print(f"🔄 Processing: {os.path.basename(file)}")
         start = time.time()
 
         df = pl.read_parquet(file)
-        values = set(df["MATL_SHRT_DESC"].drop_nulls().unique().to_list() +
-                     df["CMPNT_MATL_DESC"].drop_nulls().unique().to_list())
-        value_map = {v: clean_text_pipeline(v) for v in values if isinstance(v, str)}
 
-        # Reload as lazy
-        ldf = pl.read_parquet(file).lazy()
-
-        ldf = ldf.with_columns([
-            pl.col("MATL_SHRT_DESC").map_dict(value_map, return_dtype=pl.Utf8),
-            pl.col("CMPNT_MATL_DESC").map_dict(value_map, return_dtype=pl.Utf8)
+        df = df.with_columns([
+            pl.col("MATL_SHRT_DESC").apply(clean_text_pipeline, return_dtype=pl.Utf8),
+            pl.col("CMPNT_MATL_DESC").apply(clean_text_pipeline, return_dtype=pl.Utf8)
         ])
 
-        ldf = ldf.with_columns([
+        df = df.with_columns([
             (pl.col("MATL_SHRT_DESC").fill_null('') + pl.lit(" ") + pl.col("CMPNT_MATL_DESC").fill_null(''))
             .str.strip_chars()
             .alias("MATL_SHRT_DESC_AND_CMPNT_MATL_DESC")
         ])
 
-        df_result = ldf.collect()
-        df_result.write_parquet(file)
+        df.write_parquet(file)
 
         print(f"✅ Done: {os.path.basename(file)} | ⏱️ {time.time() - start:.2f}s")
     except Exception as e:
         print(f"❌ Failed: {os.path.basename(file)} -> {e}")
 
+# --- Run all files with ThreadPool ---
 def run_multithreaded_parquet_cleaning(folder_path, max_workers=6):
     files = glob.glob(os.path.join(folder_path, "*.parquet"))
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        executor.map(process_file_lazy, files)
+        executor.map(process_file_apply, files)
 
-# Run it
+# --- Start processing ---
 run_multithreaded_parquet_cleaning('./data/target_map_parquet_files', max_workers=8)
