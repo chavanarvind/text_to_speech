@@ -1,58 +1,146 @@
-import os
-import re
-import time
-import polars as pl
-from concurrent.futures import ThreadPoolExecutor
-import glob
+import json
+import sys
+from azureml.core import Experiment, RunConfiguration, Environment, Workspace, Dataset
+from azureml.core.authentication import ServicePrincipalAuthentication
 
-# --- Your cleaning logic ---
-def clean_text_pipeline(text):
-    if not isinstance(text, str):
-        return text
+from azureml.pipeline.core import Pipeline
+from azureml.pipeline.steps import PythonScriptStep
+from azureml.data import OutputFileDatasetConfig
+
+
+def set_aml_config_for_training(ws, compute_name):
+    compute_target = ws.compute_targets[compute_name]
+    aml_run_config = RunConfiguration()
+    aml_run_config.target = compute_target
+    env = Environment.get(workspace=ws,
+                          name="Bom_X_Evaluator")
+    aml_run_config.environment = env
+
+    return aml_run_config
+
+
+def workspace_from_cmd(args):
+    print('Reading workspace from command line arguments')
+    tenant_id = args[1]
+    client_id = args[2]
+    client_secret = args[3]
+    config_file = args[4]
+
+    # Needed when triggering from Jenkins
+    service_principal_auth = ServicePrincipalAuthentication(tenant_id=tenant_id,
+                                                            service_principal_id=client_id,
+                                                            service_principal_password=client_secret)
+    path = '../.azureml/' + config_file
+
+    with open(path) as json_file_obj:
+        config_json = json.load(json_file_obj)
+
+    return Workspace(subscription_id=config_json['subscription_id'],
+                     resource_group=config_json['resource_group'],
+                     workspace_name=config_json['workspace_name'],
+                     auth=service_principal_auth)
+
+
+def workspace_from_config(path):
+    print('Reading workspace from local config file')
+    with open(path) as json_file_obj:
+        config_json = json.load(json_file_obj)
+
+    return Workspace(subscription_id=config_json['subscription_id'],
+                     resource_group=config_json['resource_group'],
+                     workspace_name=config_json['workspace_name'])
+
+
+#ENV = 'dev'
+ENV = 'dev'
+
+if __name__ == '__main__':
+    if len(sys.argv) > 1:  # Command line args
+        workspace = workspace_from_cmd(sys.argv)
+        # Default to dev when running from jenkins
+        aml_config_file = 'dev_config.json'
+        datastore_name = 'xbomrefadlsg2'
+        compute_name = 'llm-gpu-cluster-2'
+    else:
+        if ENV == 'prod':
+            aml_config_file = 'prod_config.json'
+            datastore_name = 'xbom_prod_adlsgen2'
+            compute_name = 'bom-cluster-2'
+        else:
+            aml_config_file = 'dev_config.json'
+            datastore_name = 'xbomrefadlsg2'
+            compute_name = 'llm-gpu-cluster-2'
+
+        workspace = workspace_from_config(path='../.azureml/' + aml_config_file)
+
+    aml_config = set_aml_config_for_training(workspace, compute_name=compute_name)
+
+    # version = 'aug_2023'
+    # version = 'sep9_2023'
+    # version = '5k'
+    # version = 'sep19_2023'
+    # version = 'oct10_2023'
+    # version = 'nov14_2023'
+    # version = 'may14_2024'
+#    version = 'jun12_2024'
+    version = 'aug20_2024'
+
+    model_type = 'offline_transformer'
+    # model_type = 'open_ai'
+    transformer_model = 'all-roberta-large-kft'
+    db_style = 'pandas'
+
+    sentence_transformer_dir = (Dataset
+                                .get_by_name(workspace, name=transformer_model)
+                                .as_named_input('transformer_model')
+                                .as_mount()
+                                )
     try:
-        text = text.lower()
-        text = re.sub('[^A-Za-z0-9&% ]+', '', text).strip()
-        text = re.sub(r"\s*%\s*", "% ", text)
-        text = re.sub(r'(canada|can|(ca\d+)$|ca)', r' \1', text)
-        text = re.sub('canada\s*(\d{2,})|(canada\d+)|canada|can\s*(\d{2,})|(can\d+)|can|(ca\d+)|ca\s(\d{2,})|ca$|(ca\s)', '', text).strip()
-        text = re.sub(r"(\D)(\d+)(\s*)(ml|l|gr|gm|g|ct)", r"\1 \2\3\4 ", text).strip()
-        text = re.sub("(\s)(spf)\s*([\d+])", r"\1\2\3", text).strip()
-        text = re.sub('([\d+])\s*(?:ml|l|gr|gm|g|ct)(?: |$)', lambda z: z.group().replace(" ", ""), text).strip()
-        text = re.sub(r"(\D)(spf\d+)", r'\1 \2 ', text).strip()
-        return text
-    except:
-        return text
-
-# --- Per-file processing with map_elements ---
-def process_file(file):
-    try:
-        print(f"🔄 Processing: {os.path.basename(file)}")
-        start = time.time()
-
-        df = pl.read_parquet(file)
-
-        df = df.with_columns([
-            pl.col("MATL_SHRT_DESC").map_elements(clean_text_pipeline, return_dtype=pl.Utf8),
-            pl.col("CMPNT_MATL_DESC").map_elements(clean_text_pipeline, return_dtype=pl.Utf8)
-        ])
-
-        df = df.with_columns([
-            (pl.col("MATL_SHRT_DESC").fill_null('') + pl.lit(" ") + pl.col("CMPNT_MATL_DESC").fill_null(''))
-            .str.strip_chars()
-            .alias("MATL_SHRT_DESC_AND_CMPNT_MATL_DESC")
-        ])
-
-        df.write_parquet(file)
-
-        print(f"✅ Done: {os.path.basename(file)} | ⏱️ {time.time() - start:.2f}s")
+        embeddings_dir = (Dataset
+                          .get_by_name(workspace, name=f'bom_embeddings_{model_type}_{version}')
+                          .as_named_input('embeddings')
+                          .as_mount()
+                          )
     except Exception as e:
-        print(f"❌ Failed: {os.path.basename(file)} -> {e}")
+        print(e)
+        embeddings_dir = 'new_embd'
 
-# --- Threaded execution ---
-def run_multithreaded_parquet_cleaning(folder_path, max_workers=6):
-    files = glob.glob(os.path.join(folder_path, "*.parquet"))
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        executor.map(process_file, files)
+    # This will return the id of the datasets
+    erp_im_data = Dataset.get_by_name(workspace, f'nlp_input_bom_hier_dtls').as_named_input(f'erp_im_bom')
+    erp_em_data = Dataset.get_by_name(workspace, f'nlp_input_bom_hier').as_named_input(f'erp_em_bom')
+    tru_data = Dataset.get_by_name(workspace, f'nlp_input_p360_bom').as_named_input(f'tru_bom')
+    trade_names_data = Dataset.get_by_name(workspace, 'nlp_input_p360_trdnm').as_named_input('trade_names_feb08_2024')
 
-# --- Run it ---
-run_multithreaded_parquet_cleaning('./data/target_map_parquet_files', max_workers=8)
+    matches_output = OutputFileDatasetConfig(name='matches')
+    full_training_step = PythonScriptStep(
+        name="Cross Hound Matching",
+        source_directory="src",
+        script_name="cross_hound/matcher.py",
+        arguments=['--erp-im-dataset-name', erp_im_data,
+                   '--erp-em-dataset-name', erp_em_data,
+                   '--tru-dataset-name', tru_data,
+                   '--trade-names-name', trade_names_data,
+                   '--sentence-transformer-dir', sentence_transformer_dir,
+                   '--embeddings-dir', embeddings_dir,
+                   '--output_dir', matches_output,
+                   '--datastore-name', datastore_name,
+                   '--data-version', version,
+                   '--model-type', model_type,
+                   '--db-style', db_style],
+        runconfig=aml_config,
+        allow_reuse=False
+    )
+
+    pipeline = Pipeline(workspace=workspace, steps=[full_training_step])
+    print('Pipeline created and about to be deployed')
+
+    try:
+        from git import Repo
+
+        local_branch = Repo(search_parent_directories=True).active_branch.name
+        local_branch = local_branch.replace('/', '-')
+        local_branch = local_branch.replace(' ', '-')
+    except:
+        local_branch = 'jenkins_run'
+    pipeline_run = Experiment(workspace, name=f'xHound-{local_branch}').submit(pipeline)
+    pipeline_run.wait_for_completion()
