@@ -17,7 +17,7 @@ patterns = {
     'spf_number': re.compile(r"(\D)(spf\d+)")
 }
 
-# --- Function to clean an entire Series using str.replace chain ---
+# --- Clean Series ---
 def clean_series(series):
     return (series.str.lower()
         .str.replace(patterns['non_alphanumeric'], '', regex=True)
@@ -30,7 +30,7 @@ def clean_series(series):
         .str.replace(patterns['spf_number'], r'\1 \2 ', regex=True)
     )
 
-# --- Per-file processing ---
+# --- File processing ---
 def text_clean_step(file):
     try:
         print(f"🔄 Processing: {os.path.basename(file)}")
@@ -38,24 +38,25 @@ def text_clean_step(file):
 
         df = pd.read_parquet(file)
 
-        # Clean both columns
         df['MATL_SHRT_DESC'] = clean_series(df['MATL_SHRT_DESC'].fillna(''))
         df['CMPNT_MATL_DESC'] = clean_series(df['CMPNT_MATL_DESC'].fillna(''))
 
-        # Create combined column
-        df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'] = (df['MATL_SHRT_DESC'] + ' ' + df['CMPNT_MATL_DESC']).str.strip()
+        df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'] = (
+            df['MATL_SHRT_DESC'] + ' ' + df['CMPNT_MATL_DESC']
+        ).str.strip()
 
-        # Save to same location (or modify path if needed)
         df.to_parquet(file, index=False)
 
         print(f"✅ Done: {os.path.basename(file)} | ⏱️ {time.time() - start:.2f}s")
     except Exception as e:
         print(f"❌ Failed: {os.path.basename(file)} -> {e}")
 
-
-# Multithreaded execution
+# --- Input path and max workers ---
 input_path = './data/target_map_parquet_files'
+max_workers = 4  # 🔧 Set your desired number of threads here
+
 all_files = glob.glob(os.path.join(input_path, '*.parquet'))
-with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
-    for file_idx, file in enumerate(all_files):
-        executor.submit(text_clean_step, file_idx, file)
+
+with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    for file in all_files:
+        executor.submit(text_clean_step, file)
