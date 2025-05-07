@@ -1,3 +1,46 @@
-✅ Done: mapped_file0_chunk3.parquet | 1/2140 completed (99.95% remaining, ETA: 375090.0s)
-✅ Done: mapped_file0_chunk0.parquet | 2/2140 completed (99.91% remaining, ETA: 208108.3s)
-✅ Done: mapped_file100_chunk0.parquet | 3/2140 completed (99.86% remaining, ETA: 155396.7s)
+import os
+import glob
+import pyarrow.parquet as pq
+import polars as pl
+import pandas as pd
+from concurrent.futures import ThreadPoolExecutor
+
+# Paths
+input_path = './data/parquet_files'
+output_path = './data/target_map_parquet_files'
+os.makedirs(output_path, exist_ok=True)
+
+# Load mapping as Polars DataFrame
+target_map_df = pl.read_csv('./data/target_map.csv', columns=['CMPNT_CAT_CD_DESC', 'Final Category']).unique()
+
+# Required columns
+columns_to_read = [
+    'MATL_SHRT_DESC',
+    'CMPNT_MATL_DESC',
+    'CMPNT_MATL_TYPE_CD',
+    'CMPNT_CAT_CD_DESC',
+    'CMPNT_UOM_CD'
+]
+
+def process_file(file_idx, file):
+    try:
+        parquet_file = pq.ParquetFile(file)
+        for row_group_idx in range(parquet_file.num_row_groups):
+            table = parquet_file.read_row_group(row_group_idx, columns=columns_to_read)
+            df_chunk = pl.from_arrow(table).unique()
+
+            # Left join with mapping
+            joined_chunk = df_chunk.join(target_map_df, on='CMPNT_CAT_CD_DESC', how='left')
+
+            # Save output
+            out_file = os.path.join(output_path, f'mapped_file{file_idx}_chunk{row_group_idx}.parquet')
+            joined_chunk.write_parquet(out_file)
+            print(f"✅ Saved: {out_file}")
+    except Exception as e:
+        print(f"❌ Error processing {file}: {e}")
+
+# Multithreaded execution
+all_files = glob.glob(os.path.join(input_path, '*.parquet'))
+with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
+    for file_idx, file in enumerate(all_files):
+        executor.submit(process_file, file_idx, file)
