@@ -1,62 +1,24 @@
-import os
-import re
-import time
-import polars as pl
-from concurrent.futures import ThreadPoolExecutor
-import glob
-
-# --- Clean text using your custom rules ---
-def clean_text_pipeline(text):
-    if not isinstance(text, str):
-        return text
-    try:
-        text = text.lower()
-        text = re.sub('[^A-Za-z0-9&% ]+', '', text).strip()
-        text = re.sub(r"\s*%\s*", "% ", text)
-        text = re.sub(r'(canada|can|(ca\d+)$|ca)', r' \1', text)
-        text = re.sub('canada\s*(\d{2,})|(canada\d+)|canada|can\s*(\d{2,})|(can\d+)|can|(ca\d+)|ca\s(\d{2,})|ca$|(ca\s)', '', text).strip()
-        text = re.sub(r"(\D)(\d+)(\s*)(ml|l|gr|gm|g|ct)", r"\1 \2\3\4 ", text).strip()
-        text = re.sub("(\s)(spf)\s*([\d+])", r"\1\2\3", text).strip()
-        text = re.sub('([\d+])\s*(?:ml|l|gr|gm|g|ct)(?: |$)', lambda z: z.group().replace(" ", ""), text).strip()
-        text = re.sub(r"(\D)(spf\d+)", r'\1 \2 ', text).strip()
-        return text
-    except:
-        return text
-
-# --- Processing one parquet file ---
-def process_file(file):
-    try:
-        print(f"🔄 Processing: {os.path.basename(file)}")
-        start = time.time()
-        df = pl.read_parquet(file)
-
-        values = set(df["MATL_SHRT_DESC"].drop_nulls().unique().to_list() +
-                     df["CMPNT_MATL_DESC"].drop_nulls().unique().to_list())
-
-        value_map = {v: clean_text_pipeline(v) for v in values if isinstance(v, str)}
-
-        df = df.with_columns([
-            pl.col("MATL_SHRT_DESC").map_dict(value_map, return_dtype=pl.Utf8),
-            pl.col("CMPNT_MATL_DESC").map_dict(value_map, return_dtype=pl.Utf8)
-        ])
-
-        df = df.with_columns([
-            (pl.col("MATL_SHRT_DESC").fill_null('') + pl.lit(" ") + pl.col("CMPNT_MATL_DESC").fill_null(''))
-            .str.strip_chars()
-            .alias("MATL_SHRT_DESC_AND_CMPNT_MATL_DESC")
-        ])
-
-        df.write_parquet(file)
-
-        print(f"✅ Done: {os.path.basename(file)} | ⏱️ {time.time() - start:.2f}s")
-    except Exception as e:
-        print(f"❌ Failed: {os.path.basename(file)} -> {e}")
-
-# --- Run with multithreading ---
-def run_multithreaded_parquet_cleaning(folder_path, max_workers=6):
-    files = glob.glob(os.path.join(folder_path, "*.parquet"))
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        executor.map(process_file, files)
-
-# --- Example usage ---
-run_multithreaded_parquet_cleaning('./data/target_map_parquet_files', max_workers=8)
+🔄 Processing: mapped_file0_chunk0.parquet
+🔄 Processing: mapped_file0_chunk1.parquet
+🔄 Processing: mapped_file0_chunk2.parquet
+🔄 Processing: mapped_file0_chunk3.parquet
+🔄 Processing: mapped_file100_chunk0.parquet
+❌ Failed: mapped_file0_chunk0.parquet -> 'Expr' object has no attribute 'map_dict'
+🔄 Processing: mapped_file100_chunk1.parquet
+❌ Failed: mapped_file100_chunk0.parquet -> 'Expr' object has no attribute 'map_dict'
+🔄 Processing: mapped_file100_chunk2.parquet
+❌ Failed: mapped_file0_chunk3.parquet -> 'Expr' object has no attribute 'map_dict'
+🔄 Processing: mapped_file100_chunk3.parquet
+❌ Failed: mapped_file0_chunk1.parquet -> 'Expr' object has no attribute 'map_dict'
+🔄 Processing: mapped_file101_chunk0.parquet
+❌ Failed: mapped_file100_chunk3.parquet -> 'Expr' object has no attribute 'map_dict'
+🔄 Processing: mapped_file101_chunk1.parquet
+❌ Failed: mapped_file100_chunk1.parquet -> 'Expr' object has no attribute 'map_dict'
+🔄 Processing: mapped_file101_chunk2.parquet
+❌ Failed: mapped_file101_chunk0.parquet -> 'Expr' object has no attribute 'map_dict'
+🔄 Processing: mapped_file101_chunk3.parquet
+❌ Failed: mapped_file0_chunk2.parquet -> 'Expr' object has no attribute 'map_dict'
+🔄 Processing: mapped_file102_chunk0.parquet
+❌ Failed: mapped_file101_chunk3.parquet -> 'Expr' object has no attribute 'map_dict'
+🔄 Processing: mapped_file102_chunk1.parquet
+❌ 
