@@ -1,7 +1,9 @@
 import os
-import time
 import re
+import time
 import polars as pl
+from concurrent.futures import ThreadPoolExecutor
+import glob
 
 # --- Clean text using your custom rules ---
 def clean_text_pipeline(text):
@@ -21,35 +23,40 @@ def clean_text_pipeline(text):
     except:
         return text
 
-# --- Main function to process and overwrite ---
-def process_and_overwrite(file):
+# --- Processing one parquet file ---
+def process_file(file):
     try:
         print(f"🔄 Processing: {os.path.basename(file)}")
         start = time.time()
         df = pl.read_parquet(file)
 
-        # Unique values from both columns
-        values = set(df["MATL_SHRT_DESC"].drop_nulls().unique().to_list() + 
+        values = set(df["MATL_SHRT_DESC"].drop_nulls().unique().to_list() +
                      df["CMPNT_MATL_DESC"].drop_nulls().unique().to_list())
 
-        # Create map of cleaned values
         value_map = {v: clean_text_pipeline(v) for v in values if isinstance(v, str)}
 
-        # Apply cleaned values
         df = df.with_columns([
             pl.col("MATL_SHRT_DESC").map_dict(value_map, return_dtype=pl.Utf8),
             pl.col("CMPNT_MATL_DESC").map_dict(value_map, return_dtype=pl.Utf8)
         ])
 
-        # Combine both cleaned columns
         df = df.with_columns([
             (pl.col("MATL_SHRT_DESC").fill_null('') + pl.lit(" ") + pl.col("CMPNT_MATL_DESC").fill_null(''))
             .str.strip_chars()
             .alias("MATL_SHRT_DESC_AND_CMPNT_MATL_DESC")
         ])
 
-        df.write_parquet(file)  # Overwrite original file
+        df.write_parquet(file)
 
         print(f"✅ Done: {os.path.basename(file)} | ⏱️ {time.time() - start:.2f}s")
     except Exception as e:
         print(f"❌ Failed: {os.path.basename(file)} -> {e}")
+
+# --- Run with multithreading ---
+def run_multithreaded_parquet_cleaning(folder_path, max_workers=6):
+    files = glob.glob(os.path.join(folder_path, "*.parquet"))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        executor.map(process_file, files)
+
+# --- Example usage ---
+run_multithreaded_parquet_cleaning('./data/target_map_parquet_files', max_workers=8)
