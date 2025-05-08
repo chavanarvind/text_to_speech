@@ -7,38 +7,36 @@ import os
 import time
 from multiprocessing import Pool, cpu_count
 
-nlp = spacy.load("en_core_web_sm", disable=["ner", "parser", "tagger"])
+# Enable tagger for proper lemmatization
+nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])
 
 input_path = './data/target_map_cleaned'
 output_path = Path('./data/gram_outputs/frequent_terms_by_category')
 output_path.mkdir(parents=True, exist_ok=True)
 
-required_cols = ['Final Category','MATL_SHRT_DESC_AND_CMPNT_MATL_DESC']
+required_cols = ['Final Category', 'MATL_SHRT_DESC_AND_CMPNT_MATL_DESC']
 threshold = 10
 
 def process_category(category, descriptions, threshold):
-    unique_words = []
+    descriptions = [desc for desc in descriptions if desc]
 
-    for desc in descriptions:
-        doc = nlp(desc)
-        words = {token.lemma_ for token in doc if token.is_alpha and not token.is_stop}
-        unique_words.extend(words)
-
-    unigram_counts = Counter(unique_words)
-
+    # Unigram frequency from unique lemmas per row
+    unique_lemmas = []
+    for doc in nlp.pipe(descriptions, batch_size=100):
+        lemmas = {token.lemma_ for token in doc if token.is_alpha and not token.is_stop}
+        unique_lemmas.extend(lemmas)
+    unigram_counts = Counter(unique_lemmas)
     unigrams = [
         {'category': category, 'word': word, 'count': count}
         for word, count in unigram_counts.items() if count >= threshold
     ]
 
-    # Bigrams: normal frequency with repetition allowed (no deduplication per row)
-    bigram_words = []
-    for desc in descriptions:
-        doc = nlp(desc)
+    # Bigram frequency (repetition allowed)
+    bigrams_list = []
+    for doc in nlp.pipe(descriptions, batch_size=100):
         words = [token.lemma_ for token in doc if token.is_alpha and not token.is_stop]
-        bigram_words.extend(zip(words, islice(words, 1, None)))
-
-    bigram_counts = Counter(bigram_words)
+        bigrams_list.extend(zip(words, islice(words, 1, None)))
+    bigram_counts = Counter(bigrams_list)
     bigrams = [
         {'category': category, 'bigram': f'{w1} {w2}', 'count': count}
         for (w1, w2), count in bigram_counts.items() if count >= threshold
@@ -49,42 +47,40 @@ def process_category(category, descriptions, threshold):
 def process_file(file_path_str):
     file_path = Path(file_path_str)
     start_time = time.time()
-
     try:
         df = pd.read_parquet(file_path, columns=required_cols)
         df = df[df['Final Category'].notna()]
-        df['CMPNT_MATL_DESC'] = df['CMPNT_MATL_DESC'].fillna('').str.lower()
+        df = df.dropna(subset=['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'])
 
         file_unigrams = []
         file_bigrams = []
 
         for category, group in df.groupby('Final Category'):
-            unigrams, bigrams = process_category(category, group['CMPNT_MATL_DESC'].tolist(), threshold)
+            descriptions = group['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'].astype(str).tolist()
+            unigrams, bigrams = process_category(category, descriptions, threshold)
             file_unigrams.extend(unigrams)
             file_bigrams.extend(bigrams)
 
-        duration = time.time() - start_time
-        print(f" Processed {file_path.name} in {duration:.2f}s")
-
+        print(f"✅ Processed {file_path.name} in {time.time() - start_time:.2f}s")
         return file_unigrams, file_bigrams
 
     except Exception as e:
-        print(f" Failed on {file_path.name}: {e}")
+        print(f"❌ Failed on {file_path.name}: {e}")
         return [], []
 
-# Gather all parquet files
-all_files = [str(f) for f in Path(input_path).glob("*.parquet")]
-print(f" Total files to process: {len(all_files)}")
+# Run multiprocessing
+if __name__ == '__main__':
+    all_files = [str(f) for f in Path(input_path).glob("*.parquet")]
+    print(f"📁 Total files to process: {len(all_files)}")
 
-all_unigrams, all_bigrams = [], []
+    all_unigrams, all_bigrams = [], []
 
-# Process in parallel using multiprocessing
-with Pool(processes=cpu_count()) as pool:
-    for unigrams, bigrams in pool.map(process_file, all_files):
-        all_unigrams.extend(unigrams)
-        all_bigrams.extend(bigrams)
+    with Pool(processes=cpu_count()) as pool:
+        for unigrams, bigrams in pool.map(process_file, all_files):
+            all_unigrams.extend(unigrams)
+            all_bigrams.extend(bigrams)
 
-# Save outputs
-pd.DataFrame(all_unigrams).to_csv(output_path / "all_categories_unigrams.csv", index=False)
-pd.DataFrame(all_bigrams).to_csv(output_path / "all_categories_bigrams.csv", index=False)
-print(" Saved unigrams and bigrams.")
+    # Save to CSV
+    pd.DataFrame(all_unigrams).to_csv(output_path / "all_categories_unigrams.csv", index=False)
+    pd.DataFrame(all_bigrams).to_csv(output_path / "all_categories_bigrams.csv", index=False)
+    print("✅ Saved unigrams and bigrams.")
