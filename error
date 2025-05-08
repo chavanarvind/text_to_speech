@@ -1,10 +1,6 @@
-✅ Processed mapped_file169.parquet in 1962.80s
-✅ Processed mapped_file123.parquet in 1917.78s
-✅ Processed mapped_file191.parquet in 1967.78s
-✅ Processed mapped_file259.parquet in 2105.67s
-✅ Processed mapped_file100.parquet in 1906.36s
-✅ Processed mapped_file146.parquet in 2029.14s
-✅ Processed mapped_file213.parquet in 2079.44s
-✅ Processed mapped_file236.parquet in 2087.85s
-✅ Processed mapped_file124.parquet in 1903.12s
-✅ Processed mapped_file26.parquet in 1961.25s
+df = pd.read_parquet(file_path, columns=required_cols)
+df = df[df['Final Category'].notna()]
+df = df.dropna(subset=['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'])
+
+# ✅ Remove duplicates based on both key columns
+df = df.drop_duplicates(subset=['Final Category', 'MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'])
