@@ -1,118 +1,90 @@
-import os
-import glob
-import re
 import pandas as pd
 import spacy
+from collections import Counter
+from itertools import islice
+from pathlib import Path
+import os
+import time
 from multiprocessing import Pool, cpu_count
 
-# Load spaCy model globally (each process loads separately)
-nlp = spacy.load("en_core_web_sm")
+nlp = spacy.load("en_core_web_sm", disable=["ner", "parser", "tagger"])
 
-# RULE_HINT logic using spaCy (batched via nlp.pipe)
-def compute_rule_hint_column(series):
-    hints = []
-    for doc in nlp.pipe(series.fillna('').astype(str), disable=["ner", "parser", "tagger"]):
-        lemmas = set(token.lemma_ for token in doc)
-        if lemmas & {'api', 'active'}:
-            hints.append('API')
-        elif lemmas & {'cream', 'gel', 'emulsion', 'ointment', 'moisturiser'}:
-            hints.append('Liquids and Creams')
-        elif lemmas & {'bottle', 'cap', 'carton', 'label', 'cotton', 'lotion', 'mouthwash', 'pkg', 'pack', 'karton', 'package'}:
-            hints.append('PKG')
-        elif lemmas & {'excipient', 'binder', 'bind', 'filler', 'fill', 'lubricant', 'lubricate', 'acid'}:
-            hints.append('CHM')
-        else:
-            hints.append(None)
-    return pd.Series(hints, index=series.index)
+input_path = './data/target_map_cleaned'
+output_path = Path('./data/gram_outputs/frequent_terms_by_category')
+output_path.mkdir(parents=True, exist_ok=True)
 
-# Flat unit group dictionary for fast mapping
-unit_group_map = {
-    'KG': 'CHM', 'KGS': 'CHM', 'KGA': 'CHM', 'KGW': 'CHM', 'G': 'CHM', 'GR': 'CHM', 'GM': 'CHM', 'MG': 'CHM',
-    'LB': 'CHM', 'LBS': 'CHM', 'OZ': 'CHM', 'OZA': 'CHM', 'GW': 'CHM', 'TON': 'CHM', 'DR': 'CHM',
-    'L': 'Liquid', 'LT': 'Liquid', 'ML': 'Liquid', 'CC': 'Liquid', 'CL': 'Liquid', 'CCM': 'Liquid', 'GLL': 'Liquid',
-    'EA': 'Discrete', 'PC': 'Discrete', 'PCS': 'Discrete', 'Pcs': 'Discrete', 'PKT': 'Discrete', 'PK': 'Discrete',
-    'PAK': 'Discrete', 'PCK': 'Discrete', 'CS': 'Discrete', 'CSE': 'Discrete', 'CT': 'Discrete', 'CA': 'Discrete',
-    'ST': 'Discrete', 'GRO': 'Discrete', 'BX': 'Discrete',
-    'BOT': 'Containers', 'BOTTLE': 'Containers', 'ROLL': 'Containers', 'ROL': 'Containers', 'REEL': 'Containers',
-    'KAR': 'Containers',
-    'FT': 'Dimensional', 'YD': 'Dimensional', 'KM': 'Dimensional', 'DM': 'Dimensional', 'M': 'Dimensional',
-    'M1': 'Dimensional', 'M2': 'Dimensional', 'KM2': 'Dimensional', 'YD2': 'Dimensional', 'FT3': 'Dimensional',
-    'SQM': 'Dimensional', 'sqm': 'Dimensional', 'MYD': 'Dimensional', 'MI': 'Dimensional', 'SM': 'Dimensional',
-    'LM': 'Dimensional', 'LF': 'Dimensional', 'MH': 'Dimensional', 'KN': 'Dimensional', 'CH': 'Dimensional',
-    'TH': 'Unclassified', 'THU': 'Unclassified', 'IM': 'Unclassified', 'NOS': 'Unclassified', 'NO': 'Unclassified',
-    'TS': 'Unclassified', 'KA': 'Unclassified', 'ZPC': 'Unclassified', 'ZCT': 'Unclassified', '0%': 'Unclassified',
-    'KP': 'Unclassified', 'GP': 'Unclassified', 'KAI': 'Unclassified', 'SY': 'Unclassified', 'UN': 'Unclassified',
-    'MU': 'Unclassified', 'UM': 'Unclassified', 'HU': 'Unclassified'
-}
+required_cols = ['Final Category','MATL_SHRT_DESC_AND_CMPNT_MATL_DESC']
+threshold = 10
 
-# Process a single file
-def process_file(file):
+def process_category(category, descriptions, threshold):
+    unique_words = []
+
+    for desc in descriptions:
+        doc = nlp(desc)
+        words = {token.lemma_ for token in doc if token.is_alpha and not token.is_stop}
+        unique_words.extend(words)
+
+    unigram_counts = Counter(unique_words)
+
+    unigrams = [
+        {'category': category, 'word': word, 'count': count}
+        for word, count in unigram_counts.items() if count >= threshold
+    ]
+
+    # Bigrams: normal frequency with repetition allowed (no deduplication per row)
+    bigram_words = []
+    for desc in descriptions:
+        doc = nlp(desc)
+        words = [token.lemma_ for token in doc if token.is_alpha and not token.is_stop]
+        bigram_words.extend(zip(words, islice(words, 1, None)))
+
+    bigram_counts = Counter(bigram_words)
+    bigrams = [
+        {'category': category, 'bigram': f'{w1} {w2}', 'count': count}
+        for (w1, w2), count in bigram_counts.items() if count >= threshold
+    ]
+
+    return unigrams, bigrams
+
+def process_file(file_path_str):
+    file_path = Path(file_path_str)
+    start_time = time.time()
+
     try:
-        df = pd.read_parquet(file)
+        df = pd.read_parquet(file_path, columns=required_cols)
+        df = df[df['Final Category'].notna()]
+        df['CMPNT_MATL_DESC'] = df['CMPNT_MATL_DESC'].fillna('').str.lower()
 
-        # Clean CMPNT_CAT_CD_DESC into CMPNT_CAT_CLEAN
-        df['CMPNT_CAT_CLEAN'] = (
-            df['CMPNT_CAT_CD_DESC']
-            .fillna('')
-            .str.lower()
-            .str.replace(r'[^a-z0-9\s]', ' ', regex=True)
-            .str.replace(r'\s+', ' ', regex=True)
-            .str.strip()
-            .replace('', pd.NA)
-        )
+        file_unigrams = []
+        file_bigrams = []
 
-        # Combine with MATL_SHRT_DESC_AND_CMPNT_MATL_DESC for richer RULE_HINT
-        combined_text = (
-            df['CMPNT_CAT_CLEAN'].fillna('') + ' ' +
-            df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'].fillna('')
-        ).str.strip()
+        for category, group in df.groupby('Final Category'):
+            unigrams, bigrams = process_category(category, group['CMPNT_MATL_DESC'].tolist(), threshold)
+            file_unigrams.extend(unigrams)
+            file_bigrams.extend(bigrams)
 
-        # Apply RULE_HINT
-        df['RULE_HINT'] = compute_rule_hint_column(combined_text)
+        duration = time.time() - start_time
+        print(f" Processed {file_path.name} in {duration:.2f}s")
 
-        # Assign UNIT_GROUP
-        df['UNIT_GROUP'] = (
-            df['CMPNT_UOM_CD']
-            .fillna('')
-            .str.upper()
-            .map(unit_group_map)
-            .fillna('Unclassified')
-        )
+        return file_unigrams, file_bigrams
 
-        # Save to new folder
-        output_file = file.replace("target_map_cleaned", "target_map_with_rules")
-        os.makedirs(os.path.dirname(output_file), exist_ok=True)
-        df.to_parquet(output_file, index=False)
-
-        print(f"✅ Done: {os.path.basename(file)}")
     except Exception as e:
-        print(f"❌ Failed: {os.path.basename(file)} -> {e}")
+        print(f" Failed on {file_path.name}: {e}")
+        return [], []
 
-# Main: run in parallel
-if __name__ == '__main__':
-    input_path = './data/target_map_cleaned'
-    all_files = glob.glob(os.path.join(input_path, '*.parquet'))
+# Gather all parquet files
+all_files = [str(f) for f in Path(input_path).glob("*.parquet")]
+print(f" Total files to process: {len(all_files)}")
 
-    with Pool(processes=cpu_count()) as pool:
-        pool.map(process_file, all_files)
+all_unigrams, all_bigrams = [], []
 
+# Process in parallel using multiprocessing
+with Pool(processes=cpu_count()) as pool:
+    for unigrams, bigrams in pool.map(process_file, all_files):
+        all_unigrams.extend(unigrams)
+        all_bigrams.extend(bigrams)
 
-
-/anaconda/envs/azureml_py38/lib/python3.10/site-packages/torch/cuda/__init__.py:734: UserWarning: Can't initialize NVML
-  warnings.warn("Can't initialize NVML")
-/anaconda/envs/azureml_py38/lib/python3.10/site-packages/spacy/pipeline/lemmatizer.py:211: UserWarning: [W108] The rule-based lemmatizer did not find POS annotation for one or more tokens. Check that your pipeline includes components that assign token.pos, typically 'tagger'+'attribute_ruler' or 'morphologizer'.
-  warnings.warn(Warnings.W108)
-/anaconda/envs/azureml_py38/lib/python3.10/site-packages/spacy/pipeline/lemmatizer.py:211: UserWarning: [W108] The rule-based lemmatizer did not find POS annotation for one or more tokens. Check that your pipeline includes components that assign token.pos, typically 'tagger'+'attribute_ruler' or 'morphologizer'.
-  warnings.warn(Warnings.W108)
-/anaconda/envs/azureml_py38/lib/python3.10/site-packages/spacy/pipeline/lemmatizer.py:211: UserWarning: [W108] The rule-based lemmatizer did not find POS annotation for one or more tokens. Check that your pipeline includes components that assign token.pos, typically 'tagger'+'attribute_ruler' or 'morphologizer'.
-  warnings.warn(Warnings.W108)
-/anaconda/envs/azureml_py38/lib/python3.10/site-packages/spacy/pipeline/lemmatizer.py:211: UserWarning: [W108] The rule-based lemmatizer did not find POS annotation for one or more tokens. Check that your pipeline includes components that assign token.pos, typically 'tagger'+'attribute_ruler' or 'morphologizer'.
-  warnings.warn(Warnings.W108)
-/anaconda/envs/azureml_py38/lib/python3.10/site-packages/spacy/pipeline/lemmatizer.py:211: UserWarning: [W108] The rule-based lemmatizer did not find POS annotation for one or more tokens. Check that your pipeline includes components that assign token.pos, typically 'tagger'+'attribute_ruler' or 'morphologizer'.
-  warnings.warn(Warnings.W108)
-/anaconda/envs/azureml_py38/lib/python3.10/site-packages/spacy/pipeline/lemmatizer.py:211: UserWarning: [W108] The rule-based lemmatizer did not find POS annotation for one or more tokens. Check that your pipeline includes components that assign token.pos, typically 'tagger'+'attribute_ruler' or 'morphologizer'.
-  warnings.warn(Warnings.W108)
-/anaconda/envs/azureml_py38/lib/python3.10/site-packages/spacy/pipeline/lemmatizer.py:211: UserWarning: [W108] The rule-based lemmatizer did not find POS annotation for one or more tokens. Check that your pipeline includes components that assign token.pos, typically 'tagger'+'attribute_ruler' or 'morphologizer'.
-  warnings.warn(Warnings.W108)
-/anaconda/envs/azureml_py38/lib/python3.10/site-packages/spacy/pipeline/lemmatizer.py:211: UserWarning: [W108] The rule-based lemmatizer did not find POS annotation for one or more tokens. Check that your pipeline includes components that assign token.pos, typically 'tagger'+'attribute_ruler' or 'morphologizer'.
-  warnings.warn(Warnings.W108)
+# Save outputs
+pd.DataFrame(all_unigrams).to_csv(output_path / "all_categories_unigrams.csv", index=False)
+pd.DataFrame(all_bigrams).to_csv(output_path / "all_categories_bigrams.csv", index=False)
+print(" Saved unigrams and bigrams.")
