@@ -7,7 +7,7 @@ import os
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-# Global NLP model (loaded per worker)
+# Global NLP model (loaded per process)
 nlp = None
 def init_spacy():
     global nlp
@@ -20,35 +20,48 @@ output_path = Path('./data/gram_outputs/frequent_terms_by_category')
 output_path.mkdir(parents=True, exist_ok=True)
 required_cols = ['Final Category', 'MATL_SHRT_DESC_AND_CMPNT_MATL_DESC']
 threshold = 10
+num_chunks = 3  # Number of in-memory chunks per file
 
-def process_file(file_path_str):
+# Main chunk processor
+def process_dataframe_chunk(df_chunk, chunk_name):
     init_spacy()
-    file_path = Path(file_path_str)
     start_time = time.time()
+    unigram_freq = defaultdict(Counter)
+    bigram_freq = defaultdict(Counter)
+
+    for category, group in df_chunk.groupby('Final Category'):
+        texts = group['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'].astype(str).tolist()
+        for doc in nlp.pipe(texts, batch_size=100, n_process=2):
+            words = [token.lemma_ for token in doc if token.is_alpha and not token.is_stop]
+            unigram_freq[category].update(set(words))
+            bigram_freq[category].update(zip(words, islice(words, 1, None)))
+
+    print(f"✅ {chunk_name} in {time.time() - start_time:.2f}s")
+    return unigram_freq, bigram_freq
+
+# Load file and split into N chunks
+def split_and_submit(file_path, executor, futures):
     try:
         df = pd.read_parquet(file_path, columns=required_cols)
-        df = df[df['Final Category'].notna()]
-        df = df.dropna(subset=['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'])
+        df = df.dropna(subset=['Final Category', 'MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'])
+        df = df[df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'].str.strip() != '']
         df = df.drop_duplicates(subset=['Final Category', 'MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'])
 
-        unigram_freq = defaultdict(Counter)
-        bigram_freq = defaultdict(Counter)
+        total_len = len(df)
+        if total_len == 0:
+            print(f"⚠️ Skipped {file_path.name} (empty after filtering)")
+            return
 
-        for category, group in df.groupby('Final Category'):
-            texts = group['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'].astype(str).tolist()
-
-            for doc in nlp.pipe(texts, batch_size=100, n_process=2):
-                words = [token.lemma_ for token in doc if token.is_alpha and not token.is_stop]
-                unigram_freq[category].update(set(words))  # unique per row
-                bigrams = zip(words, islice(words, 1, None))
-                bigram_freq[category].update(bigrams)
-
-        print(f"✅ {file_path.name} in {time.time() - start_time:.2f}s")
-        return unigram_freq, bigram_freq
+        chunk_size = total_len // num_chunks
+        for i in range(num_chunks):
+            start = i * chunk_size
+            end = None if i == num_chunks - 1 else (i + 1) * chunk_size
+            chunk = df.iloc[start:end].copy()
+            chunk_id = f"{Path(file_path).stem}_chunk{i}"
+            futures.append(executor.submit(process_dataframe_chunk, chunk, chunk_id))
 
     except Exception as e:
-        print(f"❌ {file_path.name}: {e}")
-        return defaultdict(Counter), defaultdict(Counter)
+        print(f"❌ Failed to split {file_path}: {e}")
 
 if __name__ == '__main__':
     all_files = list(Path(input_path).glob("*.parquet"))
@@ -58,7 +71,10 @@ if __name__ == '__main__':
     global_bigrams = defaultdict(Counter)
 
     with ProcessPoolExecutor(max_workers=6) as executor:
-        futures = [executor.submit(process_file, str(f)) for f in all_files]
+        futures = []
+        for file_path in all_files:
+            split_and_submit(file_path, executor, futures)
+
         for f in as_completed(futures):
             file_unigrams, file_bigrams = f.result()
             for cat in file_unigrams:
@@ -100,7 +116,3 @@ if __name__ == '__main__':
     pd.DataFrame(unigram_rows).to_csv(output_path / "all_categories_unigrams.csv", index=False)
     pd.DataFrame(bigram_rows).to_csv(output_path / "all_categories_bigrams.csv", index=False)
     print("✅ Saved final unigram and bigram CSV files.")
-
-
-📁 Total files: 778
-✅ mapped_file100.parquet in 2965.86s
