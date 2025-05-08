@@ -1,92 +1,10 @@
-import pandas as pd
-import spacy
-from collections import Counter, defaultdict
-from itertools import islice
-from pathlib import Path
-import os
-import time
-from concurrent.futures import ProcessPoolExecutor, as_completed
-import pickle
-
-# Load spaCy only in worker
-nlp = None
-def init_spacy():
-    global nlp
-    if nlp is None:
-        nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])
-
-input_path = './data/target_map_cleaned'
-output_path = Path('./data/gram_outputs/frequent_terms_by_category')
-output_path.mkdir(parents=True, exist_ok=True)
-
-required_cols = ['Final Category', 'MATL_SHRT_DESC_AND_CMPNT_MATL_DESC']
-threshold = 10
-
-def process_file(file_path_str):
-    init_spacy()
-    file_path = Path(file_path_str)
-    start_time = time.time()
-    try:
-        df = pd.read_parquet(file_path, columns=required_cols)
-        df = df[df['Final Category'].notna()]
-        df = df.dropna(subset=['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'])
-
-        unigram_freq = defaultdict(Counter)
-        bigram_freq = defaultdict(Counter)
-
-        for category, group in df.groupby('Final Category'):
-            texts = group['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'].astype(str).tolist()
-
-            for doc in nlp.pipe(texts, batch_size=100):
-                words = [token.lemma_ for token in doc if token.is_alpha and not token.is_stop]
-
-                # Unigrams - unique per row
-                unigram_freq[category].update(set(words))
-
-                # Bigrams - repeated
-                bigrams = zip(words, islice(words, 1, None))
-                bigram_freq[category].update(bigrams)
-
-        print(f"✅ {file_path.name} in {time.time() - start_time:.2f}s")
-        return unigram_freq, bigram_freq
-
-    except Exception as e:
-        print(f"❌ {file_path.name}: {e}")
-        return defaultdict(Counter), defaultdict(Counter)
-
-if __name__ == '__main__':
-    all_files = list(Path(input_path).glob("*.parquet"))
-    print(f"📁 Total files: {len(all_files)}")
-
-    global_unigrams = defaultdict(Counter)
-    global_bigrams = defaultdict(Counter)
-
-    with ProcessPoolExecutor(max_workers=cpu_count()) as executor:
-        futures = [executor.submit(process_file, str(f)) for f in all_files]
-        for f in as_completed(futures):
-            file_unigrams, file_bigrams = f.result()
-
-            for cat in file_unigrams:
-                global_unigrams[cat].update(file_unigrams[cat])
-            for cat in file_bigrams:
-                global_bigrams[cat].update(file_bigrams[cat])
-
-    # Flatten and filter results
-    unigram_rows = []
-    for cat, counter in global_unigrams.items():
-        unigram_rows.extend([
-            {'category': cat, 'word': word, 'count': count}
-            for word, count in counter.items() if count >= threshold
-        ])
-
-    bigram_rows = []
-    for cat, counter in global_bigrams.items():
-        bigram_rows.extend([
-            {'category': cat, 'bigram': f"{w1} {w2}", 'count': count}
-            for (w1, w2), count in counter.items() if count >= threshold
-        ])
-
-    # Save to CSV
-    pd.DataFrame(unigram_rows).to_csv(output_path / "all_categories_unigrams.csv", index=False)
-    pd.DataFrame(bigram_rows).to_csv(output_path / "all_categories_bigrams.csv", index=False)
-    print("✅ Saved optimized unigrams and bigrams.")
+✅ Processed mapped_file169.parquet in 1962.80s
+✅ Processed mapped_file123.parquet in 1917.78s
+✅ Processed mapped_file191.parquet in 1967.78s
+✅ Processed mapped_file259.parquet in 2105.67s
+✅ Processed mapped_file100.parquet in 1906.36s
+✅ Processed mapped_file146.parquet in 2029.14s
+✅ Processed mapped_file213.parquet in 2079.44s
+✅ Processed mapped_file236.parquet in 2087.85s
+✅ Processed mapped_file124.parquet in 1903.12s
+✅ Processed mapped_file26.parquet in 1961.25s
