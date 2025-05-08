@@ -1,120 +1,2821 @@
-import pandas as pd
-import spacy
-from collections import Counter, defaultdict
-from itertools import islice
-from pathlib import Path
-import os
-import time
-from concurrent.futures import ProcessPoolExecutor, as_completed
+---------------------------------------------------------------------------
+FileNotFoundError                         Traceback (most recent call last)
+Cell In[1], line 2
+      1 import os
+----> 2 os.chdir("null/Users/AChava05")
 
-# Global NLP model (loaded per process)
-nlp = None
-def init_spacy():
-    global nlp
-    if nlp is None:
-        nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])
+FileNotFoundError: [Errno 2] No such file or directory: 'null/Users/AChava05'
+{'infer_column_types': 'False', 'activity': 'download'}
+{'infer_column_types': 'False', 'activity': 'download', 'activityApp': 'FileDataset'}
+['/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-005c8307-5baf-4d69-9965-89b2c801ed43-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-05514bfe-46fe-4b53-aac5-5a321831f46a-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-0841159b-cbfb-43ec-817f-95c45519bb20-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-0cc1158a-5dd7-470d-ab4e-f209de134e05-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-1330431e-1bb8-42ff-94e4-a3c0d25873dc-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-1751308e-b846-400c-84bb-f2e618adc433-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-1e3fbe40-c307-4d37-a055-880e70df03ad-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-2326dcbe-a5f5-44cb-8674-29b3ec9d0a5a-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-285e2ae3-a04d-4bbb-88f1-f81d77996693-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-2c23f659-f0a5-4b41-867f-51a314ff03de-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-2e78b152-87f8-475b-acf0-bf6c83c91fe1-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-35b47b84-014d-4656-84b1-590ede9b2082-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-37c66b28-0be1-48eb-9839-3c7848f99e99-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-3d1fa917-2338-4c57-b5b9-64f101ec0962-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-40f723cd-b68c-4399-97c0-0d44c729ca68-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-451867b5-a7d3-4d18-a012-d363ea053d72-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-48e9580c-4390-4d44-ab0e-50b647c31520-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-4c4b59d3-de96-4967-a444-36962a898554-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-5005fc57-4409-4465-8ada-9c80d94c4afd-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-5a95fe0c-d639-4023-92e6-0272a646add8-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-611e7d01-be88-477a-913e-4053e81ffaef-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-642c0dc7-f2d7-4ef1-9273-c8e27f27abef-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-6a3c993c-f37a-421d-9d9e-059161b1c75f-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-6e6afbe0-95d9-4600-bde5-cb0d11bf5ecc-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-71b378c5-09b8-4601-835e-b4facab1db04-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-7366ae44-d111-4cc1-b267-caee472d9a7c-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-77794955-e4ee-4b7c-a9de-874131653f7b-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-7aa5ac6e-c3f6-4e7e-ad9b-0e0b757b5d27-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-7ee59d80-47e8-49b4-9b7c-c818afe28dad-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-8306797f-250a-486b-9083-9aaf3d75140a-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-88c58253-cc21-46fa-95d2-167571932f48-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-8ded6bf9-ba6a-4725-b6fc-d462f0787089-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-926a1d2b-ff28-480e-a775-0f56705e3e3b-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-976ab280-cc85-437c-8693-37102f9d17e9-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-9c00a131-c362-4747-a5bf-f09ba54c66ff-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-9eae5fde-f849-46c1-a8a3-500d5604c7c9-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-a3f624c7-d00e-4201-958b-560526357947-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-a8ff7b57-141d-4432-a91c-2aca8f77f272-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-ac5ffa87-0ef5-48b9-94de-a7ec57a39973-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-afeeaa0e-098e-4b68-a404-4aa204abfbc1-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-b5d7a9cd-e715-4bce-9ba3-844158189822-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-baae34d8-7aab-4b69-b973-405722d0fa7e-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-bfc92c28-e884-492b-8f2a-375b33d2fe74-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-c54041bb-473f-43db-b212-328e4a850321-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-c95557a1-ee88-4721-a771-bbb3ec3bd4c9-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-cd27938d-d246-4a07-af39-e4896bd6fd88-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-d0c79c86-5883-4bd2-827f-d068780b5702-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-d46dfcf0-f1d6-4744-a9d1-4afb1813db5c-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-d8aad0c1-7f59-4a92-906e-c1b8d05cefc2-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-dce45be9-ec74-4d87-b717-a8c1c920adda-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-e3121465-c9e6-4a8d-bf32-2c9315c5cb61-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-e735deb7-e448-48e9-90bb-b1a1e93681fa-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-ebcdd864-3b49-4907-9190-c83a9fecfc30-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-eff339ac-538a-4ec8-b729-8db6d06ee732-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-f2b8278d-4357-4759-bcaf-99d444cf984f-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-f8c169e7-2dca-41db-b52f-535fec93ca38-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00000-fd44344d-c622-46fe-ab5b-7a7bf28ddb72-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-00f22e32-3508-48d4-96fb-32ccacc19ef9-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-0930ab56-1778-416b-9af5-9f892c785d13-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-0d14ef5a-8931-403b-b6db-e14e8fb0b5cc-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-11a08831-c0fb-4271-b394-30b1092d1b2d-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-1658adad-a821-476b-96f4-f6bf0eabc2d6-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-1999c2e1-8f2e-4f0e-8923-a5616c3f4883-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-1f69870e-9b38-4efe-aa25-45c1c7c2ac5c-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-24106685-282c-4c1c-80b8-769953f36db6-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-2a4a714d-6027-496a-8d09-691b4f3fa26e-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-2f048b79-2081-4b4c-981d-799021ecf986-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-35ee218f-6a82-4ea3-a3e7-7972d83249fc-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-3ab862a7-96f2-428e-addd-82a727ec27cc-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-3f711fe9-bab2-45f7-acb6-784add1e23ce-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-443c735b-ca71-46fe-ad83-d84b1fcc36f7-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-495bc8d7-ebd8-408f-80ff-a58258d81509-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-5194702b-7764-4613-ac1f-894d5ca5033b-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-57981860-ac09-4ed8-b532-cf3f22fc8f0e-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-5ff0cd03-66b4-488c-8ba9-ee715c835530-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-647337d4-f6bb-4333-ae66-1161d89624cc-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-69e2d52e-0e2c-46e2-b7a5-485a0e714fc4-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-6fbd03c5-84cc-4e1b-b418-91813e2c4aa8-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-780041a9-7fb9-4cfd-a8b2-e498189fa8d5-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-7a6fe263-ba96-4026-b634-76af31c51346-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-80cb0f03-5d94-4367-9a0a-863c1bcea245-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-86f47aad-d298-4f7d-92b4-bb6b3d8660bb-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-8e6616a7-d754-4428-8d03-2abc8e675193-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-959bfc15-2bc5-41fc-837e-8d91cc621adc-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-997fc7ad-b677-472f-b059-308b53a6d933-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-9f0bffde-b2c4-40fb-bf24-aa3083958c77-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-a6252ad9-332d-4f42-a2b2-21636f1e854a-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-aed29810-7da1-4d4d-b682-d56562117e03-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-b4b9555d-a321-4e28-b5cf-cc3386867c70-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-bd09f859-cf56-4c3a-a8ff-ac23b4318d42-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-c3d87543-9649-440b-8e23-82ba1dd255b6-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-c90ef48a-a360-4563-8650-8216e7117946-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-d1aa6de1-831e-4429-aab8-ccc09f187cca-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-db54b385-af7d-4bb9-8a5f-e24f4262f336-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-ddd6f159-5c82-47f8-b425-d9cf7a6be89c-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-e9b9e6be-c3c1-4a93-b186-b201c56c709e-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-f5f62eef-570c-4dad-a222-8f00424eda81-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/part-00001-fe321408-b0c9-4c0d-a5c5-4f1d4f372554-c000.snappy.parquet',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000401.json',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000405.json',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000409.json',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000413.json',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000417.json',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000421.json',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000425.json',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000429.json',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000433.00000000000000000438.compacted.json',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000436.json',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000440.crc',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000444.crc',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000447.json',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000451.crc',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000455.crc',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000458.json',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000462.json',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000466.json',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000469.json',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000473.json',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000477.crc',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000481.00000000000000000486.compacted.json',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000484.json',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000488.crc',
+ '/mnt/batch/tasks/shared/LS_root/mounts/clusters/achava051/code/Users/AChava05/data/parquet_files/_delta_log/00000000000000000492.crc',… 
+Show all (158 kB)
+🔄 Start: part-00000-005c8307-5baf-4d69-9965-89b2c801ed43-c000.snappy.parquet
+🔄 Start: part-00000-00e55954-f624-4448-8d4a-630a7e979cd4-c000.snappy.parquet
+🔄 Start: part-00000-014f46da-9150-4c6f-8cc8-f028c8f619f4-c000.snappy.parquet
+🔄 Start: part-00000-0163baea-37f4-42a3-9435-a9b3f43335fc-c000.snappy.parquet
+🔄 Start: part-00000-019aeb7d-5b3c-4096-813f-634096c6cfed-c000.snappy.parquet
+🔄 Start: part-00000-01cc3193-4691-48a3-87bf-d5ca1a9883e7-c000.snappy.parquet
+🔄 Start: part-00000-021a2da5-a83b-4948-ad15-b74619761e1f-c000.snappy.parquet
+🔄 Start: part-00000-02a73b56-5231-4798-b55e-18ebbf90291b-c000.snappy.parquet
+✅ Done: part-00000-00e55954-f624-4448-8d4a-630a7e979cd4-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file1.parquet | ⏱️ 8.09s
+🔄 Start: part-00000-05514bfe-46fe-4b53-aac5-5a321831f46a-c000.snappy.parquet
+✅ Done: part-00000-0163baea-37f4-42a3-9435-a9b3f43335fc-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file3.parquet | ⏱️ 8.60s
+🔄 Start: part-00000-057a7d72-e2ee-4cf2-a94b-b04614479fa8-c000.snappy.parquet
+✅ Done: part-00000-021a2da5-a83b-4948-ad15-b74619761e1f-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file6.parquet | ⏱️ 8.81s
+🔄 Start: part-00000-057f9a85-04d1-4fcc-84b0-5d03b6865e72-c000.snappy.parquet
+✅ Done: part-00000-014f46da-9150-4c6f-8cc8-f028c8f619f4-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file2.parquet | ⏱️ 9.19s
+🔄 Start: part-00000-058fd04e-a751-47e3-9bdf-4a32490184f6-c000.snappy.parquet
+✅ Done: part-00000-02a73b56-5231-4798-b55e-18ebbf90291b-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file7.parquet | ⏱️ 9.69s
+🔄 Start: part-00000-05900427-8845-4720-ae4d-2491ac301aa6-c000.snappy.parquet
+✅ Done: part-00000-005c8307-5baf-4d69-9965-89b2c801ed43-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file0.parquet | ⏱️ 10.04s
+🔄 Start: part-00000-060f58bc-2204-4eeb-8e4f-3bb76e6e2702-c000.snappy.parquet
+✅ Done: part-00000-01cc3193-4691-48a3-87bf-d5ca1a9883e7-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file5.parquet | ⏱️ 10.17s
+🔄 Start: part-00000-068153f8-5214-4cb6-a0c7-f8943f29c9fa-c000.snappy.parquet
+✅ Done: part-00000-019aeb7d-5b3c-4096-813f-634096c6cfed-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file4.parquet | ⏱️ 12.34s
+🔄 Start: part-00000-0736bc58-9bae-4ee5-b2a5-d092bf333faa-c000.snappy.parquet
+✅ Done: part-00000-05514bfe-46fe-4b53-aac5-5a321831f46a-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file8.parquet | ⏱️ 6.86s
+🔄 Start: part-00000-0841159b-cbfb-43ec-817f-95c45519bb20-c000.snappy.parquet
+✅ Done: part-00000-057a7d72-e2ee-4cf2-a94b-b04614479fa8-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file9.parquet | ⏱️ 6.62s
+🔄 Start: part-00000-095099e1-d9cc-451a-bff2-db06a382d424-c000.snappy.parquet
+✅ Done: part-00000-057f9a85-04d1-4fcc-84b0-5d03b6865e72-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file10.parquet | ⏱️ 8.75s
+🔄 Start: part-00000-0952feaf-b0c3-4276-8a55-e91b37e6ba21-c000.snappy.parquet
+✅ Done: part-00000-058fd04e-a751-47e3-9bdf-4a32490184f6-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file11.parquet | ⏱️ 8.49s
+🔄 Start: part-00000-0ac46ff6-f83e-4730-b617-cc1079532c60-c000.snappy.parquet
+✅ Done: part-00000-060f58bc-2204-4eeb-8e4f-3bb76e6e2702-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file13.parquet | ⏱️ 7.76s
+🔄 Start: part-00000-0b67b88b-f28a-4639-b6fa-a8c1d7b515a2-c000.snappy.parquet
+✅ Done: part-00000-068153f8-5214-4cb6-a0c7-f8943f29c9fa-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file14.parquet | ⏱️ 9.82s
+🔄 Start: part-00000-0b8ff58c-9401-49f8-ac20-b1b65cc39cdc-c000.snappy.parquet
+✅ Done: part-00000-05900427-8845-4720-ae4d-2491ac301aa6-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file12.parquet | ⏱️ 10.37s
+🔄 Start: part-00000-0bc02be0-7619-4587-9e27-268ba4ee5cc7-c000.snappy.parquet
+✅ Done: part-00000-095099e1-d9cc-451a-bff2-db06a382d424-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file17.parquet | ⏱️ 7.13s
+🔄 Start: part-00000-0c1a6ee3-e9bb-47f8-b2c6-17507527545d-c000.snappy.parquet
+✅ Done: part-00000-0841159b-cbfb-43ec-817f-95c45519bb20-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file16.parquet | ⏱️ 8.06s
+🔄 Start: part-00000-0cc1158a-5dd7-470d-ab4e-f209de134e05-c000.snappy.parquet
+✅ Done: part-00000-0736bc58-9bae-4ee5-b2a5-d092bf333faa-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file15.parquet | ⏱️ 11.31s
+🔄 Start: part-00000-0cfb6c25-e4a4-430f-98f6-a89a54f296c6-c000.snappy.parquet
+✅ Done: part-00000-0952feaf-b0c3-4276-8a55-e91b37e6ba21-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file18.parquet | ⏱️ 6.32s
+🔄 Start: part-00000-0e40de41-faea-4473-830d-a6e0e334ea2e-c000.snappy.parquet
+✅ Done: part-00000-0ac46ff6-f83e-4730-b617-cc1079532c60-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file19.parquet | ⏱️ 8.54s
+🔄 Start: part-00000-0ec5d782-1649-4ffa-97b4-bf1b34482d6c-c000.snappy.parquet
+✅ Done: part-00000-0b8ff58c-9401-49f8-ac20-b1b65cc39cdc-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file21.parquet | ⏱️ 8.23s
+🔄 Start: part-00000-105aa86b-87a2-493a-8fe7-cfac086e0f26-c000.snappy.parquet
+✅ Done: part-00000-0b67b88b-f28a-4639-b6fa-a8c1d7b515a2-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file20.parquet | ⏱️ 11.05s
+🔄 Start: part-00000-1125a224-bf60-4ffc-80ec-9b8c872a9202-c000.snappy.parquet
+✅ Done: part-00000-0bc02be0-7619-4587-9e27-268ba4ee5cc7-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file22.parquet | ⏱️ 9.16s
+🔄 Start: part-00000-12f56c58-6990-4d15-a6f1-4ee960266ec9-c000.snappy.parquet
+✅ Done: part-00000-0cc1158a-5dd7-470d-ab4e-f209de134e05-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file24.parquet | ⏱️ 9.32s
+🔄 Start: part-00000-131aed1f-75c4-4d99-97ca-3244c74b3135-c000.snappy.parquet
+✅ Done: part-00000-0cfb6c25-e4a4-430f-98f6-a89a54f296c6-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file25.parquet | ⏱️ 8.69s
+🔄 Start: part-00000-1330431e-1bb8-42ff-94e4-a3c0d25873dc-c000.snappy.parquet
+✅ Done: part-00000-0c1a6ee3-e9bb-47f8-b2c6-17507527545d-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file23.parquet | ⏱️ 10.27s
+🔄 Start: part-00000-1344e61b-e618-4e08-b2a3-eb9e9866b313-c000.snappy.parquet
+✅ Done: part-00000-0e40de41-faea-4473-830d-a6e0e334ea2e-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file26.parquet | ⏱️ 8.73s
+🔄 Start: part-00000-136bd500-7b00-4351-9650-c0ae62078703-c000.snappy.parquet
+✅ Done: part-00000-0ec5d782-1649-4ffa-97b4-bf1b34482d6c-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file27.parquet | ⏱️ 8.01s
+🔄 Start: part-00000-13774036-ac6c-4721-acbd-6115be411b1f-c000.snappy.parquet
+✅ Done: part-00000-1125a224-bf60-4ffc-80ec-9b8c872a9202-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file29.parquet | ⏱️ 6.51s
+🔄 Start: part-00000-14fbf74b-c8d8-46d7-a80e-2831dbab577e-c000.snappy.parquet
+✅ Done: part-00000-105aa86b-87a2-493a-8fe7-cfac086e0f26-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file28.parquet | ⏱️ 8.14s
+🔄 Start: part-00000-150af804-2f24-4c21-97fb-606494fe7449-c000.snappy.parquet
+✅ Done: part-00000-12f56c58-6990-4d15-a6f1-4ee960266ec9-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file30.parquet | ⏱️ 7.66s
+🔄 Start: part-00000-16175bac-b3b1-4501-b9b5-0490cca85417-c000.snappy.parquet
+✅ Done: part-00000-1330431e-1bb8-42ff-94e4-a3c0d25873dc-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file32.parquet | ⏱️ 10.26s
+🔄 Start: part-00000-1684a587-c7d5-45a0-b098-8c92697cf53d-c000.snappy.parquet
+✅ Done: part-00000-136bd500-7b00-4351-9650-c0ae62078703-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file34.parquet | ⏱️ 10.07s
+🔄 Start: part-00000-1751308e-b846-400c-84bb-f2e618adc433-c000.snappy.parquet
+✅ Done: part-00000-1344e61b-e618-4e08-b2a3-eb9e9866b313-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file33.parquet | ⏱️ 10.87s
+🔄 Start: part-00000-17cd666a-36be-44a6-99b9-74fdfdc3c5a7-c000.snappy.parquet
+✅ Done: part-00000-16175bac-b3b1-4501-b9b5-0490cca85417-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file38.parquet | ⏱️ 6.68s
+🔄 Start: part-00000-17ee01a9-12b9-46d6-9735-ae9a6db7b7b8-c000.snappy.parquet
+✅ Done: part-00000-14fbf74b-c8d8-46d7-a80e-2831dbab577e-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file36.parquet | ⏱️ 8.60s
+🔄 Start: part-00000-18d5d8ff-e01b-4f78-bea7-e8ebadd6424c-c000.snappy.parquet
+✅ Done: part-00000-131aed1f-75c4-4d99-97ca-3244c74b3135-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file31.parquet | ⏱️ 11.65s
+🔄 Start: part-00000-19727ad0-fd7e-4278-bea4-42cd38829ac6-c000.snappy.parquet
+✅ Done: part-00000-13774036-ac6c-4721-acbd-6115be411b1f-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file35.parquet | ⏱️ 10.00s
+🔄 Start: part-00000-1d31b7d8-2e1c-46b2-95af-fe4e418e8fee-c000.snappy.parquet
+✅ Done: part-00000-150af804-2f24-4c21-97fb-606494fe7449-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file37.parquet | ⏱️ 8.06s
+🔄 Start: part-00000-1d498eac-b0a8-4df5-be18-353c9789ce46-c000.snappy.parquet
+✅ Done: part-00000-1684a587-c7d5-45a0-b098-8c92697cf53d-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file39.parquet | ⏱️ 5.36s
+🔄 Start: part-00000-1e28021b-d2ea-4466-b9ed-e579a60abfc8-c000.snappy.parquet
+✅ Done: part-00000-1751308e-b846-400c-84bb-f2e618adc433-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file40.parquet | ⏱️ 6.02s
+🔄 Start: part-00000-1e3fbe40-c307-4d37-a055-880e70df03ad-c000.snappy.parquet
+✅ Done: part-00000-17cd666a-36be-44a6-99b9-74fdfdc3c5a7-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file41.parquet | ⏱️ 8.34s
+🔄 Start: part-00000-1e9ef8c9-70b3-4b47-a056-1ddded7aa33d-c000.snappy.parquet
+✅ Done: part-00000-17ee01a9-12b9-46d6-9735-ae9a6db7b7b8-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file42.parquet | ⏱️ 9.04s
+🔄 Start: part-00000-1ebde1f8-a069-4784-9edc-5624c998604b-c000.snappy.parquet
+✅ Done: part-00000-19727ad0-fd7e-4278-bea4-42cd38829ac6-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file44.parquet | ⏱️ 9.09s
+🔄 Start: part-00000-1f15e877-4622-48e8-8c0e-5f207f1c6896-c000.snappy.parquet
+✅ Done: part-00000-18d5d8ff-e01b-4f78-bea7-e8ebadd6424c-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file43.parquet | ⏱️ 10.27s
+🔄 Start: part-00000-1fcd8af2-aee3-46b2-bb42-6c8b0b1ff73c-c000.snappy.parquet
+✅ Done: part-00000-1d498eac-b0a8-4df5-be18-353c9789ce46-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file46.parquet | ⏱️ 11.10s
+🔄 Start: part-00000-2252b6d7-0e3d-4a77-87dd-6ca3267fab02-c000.snappy.parquet
+✅ Done: part-00000-1d31b7d8-2e1c-46b2-95af-fe4e418e8fee-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file45.parquet | ⏱️ 11.32s
+🔄 Start: part-00000-22dd37af-0df4-4866-9572-356d0098c79b-c000.snappy.parquet
+✅ Done: part-00000-1e28021b-d2ea-4466-b9ed-e579a60abfc8-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file47.parquet | ⏱️ 7.93s
+🔄 Start: part-00000-2317b4c8-ae9c-480e-bac8-a9a39a408cef-c000.snappy.parquet
+✅ Done: part-00000-1e3fbe40-c307-4d37-a055-880e70df03ad-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file48.parquet | ⏱️ 9.45s
+🔄 Start: part-00000-2326dcbe-a5f5-44cb-8674-29b3ec9d0a5a-c000.snappy.parquet
+✅ Done: part-00000-1e9ef8c9-70b3-4b47-a056-1ddded7aa33d-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file49.parquet | ⏱️ 7.90s
+🔄 Start: part-00000-233b1281-2c67-4968-b92c-22fec3a71a14-c000.snappy.parquet
+✅ Done: part-00000-1ebde1f8-a069-4784-9edc-5624c998604b-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file50.parquet | ⏱️ 8.06s
+🔄 Start: part-00000-25b04900-c98b-4404-972f-f0901bb5e078-c000.snappy.parquet
+✅ Done: part-00000-1f15e877-4622-48e8-8c0e-5f207f1c6896-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file51.parquet | ⏱️ 8.50s
+🔄 Start: part-00000-25e79609-fb90-41fd-97bd-4dedb0f5094a-c000.snappy.parquet
+✅ Done: part-00000-2317b4c8-ae9c-480e-bac8-a9a39a408cef-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file55.parquet | ⏱️ 6.24s
+🔄 Start: part-00000-2650c7cc-248e-4f74-9514-0764257a4aef-c000.snappy.parquet
+✅ Done: part-00000-22dd37af-0df4-4866-9572-356d0098c79b-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file54.parquet | ⏱️ 9.39s
+🔄 Start: part-00000-2712ea13-10eb-4413-b5d8-dcbe92f4574a-c000.snappy.parquet
+✅ Done: part-00000-1fcd8af2-aee3-46b2-bb42-6c8b0b1ff73c-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file52.parquet | ⏱️ 11.01s
+🔄 Start: part-00000-2753ad8e-c9b7-4dbf-b596-8a1f5d9d77ca-c000.snappy.parquet
+✅ Done: part-00000-2252b6d7-0e3d-4a77-87dd-6ca3267fab02-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file53.parquet | ⏱️ 9.95s
+🔄 Start: part-00000-28507f3d-93f1-40ae-8f9e-d71187bb8eed-c000.snappy.parquet
+✅ Done: part-00000-2326dcbe-a5f5-44cb-8674-29b3ec9d0a5a-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file56.parquet | ⏱️ 9.03s
+🔄 Start: part-00000-285e2ae3-a04d-4bbb-88f1-f81d77996693-c000.snappy.parquet
+✅ Done: part-00000-2650c7cc-248e-4f74-9514-0764257a4aef-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file60.parquet | ⏱️ 6.13s
+🔄 Start: part-00000-299390e9-e9c7-40ac-a811-29f311f0b123-c000.snappy.parquet
+✅ Done: part-00000-233b1281-2c67-4968-b92c-22fec3a71a14-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file57.parquet | ⏱️ 9.17s
+🔄 Start: part-00000-29d0d2d7-ccdd-4142-8797-cfc19aba9e58-c000.snappy.parquet
+✅ Done: part-00000-25b04900-c98b-4404-972f-f0901bb5e078-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file58.parquet | ⏱️ 10.38s
+🔄 Start: part-00000-29fe7d56-4f80-4220-8647-519f2126c376-c000.snappy.parquet
+✅ Done: part-00000-25e79609-fb90-41fd-97bd-4dedb0f5094a-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file59.parquet | ⏱️ 9.60s
+🔄 Start: part-00000-2aa1fa05-4147-43e6-a721-4686b0bb5e21-c000.snappy.parquet
+✅ Done: part-00000-2712ea13-10eb-4413-b5d8-dcbe92f4574a-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file61.parquet | ⏱️ 8.57s
+🔄 Start: part-00000-2b29047e-9264-4ea9-ba03-0b1252b5e16d-c000.snappy.parquet
+✅ Done: part-00000-28507f3d-93f1-40ae-8f9e-d71187bb8eed-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file63.parquet | ⏱️ 8.83s
+🔄 Start: part-00000-2b509124-941c-4a13-94df-1b29b089e9bf-c000.snappy.parquet
+✅ Done: part-00000-2753ad8e-c9b7-4dbf-b596-8a1f5d9d77ca-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file62.parquet | ⏱️ 9.65s
+🔄 Start: part-00000-2baa12a8-508a-4870-bb99-a0f992d244db-c000.snappy.parquet
+✅ Done: part-00000-285e2ae3-a04d-4bbb-88f1-f81d77996693-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file64.parquet | ⏱️ 9.03s
+🔄 Start: part-00000-2c23f659-f0a5-4b41-867f-51a314ff03de-c000.snappy.parquet
+✅ Done: part-00000-299390e9-e9c7-40ac-a811-29f311f0b123-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file65.parquet | ⏱️ 7.97s
+🔄 Start: part-00000-2c53f39c-6dc4-4a20-a05a-16efc5e3484a-c000.snappy.parquet
+✅ Done: part-00000-29d0d2d7-ccdd-4142-8797-cfc19aba9e58-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file66.parquet | ⏱️ 9.78s
+🔄 Start: part-00000-2cad45ab-2743-4442-8204-c2eaacb6210b-c000.snappy.parquet
+✅ Done: part-00000-2aa1fa05-4147-43e6-a721-4686b0bb5e21-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file68.parquet | ⏱️ 9.33s
+🔄 Start: part-00000-2d07974e-2f69-4366-9734-ddc7eda883ab-c000.snappy.parquet
+✅ Done: part-00000-2b29047e-9264-4ea9-ba03-0b1252b5e16d-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file69.parquet | ⏱️ 7.04s
+🔄 Start: part-00000-2d4c0e29-0157-4b69-a515-07cafdf34667-c000.snappy.parquet
+✅ Done: part-00000-29fe7d56-4f80-4220-8647-519f2126c376-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file67.parquet | ⏱️ 10.39s
+🔄 Start: part-00000-2d6b8e57-46e1-41fb-a369-0dae33bad284-c000.snappy.parquet
+✅ Done: part-00000-2c23f659-f0a5-4b41-867f-51a314ff03de-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file72.parquet | ⏱️ 7.24s
+🔄 Start: part-00000-2dcde995-08d7-4b51-a799-aefbc2a5cb95-c000.snappy.parquet
+✅ Done: part-00000-2b509124-941c-4a13-94df-1b29b089e9bf-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file70.parquet | ⏱️ 9.39s
+🔄 Start: part-00000-2e4d6a58-646c-42e5-872f-6a32d62d965b-c000.snappy.parquet
+✅ Done: part-00000-2baa12a8-508a-4870-bb99-a0f992d244db-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file71.parquet | ⏱️ 10.55s
+🔄 Start: part-00000-2e78b152-87f8-475b-acf0-bf6c83c91fe1-c000.snappy.parquet
+✅ Done: part-00000-2c53f39c-6dc4-4a20-a05a-16efc5e3484a-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file73.parquet | ⏱️ 9.85s
+🔄 Start: part-00000-308b4928-efeb-4795-9622-33f251247efe-c000.snappy.parquet
+✅ Done: part-00000-2d4c0e29-0157-4b69-a515-07cafdf34667-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file76.parquet | ⏱️ 6.93s
+🔄 Start: part-00000-30ff7119-b9b2-43de-af14-3c6c5bae31a0-c000.snappy.parquet
+✅ Done: part-00000-2cad45ab-2743-4442-8204-c2eaacb6210b-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file74.parquet | ⏱️ 9.47s
+🔄 Start: part-00000-314bd13e-35dc-47ee-9a7b-d9db703f523a-c000.snappy.parquet
+✅ Done: part-00000-2d07974e-2f69-4366-9734-ddc7eda883ab-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file75.parquet | ⏱️ 8.45s
+🔄 Start: part-00000-327910b1-7ee0-483a-9531-5e727e219eef-c000.snappy.parquet
+✅ Done: part-00000-2d6b8e57-46e1-41fb-a369-0dae33bad284-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file77.parquet | ⏱️ 8.81s
+🔄 Start: part-00000-33b4e33a-83f1-4f30-aa8f-10fd02cf36c4-c000.snappy.parquet
+✅ Done: part-00000-2e4d6a58-646c-42e5-872f-6a32d62d965b-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file79.parquet | ⏱️ 9.44s
+🔄 Start: part-00000-3463d60d-128d-46e2-83b0-50baeb8577b2-c000.snappy.parquet
+✅ Done: part-00000-308b4928-efeb-4795-9622-33f251247efe-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file81.parquet | ⏱️ 7.16s
+🔄 Start: part-00000-34edadeb-404f-4bf7-b56f-1f20f1a553c5-c000.snappy.parquet
+✅ Done: part-00000-2dcde995-08d7-4b51-a799-aefbc2a5cb95-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file78.parquet | ⏱️ 10.59s
+🔄 Start: part-00000-35b47b84-014d-4656-84b1-590ede9b2082-c000.snappy.parquet
+✅ Done: part-00000-2e78b152-87f8-475b-acf0-bf6c83c91fe1-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file80.parquet | ⏱️ 9.22s
+🔄 Start: part-00000-3603c281-1666-4e72-a966-e2c76be40eed-c000.snappy.parquet
+✅ Done: part-00000-314bd13e-35dc-47ee-9a7b-d9db703f523a-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file83.parquet | ⏱️ 9.43s
+🔄 Start: part-00000-36041b29-1156-4ab6-9fb0-599ecf82a1f8-c000.snappy.parquet
+✅ Done: part-00000-33b4e33a-83f1-4f30-aa8f-10fd02cf36c4-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file85.parquet | ⏱️ 7.70s
+🔄 Start: part-00000-36537e8e-798b-4773-8a3a-15b6274dacc0-c000.snappy.parquet
+✅ Done: part-00000-30ff7119-b9b2-43de-af14-3c6c5bae31a0-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file82.parquet | ⏱️ 10.58s
+🔄 Start: part-00000-36785847-c9c1-4f5b-965d-6f4d6da2976c-c000.snappy.parquet
+✅ Done: part-00000-327910b1-7ee0-483a-9531-5e727e219eef-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file84.parquet | ⏱️ 9.28s
+🔄 Start: part-00000-375b85ea-08e7-4cde-b0b4-dc32cbe37953-c000.snappy.parquet
+✅ Done: part-00000-3463d60d-128d-46e2-83b0-50baeb8577b2-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file86.parquet | ⏱️ 7.81s
+🔄 Start: part-00000-379f98fd-8b31-4063-9fd5-adcedd264540-c000.snappy.parquet
+✅ Done: part-00000-34edadeb-404f-4bf7-b56f-1f20f1a553c5-c000.snappy.parquet → ./data/target_map_parquet_files/mapped_file87.parquet | ⏱️ 8.53s…
+Show all (169 kB)
+Requirement already satisfied: spacy in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (3.7.4)
+Requirement already satisfied: catalogue<2.1.0,>=2.0.6 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy) (2.0.10)
+Requirement already satisfied: jinja2 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy) (3.1.6)
+Requirement already satisfied: numpy>=1.19.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy) (1.23.5)
+Requirement already satisfied: preshed<3.1.0,>=3.0.2 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy) (3.0.9)
+Requirement already satisfied: spacy-loggers<2.0.0,>=1.0.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy) (1.0.5)
+Requirement already satisfied: packaging>=20.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy) (25.0)
+Requirement already satisfied: smart-open<7.0.0,>=5.2.1 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy) (6.4.0)
+Requirement already satisfied: wasabi<1.2.0,>=0.9.1 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy) (1.1.3)
+Requirement already satisfied: weasel<0.4.0,>=0.1.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy) (0.3.4)
+Requirement already satisfied: thinc<8.3.0,>=8.2.2 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy) (8.2.5)
+Requirement already satisfied: setuptools in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy) (75.8.0)
+Requirement already satisfied: spacy-legacy<3.1.0,>=3.0.11 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy) (3.0.12)
+Requirement already satisfied: pydantic!=1.8,!=1.8.1,<3.0.0,>=1.7.4 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy) (2.9.2)
+Requirement already satisfied: typer<0.10.0,>=0.3.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy) (0.4.2)
+Requirement already satisfied: tqdm<5.0.0,>=4.38.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy) (4.67.1)
+Requirement already satisfied: cymem<2.1.0,>=2.0.2 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy) (2.0.11)
+Requirement already satisfied: murmurhash<1.1.0,>=0.28.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy) (1.0.12)
+Requirement already satisfied: srsly<3.0.0,>=2.4.3 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy) (2.5.1)
+Requirement already satisfied: langcodes<4.0.0,>=3.2.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy) (3.5.0)
+Requirement already satisfied: requests<3.0.0,>=2.13.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy) (2.32.3)
+Requirement already satisfied: language-data>=1.2 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from langcodes<4.0.0,>=3.2.0->spacy) (1.3.0)
+Requirement already satisfied: typing-extensions>=4.6.1 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from pydantic!=1.8,!=1.8.1,<3.0.0,>=1.7.4->spacy) (4.13.2)
+Requirement already satisfied: pydantic-core==2.23.4 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from pydantic!=1.8,!=1.8.1,<3.0.0,>=1.7.4->spacy) (2.23.4)
+Requirement already satisfied: annotated-types>=0.6.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from pydantic!=1.8,!=1.8.1,<3.0.0,>=1.7.4->spacy) (0.7.0)
+Requirement already satisfied: charset-normalizer<4,>=2 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from requests<3.0.0,>=2.13.0->spacy) (3.4.1)
+Requirement already satisfied: urllib3<3,>=1.21.1 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from requests<3.0.0,>=2.13.0->spacy) (1.26.20)
+Requirement already satisfied: idna<4,>=2.5 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from requests<3.0.0,>=2.13.0->spacy) (3.10)
+Requirement already satisfied: certifi>=2017.4.17 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from requests<3.0.0,>=2.13.0->spacy) (2025.1.31)
+Requirement already satisfied: blis<0.8.0,>=0.7.8 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from thinc<8.3.0,>=8.2.2->spacy) (0.7.11)
+Requirement already satisfied: confection<1.0.0,>=0.0.1 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from thinc<8.3.0,>=8.2.2->spacy) (0.1.5)
+Requirement already satisfied: click<9.0.0,>=7.1.1 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from typer<0.10.0,>=0.3.0->spacy) (8.1.8)
+Requirement already satisfied: cloudpathlib<0.17.0,>=0.7.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from weasel<0.4.0,>=0.1.0->spacy) (0.16.0)
+Requirement already satisfied: MarkupSafe>=2.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from jinja2->spacy) (2.0.1)
+Requirement already satisfied: marisa-trie>=1.1.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from language-data>=1.2->langcodes<4.0.0,>=3.2.0->spacy) (1.2.1)
+/anaconda/envs/azureml_py38/lib/python3.10/site-packages/torch/cuda/__init__.py:734: UserWarning: Can't initialize NVML
+  warnings.warn("Can't initialize NVML")
+Collecting en-core-web-sm==3.7.1
+  Downloading https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl (12.8 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 12.8/12.8 MB 42.3 MB/s eta 0:00:0000:010:01
+Requirement already satisfied: spacy<3.8.0,>=3.7.2 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from en-core-web-sm==3.7.1) (3.7.4)
+Requirement already satisfied: requests<3.0.0,>=2.13.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (2.32.3)
+Requirement already satisfied: cymem<2.1.0,>=2.0.2 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (2.0.11)
+Requirement already satisfied: typer<0.10.0,>=0.3.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (0.4.2)
+Requirement already satisfied: numpy>=1.19.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (1.23.5)
+Requirement already satisfied: srsly<3.0.0,>=2.4.3 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (2.5.1)
+Requirement already satisfied: spacy-legacy<3.1.0,>=3.0.11 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (3.0.12)
+Requirement already satisfied: smart-open<7.0.0,>=5.2.1 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (6.4.0)
+Requirement already satisfied: langcodes<4.0.0,>=3.2.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (3.5.0)
+Requirement already satisfied: preshed<3.1.0,>=3.0.2 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (3.0.9)
+Requirement already satisfied: thinc<8.3.0,>=8.2.2 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (8.2.5)
+Requirement already satisfied: packaging>=20.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (25.0)
+Requirement already satisfied: spacy-loggers<2.0.0,>=1.0.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (1.0.5)
+Requirement already satisfied: weasel<0.4.0,>=0.1.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (0.3.4)
+Requirement already satisfied: tqdm<5.0.0,>=4.38.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (4.67.1)
+Requirement already satisfied: murmurhash<1.1.0,>=0.28.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (1.0.12)
+Requirement already satisfied: catalogue<2.1.0,>=2.0.6 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (2.0.10)
+Requirement already satisfied: pydantic!=1.8,!=1.8.1,<3.0.0,>=1.7.4 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (2.9.2)
+Requirement already satisfied: setuptools in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (75.8.0)
+Requirement already satisfied: jinja2 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (3.1.6)
+Requirement already satisfied: wasabi<1.2.0,>=0.9.1 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (1.1.3)
+Requirement already satisfied: language-data>=1.2 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from langcodes<4.0.0,>=3.2.0->spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (1.3.0)
+Requirement already satisfied: annotated-types>=0.6.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from pydantic!=1.8,!=1.8.1,<3.0.0,>=1.7.4->spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (0.7.0)
+Requirement already satisfied: typing-extensions>=4.6.1 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from pydantic!=1.8,!=1.8.1,<3.0.0,>=1.7.4->spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (4.13.2)
+Requirement already satisfied: pydantic-core==2.23.4 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from pydantic!=1.8,!=1.8.1,<3.0.0,>=1.7.4->spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (2.23.4)
+Requirement already satisfied: certifi>=2017.4.17 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from requests<3.0.0,>=2.13.0->spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (2025.1.31)
+Requirement already satisfied: urllib3<3,>=1.21.1 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from requests<3.0.0,>=2.13.0->spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (1.26.20)
+Requirement already satisfied: idna<4,>=2.5 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from requests<3.0.0,>=2.13.0->spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (3.10)
+Requirement already satisfied: charset-normalizer<4,>=2 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from requests<3.0.0,>=2.13.0->spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (3.4.1)
+Requirement already satisfied: confection<1.0.0,>=0.0.1 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from thinc<8.3.0,>=8.2.2->spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (0.1.5)
+Requirement already satisfied: blis<0.8.0,>=0.7.8 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from thinc<8.3.0,>=8.2.2->spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (0.7.11)
+Requirement already satisfied: click<9.0.0,>=7.1.1 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from typer<0.10.0,>=0.3.0->spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (8.1.8)
+Requirement already satisfied: cloudpathlib<0.17.0,>=0.7.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from weasel<0.4.0,>=0.1.0->spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (0.16.0)
+Requirement already satisfied: MarkupSafe>=2.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from jinja2->spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (2.0.1)
+Requirement already satisfied: marisa-trie>=1.1.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from language-data>=1.2->langcodes<4.0.0,>=3.2.0->spacy<3.8.0,>=3.7.2->en-core-web-sm==3.7.1) (1.2.1)
+✔ Download and installation successful
+You can now load the package via spacy.load('en_core_web_sm')
+Done: mapped_file189.parquet
+Done: mapped_file256.parquet
+Done: mapped_file120.parquet
+Done: mapped_file233.parquet
+Done: mapped_file143.parquet
+Done: mapped_file210.parquet
+Done: mapped_file0.parquet
+Done: mapped_file166.parquet
+Done: mapped_file144.parquet
+Done: mapped_file121.parquet
+Done: mapped_file257.parquet
+Done: mapped_file211.parquet
+Done: mapped_file1.parquet
+Done: mapped_file234.parquet
+Done: mapped_file19.parquet
+Done: mapped_file167.parquet
+Done: mapped_file212.parquet
+Done: mapped_file10.parquet
+Done: mapped_file122.parquet
+Done: mapped_file145.parquet
+Done: mapped_file235.parquet
+Done: mapped_file190.parquet
+Done: mapped_file258.parquet
+Done: mapped_file168.parquet
+Done: mapped_file213.parquet
+Done: mapped_file146.parquet
+Done: mapped_file236.parquet
+Done: mapped_file123.parquet
+Done: mapped_file259.parquet
+Done: mapped_file100.parquet
+Done: mapped_file191.parquet
+Done: mapped_file169.parquet
+Done: mapped_file147.parquet
+Done: mapped_file214.parquet
+Done: mapped_file237.parquet
+Done: mapped_file26.parquet
+Done: mapped_file124.parquet
+Done: mapped_file101.parquet
+Done: mapped_file192.parquet
+Done: mapped_file17.parquet
+Done: mapped_file148.parquet
+Done: mapped_file215.parquet
+Done: mapped_file260.parquet
+Done: mapped_file238.parquet
+Done: mapped_file102.parquet
+Done: mapped_file125.parquet
+Done: mapped_file193.parquet
+Done: mapped_file170.parquet
+Done: mapped_file149.parquet
+Done: mapped_file216.parquet
+Done: mapped_file103.parquet
+Done: mapped_file261.parquet
+Done: mapped_file194.parquet
+Done: mapped_file239.parquet
+Done: mapped_file126.parquet
+Done: mapped_file171.parquet
+Done: mapped_file217.parquet
+Done: mapped_file15.parquet
+Done: mapped_file104.parquet
+Done: mapped_file24.parquet
+Done: mapped_file262.parquet
+Done: mapped_file127.parquet
+Done: mapped_file195.parquet
+Done: mapped_file172.parquet
+Done: mapped_file218.parquet
+Done: mapped_file150.parquet
+Done: mapped_file105.parquet
+Done: mapped_file240.parquet
+Done: mapped_file196.parquet
+Done: mapped_file263.parquet
+Done: mapped_file128.parquet
+Done: mapped_file173.parquet
+Done: mapped_file219.parquet
+Done: mapped_file106.parquet
+Done: mapped_file151.parquet
+Done: mapped_file241.parquet
+Done: mapped_file264.parquet
+Done: mapped_file129.parquet
+Done: mapped_file174.parquet
+Done: mapped_file197.parquet
+Done: mapped_file22.parquet
+Done: mapped_file107.parquet
+Done: mapped_file152.parquet
+Done: mapped_file242.parquet
+Done: mapped_file13.parquet
+Done: mapped_file265.parquet
+Done: mapped_file198.parquet
+Done: mapped_file175.parquet
+Done: mapped_file220.parquet
+Done: mapped_file153.parquet
+Done: mapped_file108.parquet
+Done: mapped_file130.parquet
+Done: mapped_file243.parquet
+Done: mapped_file266.parquet
+Done: mapped_file176.parquet
+Done: mapped_file199.parquet
+Done: mapped_file221.parquet
+Done: mapped_file109.parquet
+Done: mapped_file154.parquet
+Done: mapped_file131.parquet
+Done: mapped_file267.parquet
+Done: mapped_file244.parquet
+Done: mapped_file2.parquet
+Done: mapped_file177.parquet
+Done: mapped_file222.parquet
+Done: mapped_file11.parquet
+Done: mapped_file155.parquet
+Done: mapped_file132.parquet
+Done: mapped_file268.parquet
+Done: mapped_file245.parquet
+Done: mapped_file178.parquet
+Done: mapped_file20.parquet
+Done: mapped_file223.parquet
+Done: mapped_file110.parquet
+Done: mapped_file156.parquet
+Done: mapped_file269.parquet
+Done: mapped_file133.parquet
+Done: mapped_file179.parquet
+Done: mapped_file200.parquet
+Done: mapped_file246.parquet
+Done: mapped_file224.parquet
+Done: mapped_file111.parquet
+Done: mapped_file27.parquet
+Done: mapped_file157.parquet
+Done: mapped_file134.parquet
+Done: mapped_file201.parquet
+Done: mapped_file18.parquet
+Done: mapped_file247.parquet
+Done: mapped_file225.parquet
+Done: mapped_file112.parquet
+Done: mapped_file270.parquet
+Done: mapped_file158.parquet
+Done: mapped_file135.parquet
+Done: mapped_file180.parquet
+Done: mapped_file202.parquet
+Done: mapped_file248.parquet
+Done: mapped_file226.parquet
+Done: mapped_file113.parquet
+Done: mapped_file271.parquet
+Done: mapped_file159.parquet
+Done: mapped_file136.parquet
+Done: mapped_file181.parquet
+Done: mapped_file203.parquet
+Done: mapped_file249.parquet
+Done: mapped_file227.parquet
+Done: mapped_file114.parquet
+Done: mapped_file272.parquet
+Done: mapped_file16.parquet
+Done: mapped_file137.parquet
+Done: mapped_file204.parquet
+Done: mapped_file182.parquet
+Done: mapped_file25.parquet
+Done: mapped_file228.parquet
+Done: mapped_file115.parquet
+Done: mapped_file273.parquet
+Done: mapped_file160.parquet
+Done: mapped_file138.parquet
+Done: mapped_file183.parquet
+Done: mapped_file205.parquet
+Done: mapped_file250.parquet
+Done: mapped_file229.parquet
+Done: mapped_file116.parquet
+Done: mapped_file274.parquet
+Done: mapped_file161.parquet
+Done: mapped_file139.parquet
+Done: mapped_file184.parquet
+Done: mapped_file206.parquet
+Done: mapped_file251.parquet
+Done: mapped_file23.parquet
+Done: mapped_file117.parquet
+Done: mapped_file14.parquet
+Done: mapped_file162.parquet
+Done: mapped_file275.parquet
+Done: mapped_file185.parquet
+Done: mapped_file207.parquet
+Done: mapped_file252.parquet
+Done: mapped_file230.parquet
+Done: mapped_file118.parquet
+Done: mapped_file140.parquet
+Done: mapped_file276.parquet
+Done: mapped_file163.parquet
+Done: mapped_file186.parquet
+Done: mapped_file253.parquet
+Done: mapped_file208.parquet
+Done: mapped_file231.parquet
+Done: mapped_file119.parquet
+Done: mapped_file141.parquet
+Done: mapped_file277.parquet
+Done: mapped_file164.parquet
+Done: mapped_file187.parquet
+Done: mapped_file209.parquet
+Done: mapped_file254.parquet
+Done: mapped_file232.parquet
+Done: mapped_file12.parquet
+Done: mapped_file142.parquet
+Done: mapped_file165.parquet
+Done: mapped_file278.parquet
+Done: mapped_file188.parquet
+Done: mapped_file21.parquet
+Done: mapped_file255.parquet
+Done: mapped_file279.parquet
+Done: mapped_file300.parquet
+Done: mapped_file323.parquet
+Done: mapped_file346.parquet
+Done: mapped_file369.parquet
+Done: mapped_file413.parquet
+Done: mapped_file391.parquet
+Done: mapped_file436.parquet
+Done: mapped_file28.parquet
+Done: mapped_file301.parquet
+Done: mapped_file324.parquet
+Done: mapped_file347.parquet
+Done: mapped_file414.parquet
+Done: mapped_file37.parquet
+Done: mapped_file392.parquet
+Done: mapped_file437.parquet
+Done: mapped_file280.parquet
+Done: mapped_file302.parquet
+Done: mapped_file325.parquet
+Done: mapped_file348.parquet
+Done: mapped_file370.parquet
+Done: mapped_file393.parquet
+Done: mapped_file415.parquet
+Done: mapped_file438.parquet
+Done: mapped_file281.parquet
+Done: mapped_file303.parquet
+Done: mapped_file326.parquet
+Done: mapped_file349.parquet
+Done: mapped_file371.parquet
+Done: mapped_file394.parquet
+Done: mapped_file416.parquet
+Done: mapped_file439.parquet
+Done: mapped_file282.parquet
+Done: mapped_file304.parquet
+Done: mapped_file327.parquet
+Done: mapped_file35.parquet
+Done: mapped_file372.parquet
+Done: mapped_file395.parquet
+Done: mapped_file417.parquet
+Done: mapped_file44.parquet
+Done: mapped_file283.parquet
+Done: mapped_file305.parquet
+Done: mapped_file328.parquet
+Done: mapped_file350.parquet
+Done: mapped_file373.parquet
+Done: mapped_file396.parquet
+Done: mapped_file418.parquet
+Done: mapped_file440.parquet
+Done: mapped_file284.parquet
+Done: mapped_file306.parquet
+Done: mapped_file351.parquet
+Done: mapped_file329.parquet
+Done: mapped_file374.parquet
+Done: mapped_file397.parquet
+Done: mapped_file419.parquet
+Done: mapped_file441.parquet
+Done: mapped_file285.parquet
+Done: mapped_file307.parquet
+Done: mapped_file33.parquet
+Done: mapped_file352.parquet
+Done: mapped_file398.parquet
+Done: mapped_file375.parquet
+Done: mapped_file42.parquet
+Done: mapped_file442.parquet
+Done: mapped_file286.parquet
+Done: mapped_file308.parquet
+Done: mapped_file330.parquet
+Done: mapped_file353.parquet
+Done: mapped_file399.parquet
+Done: mapped_file376.parquet
+Done: mapped_file420.parquet
+Done: mapped_file443.parquet
+Done: mapped_file287.parquet
+Done: mapped_file309.parquet
+Done: mapped_file354.parquet
+Done: mapped_file377.parquetDone: mapped_file331.parquet
 
-# Config
-input_path = './data/target_map_cleaned'
-output_path = Path('./data/gram_outputs/frequent_terms_by_category')
-output_path.mkdir(parents=True, exist_ok=True)
-required_cols = ['Final Category', 'MATL_SHRT_DESC_AND_CMPNT_MATL_DESC']
-num_chunks = 3
-threshold = 20
+Done: mapped_file4.parquet
+Done: mapped_file421.parquet
+Done: mapped_file444.parquet
+Done: mapped_file288.parquet
+Done: mapped_file31.parquet
+Done: mapped_file355.parquet
+Done: mapped_file40.parquetDone: mapped_file332.parquet
+Done: mapped_file378.parquet
 
-# Chunk processor
-def process_dataframe_chunk(df_chunk, chunk_name):
-    init_spacy()
-    start_time = time.time()
-    unigram_freq = defaultdict(Counter)
-    bigram_freq = defaultdict(Counter)
+Done: mapped_file422.parquet
+Done: mapped_file445.parquet
+Done: mapped_file289.parquet
+Done: mapped_file310.parquet
+Done: mapped_file333.parquet
+Done: mapped_file356.parquet
+Done: mapped_file379.parquet
+Done: mapped_file400.parquet
+Done: mapped_file423.parquet
+Done: mapped_file446.parquet
+Done: mapped_file29.parquet
+Done: mapped_file311.parquet
+Done: mapped_file334.parquet
+Done: mapped_file357.parquet
+Done: mapped_file38.parquet
+Done: mapped_file424.parquet
+Done: mapped_file401.parquet
+Done: mapped_file447.parquet
+Done: mapped_file290.parquet
+Done: mapped_file312.parquet
+Done: mapped_file335.parquet
+Done: mapped_file358.parquet
+Done: mapped_file380.parquet
+Done: mapped_file425.parquet
+Done: mapped_file402.parquet
+Done: mapped_file448.parquet
+Done: mapped_file291.parquet
+Done: mapped_file313.parquet
+Done: mapped_file336.parquet
+Done: mapped_file359.parquet
+Done: mapped_file381.parquet
+Done: mapped_file403.parquet
+Done: mapped_file426.parquet
+Done: mapped_file449.parquet
+Done: mapped_file292.parquet
+Done: mapped_file314.parquet
+Done: mapped_file337.parquet
+Done: mapped_file382.parquet
+Done: mapped_file36.parquet
+Done: mapped_file404.parquet
+Done: mapped_file427.parquet
+Done: mapped_file45.parquet
+Done: mapped_file293.parquet
+Done: mapped_file315.parquet
+Done: mapped_file338.parquet
+Done: mapped_file360.parquet
+Done: mapped_file383.parquet
+Done: mapped_file405.parquet
+Done: mapped_file428.parquet
+Done: mapped_file450.parquet
+Done: mapped_file294.parquet
+Done: mapped_file316.parquet
+Done: mapped_file339.parquet
+Done: mapped_file384.parquet
+Done: mapped_file361.parquet
+Done: mapped_file406.parquet
+Done: mapped_file429.parquet
+Done: mapped_file451.parquet
+Done: mapped_file295.parquet
+Done: mapped_file317.parquet
+Done: mapped_file34.parquet
+Done: mapped_file385.parquet
+Done: mapped_file362.parquet
+Done: mapped_file407.parquet
+Done: mapped_file43.parquet
+Done: mapped_file452.parquet
+Done: mapped_file296.parquet
+Done: mapped_file318.parquet
+Done: mapped_file340.parquet
+Done: mapped_file386.parquet
+Done: mapped_file363.parquet
+Done: mapped_file408.parquet
+Done: mapped_file430.parquet
+Done: mapped_file453.parquet
+Done: mapped_file454.parquet
+Done: mapped_file297.parquet
+Done: mapped_file455.parquet
+Done: mapped_file456.parquet
+Done: mapped_file457.parquet
+Done: mapped_file458.parquet
+Done: mapped_file319.parquet
+Done: mapped_file459.parquet
+Done: mapped_file341.parquet
+Done: mapped_file387.parquet
+Done: mapped_file409.parquet
+Done: mapped_file364.parquet
+Done: mapped_file431.parquet
+Done: mapped_file298.parquet
+Done: mapped_file32.parquet
+Done: mapped_file46.parquet
+Done: mapped_file460.parquet
+Done: mapped_file342.parquet
+Done: mapped_file461.parquet
+Done: mapped_file388.parquet
+Done: mapped_file462.parquet
+Done: mapped_file463.parquet
+Done: mapped_file41.parquet
+Done: mapped_file365.parquet
+Done: mapped_file464.parquet
+Done: mapped_file465.parquet
+Done: mapped_file466.parquet
+Done: mapped_file432.parquet
+Done: mapped_file467.parquet
+Done: mapped_file468.parquet
+Done: mapped_file469.parquet
+Done: mapped_file299.parquet
+Done: mapped_file320.parquet
+Done: mapped_file343.parquet
+Done: mapped_file389.parquet
+Done: mapped_file366.parquet
+Done: mapped_file410.parquet
+Done: mapped_file433.parquet
+Done: mapped_file47.parquet
+Done: mapped_file470.parquet
+Done: mapped_file471.parquet
+Done: mapped_file472.parquet
+Done: mapped_file473.parquet
+Done: mapped_file3.parquet
+Done: mapped_file474.parquet
+Done: mapped_file475.parquet
+Done: mapped_file476.parquet
+Done: mapped_file477.parquet
+Done: mapped_file478.parquet
+Done: mapped_file321.parquet
+Done: mapped_file479.parquet
+Done: mapped_file344.parquet
+Done: mapped_file39.parquet
+Done: mapped_file411.parquetDone: mapped_file367.parquet
 
-    for category, group in df_chunk.groupby('Final Category'):
-        texts = group['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'].astype(str).tolist()
-        for doc in nlp.pipe(texts, batch_size=100, n_process=2):
-            words = [token.lemma_ for token in doc if token.is_alpha and not token.is_stop]
-            unigram_freq[category].update(set(words))  # unique per row
-            bigram_freq[category].update(zip(words, islice(words, 1, None)))
+Done: mapped_file434.parquet
+Done: mapped_file30.parquet
+Done: mapped_file481.parquet
+Done: mapped_file482.parquet
+Done: mapped_file483.parquet
+Done: mapped_file484.parquet
+Done: mapped_file322.parquet
+Done: mapped_file485.parquet
+Done: mapped_file503.parquet
+Done: mapped_file486.parquet
+Done: mapped_file504.parquet
+Done: mapped_file48.parquet
+Done: mapped_file390.parquet
+Done: mapped_file487.parquet
+Done: mapped_file505.parquet
+Done: mapped_file480.parquet
+Done: mapped_file345.parquet
+Done: mapped_file368.parquet
+Done: mapped_file488.parquet
+Done: mapped_file526.parquet
+Done: mapped_file412.parquet
+Done: mapped_file549.parquet
+Done: mapped_file506.parquet
+Done: mapped_file489.parquet
+Done: mapped_file571.parquet
+Done: mapped_file594.parquet
+Done: mapped_file527.parquet
+Done: mapped_file507.parquet
+Done: mapped_file616.parquet
+Done: mapped_file435.parquet
+Done: mapped_file572.parquet
+Done: mapped_file595.parquet
+Done: mapped_file528.parquet
+Done: mapped_file617.parquet
+Done: mapped_file508.parquet
+Done: mapped_file573.parquet
+Done: mapped_file529.parquet
+Done: mapped_file596.parquet
+Done: mapped_file639.parquet
+Done: mapped_file618.parquet
+Done: mapped_file509.parquet
+Done: mapped_file574.parquet
+Done: mapped_file597.parquet
+Done: mapped_file619.parquet
+Done: mapped_file575.parquet
+Done: mapped_file598.parquet
+Done: mapped_file576.parquet
+Done: mapped_file599.parquet
+Done: mapped_file577.parquet
+Done: mapped_file578.parquet
+Done: mapped_file579.parquet
+Done: mapped_file55.parquet
+Done: mapped_file49.parquet
+Done: mapped_file550.parquet
+Done: mapped_file490.parquet
+Done: mapped_file551.parquet
+Done: mapped_file491.parquet
+Done: mapped_file552.parquet
+Done: mapped_file51.parquet
+Done: mapped_file64.parquet
+Done: mapped_file492.parquet
+Done: mapped_file53.parquet
+Done: mapped_file553.parquet
+Done: mapped_file510.parquet
+Done: mapped_file640.parquet
+Done: mapped_file493.parquet
+Done: mapped_file530.parquet
+Done: mapped_file554.parquet
+Done: mapped_file511.parquet
+Done: mapped_file641.parquet
+Done: mapped_file494.parquet
+Done: mapped_file531.parquet
+Done: mapped_file62.parquet
+Done: mapped_file555.parquet
+Done: mapped_file512.parquet
+Done: mapped_file495.parquet
+Done: mapped_file642.parquet
+Done: mapped_file556.parquet
+Done: mapped_file620.parquet
+Done: mapped_file532.parquet
+Done: mapped_file513.parquet
+Done: mapped_file496.parquet
+Done: mapped_file6.parquet
+Done: mapped_file643.parquet
+Done: mapped_file557.parquet
+Done: mapped_file514.parquet
+Done: mapped_file621.parquet
+Done: mapped_file533.parquet
+Done: mapped_file58.parquet
+Done: mapped_file497.parquet
+Done: mapped_file644.parquet
+Done: mapped_file558.parquet
+Done: mapped_file622.parquet
+Done: mapped_file534.parquet
+Done: mapped_file515.parquet
+Done: mapped_file580.parquet
+Done: mapped_file498.parquet
+Done: mapped_file645.parquet
+Done: mapped_file559.parquet
+Done: mapped_file623.parquet
+Done: mapped_file516.parquet
+Done: mapped_file535.parquet
+Done: mapped_file499.parquet
+Done: mapped_file581.parquet
+Done: mapped_file646.parquet
+Done: mapped_file536.parquet
+Done: mapped_file517.parquet
+Done: mapped_file624.parquet
+Done: mapped_file582.parquet
+Done: mapped_file647.parquet
+Done: mapped_file625.parquet
+Done: mapped_file583.parquet
+Done: mapped_file518.parquet
+Done: mapped_file537.parquet
+Done: mapped_file648.parquet
+Done: mapped_file626.parquet
+Done: mapped_file584.parquet
+Done: mapped_file519.parquet
+Done: mapped_file538.parquet
+Done: mapped_file649.parquet
+Done: mapped_file627.parquet
+Done: mapped_file585.parquet
+Done: mapped_file539.parquet
+Done: mapped_file628.parquet
+Done: mapped_file586.parquet
+Done: mapped_file629.parquet
+Done: mapped_file587.parquet
+Done: mapped_file588.parquet
+Done: mapped_file589.parquet
+Done: mapped_file60.parquet
+Done: mapped_file600.parquet
+Done: mapped_file601.parquet
+Done: mapped_file5.parquet
+Done: mapped_file602.parquet
+Done: mapped_file603.parquet
+Done: mapped_file56.parquet
+Done: mapped_file604.parquet
+Done: mapped_file560.parquet
+Done: mapped_file65.parquet
+Done: mapped_file605.parquet
+Done: mapped_file561.parquet
+Done: mapped_file54.parquet
+Done: mapped_file52.parquet
+Done: mapped_file650.parquet
+Done: mapped_file606.parquet
+Done: mapped_file562.parquet
+Done: mapped_file540.parquet
+Done: mapped_file520.parquet
+Done: mapped_file651.parquet
+Done: mapped_file63.parquet
+Done: mapped_file607.parquet
+Done: mapped_file563.parquet
+Done: mapped_file521.parquet
+Done: mapped_file541.parquetDone: mapped_file652.parquet
 
-    print(f"✅ {chunk_name} in {time.time() - start_time:.2f}s")
-    return unigram_freq, bigram_freq
+Done: mapped_file608.parquet
+Done: mapped_file630.parquet
+Done: mapped_file564.parquet
+Done: mapped_file653.parquet
+Done: mapped_file542.parquet
+Done: mapped_file522.parquet
+Done: mapped_file59.parquet
+Done: mapped_file609.parquet
+Done: mapped_file631.parquet
+Done: mapped_file654.parquet
+Done: mapped_file565.parquet
+Done: mapped_file523.parquet
+Done: mapped_file543.parquet
+Done: mapped_file590.parquet
+Done: mapped_file632.parquet
+Done: mapped_file655.parquet
+Done: mapped_file566.parquet
+Done: mapped_file524.parquet
+Done: mapped_file544.parquet
+Done: mapped_file591.parquet
+Done: mapped_file656.parquet
+Done: mapped_file567.parquet
+Done: mapped_file633.parquet
+Done: mapped_file525.parquet
+Done: mapped_file545.parquet
+Done: mapped_file592.parquet
+Done: mapped_file657.parquet
+Done: mapped_file634.parquet
+Done: mapped_file568.parquet
+Done: mapped_file661.parquet
+Done: mapped_file546.parquet
+Done: mapped_file593.parquet
+Done: mapped_file658.parquet
+Done: mapped_file569.parquet
+Done: mapped_file635.parquet
+Done: mapped_file662.parquet
+Done: mapped_file684.parquet
+Done: mapped_file547.parquet
+Done: mapped_file659.parquet
+Done: mapped_file636.parquet
+Done: mapped_file663.parquet
+Done: mapped_file685.parquet
+Done: mapped_file548.parquet
+Done: mapped_file637.parquet
+Done: mapped_file664.parquet
+Done: mapped_file686.parquet
+Done: mapped_file706.parquet
+Done: mapped_file665.parquet
+Done: mapped_file638.parquet
+Done: mapped_file687.parquet
+Done: mapped_file707.parquet
+Done: mapped_file666.parquet
+Done: mapped_file688.parquet
+Done: mapped_file729.parquet
+Done: mapped_file708.parquet
+Done: mapped_file667.parquet
+Done: mapped_file689.parquet
+Done: mapped_file709.parquet
+Done: mapped_file50.parquet
+Done: mapped_file668.parquet
+Done: mapped_file500.parquet
+Done: mapped_file669.parquet
+Done: mapped_file501.parquet
+Done: mapped_file502.parquet
+Done: mapped_file751.parquet
+Done: mapped_file752.parquet
+Done: mapped_file753.parquet
+Done: mapped_file754.parquet
+Done: mapped_file61.parquet
+Done: mapped_file755.parquet
+Done: mapped_file610.parquet
+Done: mapped_file756.parquet
+Done: mapped_file611.parquet
+Done: mapped_file757.parquet
+Done: mapped_file612.parquet
+Done: mapped_file758.parquet
+Done: mapped_file613.parquet
+Done: mapped_file759.parquet
+Done: mapped_file614.parquet
+Done: mapped_file66.parquet
+Done: mapped_file57.parquet
+Done: mapped_file615.parquet
+Done: mapped_file660.parquet
+Done: mapped_file570.parquet
+Done: mapped_file774.parquet
+Done: mapped_file775.parquet
+Done: mapped_file776.parquet
+Done: mapped_file73.parquet
+Done: mapped_file69.parquet
+Done: mapped_file777.parquet
+Done: mapped_file71.parquet
+Done: mapped_file730.parquet
+Done: mapped_file690.parquet
+Done: mapped_file710.parquet
+Done: mapped_file731.parquet
+Done: mapped_file691.parquet
+Done: mapped_file67.parquet
+Done: mapped_file711.parquet
+Done: mapped_file732.parquet
+Done: mapped_file670.parquet
+Done: mapped_file692.parquet
+Done: mapped_file712.parquet
+Done: mapped_file733.parquet
+Done: mapped_file693.parquet
+Done: mapped_file671.parquet
+Done: mapped_file713.parquet
+Done: mapped_file694.parquet
+Done: mapped_file734.parquet
+Done: mapped_file672.parquet
+Done: mapped_file714.parquet
+Done: mapped_file673.parquet
+Done: mapped_file695.parquet
+Done: mapped_file735.parquet
+Done: mapped_file715.parquet
+Done: mapped_file736.parquet
+Done: mapped_file674.parquet
+Done: mapped_file696.parquet
+Done: mapped_file716.parquet
+Done: mapped_file675.parquet
+Done: mapped_file737.parquet
+Done: mapped_file697.parquet
+Done: mapped_file717.parquet
+Done: mapped_file676.parquet…
+Show all (21.9 kB)
+Done: mapped_file210.parquet
+Done: mapped_file120.parquet
+Done: mapped_file0.parquet
+Done: mapped_file256.parquet
+Done: mapped_file143.parquet
+Done: mapped_file189.parquet
+Done: mapped_file233.parquet
+Done: mapped_file166.parquet
+Done: mapped_file211.parquet
+Done: mapped_file121.parquet
+Done: mapped_file144.parquet
+Done: mapped_file1.parquet
+Done: mapped_file257.parquet
+Done: mapped_file234.parquet
+Done: mapped_file19.parquet
+Done: mapped_file167.parquet
+Done: mapped_file10.parquet
+Done: mapped_file212.parquet
+Done: mapped_file145.parquet
+Done: mapped_file235.parquet
+Done: mapped_file122.parquet
+Done: mapped_file190.parquet
+Done: mapped_file258.parquet
+Done: mapped_file168.parquet
+Done: mapped_file213.parquet
+Done: mapped_file146.parquet
+Done: mapped_file236.parquet
+Done: mapped_file123.parquet
+Done: mapped_file100.parquet
+Done: mapped_file259.parquet
+Done: mapped_file191.parquet
+Done: mapped_file214.parquet
+Done: mapped_file169.parquet
+Done: mapped_file237.parquet
+Done: mapped_file147.parquet
+Done: mapped_file26.parquet
+Done: mapped_file101.parquet
+Done: mapped_file124.parquet
+Done: mapped_file192.parquet
+Done: mapped_file215.parquet
+Done: mapped_file148.parquet
+Done: mapped_file17.parquet
+Done: mapped_file260.parquet
+Done: mapped_file102.parquet
+Done: mapped_file238.parquet
+Done: mapped_file125.parquet
+Done: mapped_file193.parquet
+Done: mapped_file216.parquet
+Done: mapped_file149.parquet
+Done: mapped_file103.parquet
+Done: mapped_file170.parquet
+Done: mapped_file261.parquet
+Done: mapped_file194.parquet
+Done: mapped_file239.parquet
+Done: mapped_file126.parquet
+Done: mapped_file217.parquet
+Done: mapped_file104.parquet
+Done: mapped_file171.parquet
+Done: mapped_file15.parquet
+Done: mapped_file24.parquet
+Done: mapped_file262.parquet
+Done: mapped_file127.parquet
+Done: mapped_file195.parquet
+Done: mapped_file218.parquet
+Done: mapped_file105.parquet
+Done: mapped_file172.parquet
+Done: mapped_file150.parquet
+Done: mapped_file240.parquet
+Done: mapped_file263.parquet
+Done: mapped_file196.parquet
+Done: mapped_file128.parquet
+Done: mapped_file219.parquet
+Done: mapped_file106.parquet
+Done: mapped_file173.parquet
+Done: mapped_file241.parquet
+Done: mapped_file151.parquet
+Done: mapped_file264.parquet
+Done: mapped_file129.parquet
+Done: mapped_file197.parquet
+Done: mapped_file107.parquet
+Done: mapped_file22.parquet
+Done: mapped_file174.parquet
+Done: mapped_file242.parquet
+Done: mapped_file152.parquet
+Done: mapped_file265.parquet
+Done: mapped_file13.parquet
+Done: mapped_file198.parquet
+Done: mapped_file108.parquet
+Done: mapped_file220.parquet
+Done: mapped_file153.parquet
+Done: mapped_file175.parquet
+Done: mapped_file266.parquet
+Done: mapped_file243.parquet
+Done: mapped_file130.parquet
+Done: mapped_file199.parquet
+Done: mapped_file109.parquet
+Done: mapped_file221.parquet
+Done: mapped_file154.parquet
+Done: mapped_file176.parquet
+Done: mapped_file267.parquet
+Done: mapped_file131.parquet
+Done: mapped_file244.parquet
+Done: mapped_file2.parquet
+Done: mapped_file11.parquet
+Done: mapped_file268.parquet
+Done: mapped_file155.parquet
+Done: mapped_file222.parquet
+Done: mapped_file132.parquet
+Done: mapped_file177.parquet
+Done: mapped_file245.parquet
+Done: mapped_file20.parquet
+Done: mapped_file110.parquet
+Done: mapped_file269.parquet
+Done: mapped_file156.parquet
+Done: mapped_file223.parquet
+Done: mapped_file178.parquet
+Done: mapped_file133.parquet
+Done: mapped_file200.parquet
+Done: mapped_file246.parquet
+Done: mapped_file111.parquet
+Done: mapped_file27.parquet
+Done: mapped_file179.parquet
+Done: mapped_file224.parquet
+Done: mapped_file157.parquet
+Done: mapped_file134.parquet
+Done: mapped_file201.parquet
+Done: mapped_file247.parquet
+Done: mapped_file112.parquet
+Done: mapped_file270.parquet
+Done: mapped_file18.parquet
+Done: mapped_file225.parquet
+Done: mapped_file158.parquet
+Done: mapped_file135.parquet
+Done: mapped_file202.parquet
+Done: mapped_file248.parquet
+Done: mapped_file113.parquet
+Done: mapped_file271.parquet
+Done: mapped_file180.parquet
+Done: mapped_file226.parquet
+Done: mapped_file136.parquet
+Done: mapped_file159.parquet
+Done: mapped_file203.parquet
+Done: mapped_file249.parquet
+Done: mapped_file114.parquet
+Done: mapped_file272.parquet
+Done: mapped_file181.parquet
+Done: mapped_file137.parquet
+Done: mapped_file16.parquet
+Done: mapped_file204.parquet
+Done: mapped_file227.parquet
+Done: mapped_file25.parquet
+Done: mapped_file115.parquet
+Done: mapped_file182.parquet
+Done: mapped_file273.parquet
+Done: mapped_file138.parquet
+Done: mapped_file228.parquet
+Done: mapped_file160.parquet
+Done: mapped_file205.parquet
+Done: mapped_file250.parquet
+Done: mapped_file116.parquet
+Done: mapped_file183.parquet
+Done: mapped_file274.parquet
+Done: mapped_file161.parquet
+Done: mapped_file139.parquet
+Done: mapped_file206.parquet
+Done: mapped_file251.parquet
+Done: mapped_file117.parquet
+Done: mapped_file229.parquet
+Done: mapped_file184.parquet
+Done: mapped_file275.parquet
+Done: mapped_file162.parquet
+Done: mapped_file14.parquet
+Done: mapped_file207.parquet
+Done: mapped_file252.parquet
+Done: mapped_file118.parquet
+Done: mapped_file23.parquet
+Done: mapped_file185.parquet
+Done: mapped_file276.parquet
+Done: mapped_file208.parquet
+Done: mapped_file140.parquet
+Done: mapped_file163.parquet
+Done: mapped_file253.parquet
+Done: mapped_file119.parquet
+Done: mapped_file230.parquet
+Done: mapped_file186.parquet
+Done: mapped_file277.parquet
+Done: mapped_file209.parquet
+Done: mapped_file164.parquet
+Done: mapped_file141.parquet
+Done: mapped_file254.parquet
+Done: mapped_file12.parquet
+Done: mapped_file231.parquet
+Done: mapped_file187.parquet
+Done: mapped_file278.parquet
+Done: mapped_file21.parquet
+Done: mapped_file165.parquet
+Done: mapped_file142.parquet
+Done: mapped_file255.parquet
+Done: mapped_file279.parquet
+Done: mapped_file232.parquet
+Done: mapped_file188.parquet
+Done: mapped_file300.parquet
+Done: mapped_file323.parquet
+Done: mapped_file346.parquet
+Done: mapped_file369.parquet
+Done: mapped_file391.parquet
+Done: mapped_file28.parquet
+Done: mapped_file413.parquet
+Done: mapped_file436.parquet
+Done: mapped_file301.parquet
+Done: mapped_file324.parquet
+Done: mapped_file347.parquet
+Done: mapped_file37.parquet
+Done: mapped_file392.parquet
+Done: mapped_file280.parquet
+Done: mapped_file414.parquet
+Done: mapped_file437.parquet
+Done: mapped_file302.parquet
+Done: mapped_file325.parquet
+Done: mapped_file348.parquet
+Done: mapped_file370.parquet
+Done: mapped_file393.parquet
+Done: mapped_file281.parquet
+Done: mapped_file415.parquet
+Done: mapped_file303.parquet
+Done: mapped_file326.parquet
+Done: mapped_file438.parquet
+Done: mapped_file349.parquet
+Done: mapped_file371.parquet
+Done: mapped_file394.parquet
+Done: mapped_file282.parquet
+Done: mapped_file416.parquet
+Done: mapped_file304.parquet
+Done: mapped_file327.parquet
+Done: mapped_file439.parquet
+Done: mapped_file35.parquet
+Done: mapped_file372.parquet
+Done: mapped_file395.parquet
+Done: mapped_file283.parquet
+Done: mapped_file417.parquet
+Done: mapped_file305.parquet
+Done: mapped_file44.parquet
+Done: mapped_file328.parquet
+Done: mapped_file350.parquet
+Done: mapped_file373.parquet
+Done: mapped_file396.parquet
+Done: mapped_file284.parquet
+Done: mapped_file418.parquet
+Done: mapped_file440.parquet
+Done: mapped_file306.parquet
+Done: mapped_file329.parquet
+Done: mapped_file351.parquet
+Done: mapped_file374.parquet
+Done: mapped_file397.parquet
+Done: mapped_file285.parquet
+Done: mapped_file419.parquet
+Done: mapped_file441.parquet
+Done: mapped_file307.parquet
+Done: mapped_file33.parquet
+Done: mapped_file352.parquet
+Done: mapped_file375.parquet
+Done: mapped_file398.parquet
+Done: mapped_file286.parquet
+Done: mapped_file42.parquet
+Done: mapped_file442.parquet
+Done: mapped_file308.parquet
+Done: mapped_file330.parquet
+Done: mapped_file353.parquet
+Done: mapped_file376.parquet
+Done: mapped_file399.parquet
+Done: mapped_file287.parquet
+Done: mapped_file420.parquet
+Done: mapped_file443.parquet
+Done: mapped_file309.parquet
+Done: mapped_file354.parquet
+Done: mapped_file377.parquet
+Done: mapped_file331.parquet
+Done: mapped_file288.parquet
+Done: mapped_file4.parquet
+Done: mapped_file444.parquet
+Done: mapped_file421.parquet
+Done: mapped_file31.parquet
+Done: mapped_file378.parquet
+Done: mapped_file332.parquet
+Done: mapped_file355.parquet
+Done: mapped_file40.parquet
+Done: mapped_file289.parquet
+Done: mapped_file445.parquet
+Done: mapped_file422.parquet
+Done: mapped_file310.parquet
+Done: mapped_file333.parquet
+Done: mapped_file356.parquet
+Done: mapped_file379.parquet
+Done: mapped_file400.parquet
+Done: mapped_file29.parquet
+Done: mapped_file423.parquet
+Done: mapped_file446.parquet
+Done: mapped_file311.parquet
+Done: mapped_file334.parquet
+Done: mapped_file38.parquet
+Done: mapped_file357.parquet
+Done: mapped_file290.parquet
+Done: mapped_file401.parquet
+Done: mapped_file424.parquet
+Done: mapped_file447.parquet
+Done: mapped_file335.parquet
+Done: mapped_file312.parquet
+Done: mapped_file380.parquet
+Done: mapped_file358.parquet
+Done: mapped_file291.parquet
+Done: mapped_file402.parquet
+Done: mapped_file425.parquet
+Done: mapped_file448.parquet
+Done: mapped_file336.parquet
+Done: mapped_file313.parquet
+Done: mapped_file381.parquet
+Done: mapped_file359.parquet
+Done: mapped_file403.parquet
+Done: mapped_file292.parquet
+Done: mapped_file426.parquet
+Done: mapped_file449.parquet
+Done: mapped_file337.parquet
+Done: mapped_file382.parquet
+Done: mapped_file314.parquet
+Done: mapped_file36.parquet
+Done: mapped_file404.parquet
+Done: mapped_file293.parquet
+Done: mapped_file427.parquet
+Done: mapped_file45.parquet
+Done: mapped_file338.parquet
+Done: mapped_file383.parquet
+Done: mapped_file315.parquet
+Done: mapped_file360.parquet
+Done: mapped_file405.parquet
+Done: mapped_file294.parquet
+Done: mapped_file428.parquet
+Done: mapped_file450.parquet
+Done: mapped_file339.parquet
+Done: mapped_file316.parquet
+Done: mapped_file384.parquet
+Done: mapped_file361.parquet
+Done: mapped_file406.parquet
+Done: mapped_file295.parquet
+Done: mapped_file429.parquet
+Done: mapped_file451.parquet
+Done: mapped_file34.parquet
+Done: mapped_file317.parquet
+Done: mapped_file385.parquet
+Done: mapped_file362.parquet
+Done: mapped_file407.parquet
+Done: mapped_file296.parquet
+Done: mapped_file43.parquet
+Done: mapped_file452.parquet
+Done: mapped_file340.parquet
+Done: mapped_file318.parquet
+Done: mapped_file386.parquet
+Done: mapped_file363.parquet
+Done: mapped_file408.parquet
+Done: mapped_file297.parquet
+Done: mapped_file430.parquet
+Done: mapped_file453.parquet
+Done: mapped_file454.parquet
+Done: mapped_file341.parquet
+Done: mapped_file455.parquet
+Done: mapped_file387.parquet
+Done: mapped_file319.parquet
+Done: mapped_file456.parquet
+Done: mapped_file457.parquet
+Done: mapped_file458.parquet
+Done: mapped_file459.parquet
+Done: mapped_file364.parquet
+Done: mapped_file409.parquet
+Done: mapped_file298.parquet
+Done: mapped_file431.parquet
+Done: mapped_file388.parquet
+Done: mapped_file342.parquet
+Done: mapped_file32.parquet
+Done: mapped_file46.parquet
+Done: mapped_file365.parquet
+Done: mapped_file460.parquet
+Done: mapped_file41.parquet
+Done: mapped_file461.parquet
+Done: mapped_file462.parquet
+Done: mapped_file299.parquet
+Done: mapped_file463.parquet
+Done: mapped_file464.parquet
+Done: mapped_file465.parquet
+Done: mapped_file466.parquet
+Done: mapped_file467.parquet
+Done: mapped_file468.parquet
+Done: mapped_file432.parquet
+Done: mapped_file469.parquet
+Done: mapped_file320.parquet
+Done: mapped_file343.parquet
+Done: mapped_file389.parquet
+Done: mapped_file366.parquet
+Done: mapped_file410.parquet
+Done: mapped_file3.parquet
+Done: mapped_file433.parquet
+Done: mapped_file47.parquet
+Done: mapped_file470.parquet
+Done: mapped_file471.parquet
+Done: mapped_file472.parquet
+Done: mapped_file473.parquet
+Done: mapped_file39.parquet
+Done: mapped_file474.parquet
+Done: mapped_file321.parquet
+Done: mapped_file344.parquet
+Done: mapped_file475.parquet
+Done: mapped_file476.parquet
+Done: mapped_file477.parquet
+Done: mapped_file478.parquet
+Done: mapped_file367.parquet
+Done: mapped_file479.parquet
+Done: mapped_file411.parquet
+Done: mapped_file30.parquet
+Done: mapped_file481.parquet
+Done: mapped_file482.parquet
+Done: mapped_file483.parquet
+Done: mapped_file434.parquet
+Done: mapped_file484.parquet
+Done: mapped_file485.parquet
+Done: mapped_file486.parquet
+Done: mapped_file487.parquet
+Done: mapped_file488.parquet
+Done: mapped_file489.parquet
+Done: mapped_file390.parquet
+Done: mapped_file503.parquet
+Done: mapped_file504.parquet
+Done: mapped_file322.parquet
+Done: mapped_file505.parquet
+Done: mapped_file345.parquet
+Done: mapped_file526.parquet
+Done: mapped_file368.parquet
+Done: mapped_file506.parquet
+Done: mapped_file549.parquet
+Done: mapped_file571.parquet
+Done: mapped_file527.parquet
+Done: mapped_file507.parquet
+Done: mapped_file48.parquet
+Done: mapped_file528.parquet
+Done: mapped_file508.parquet
+Done: mapped_file480.parquet
+Done: mapped_file529.parquet
+Done: mapped_file509.parquet
+Done: mapped_file412.parquet
+Done: mapped_file594.parquet
+Done: mapped_file572.parquet
+Done: mapped_file616.parquet
+Done: mapped_file573.parquet
+Done: mapped_file595.parquet
+Done: mapped_file617.parquet
+Done: mapped_file574.parquet
+Done: mapped_file596.parquet
+Done: mapped_file618.parquet
+Done: mapped_file575.parquet
+Done: mapped_file597.parquet
+Done: mapped_file619.parquet
+Done: mapped_file576.parquet
+Done: mapped_file598.parquet
+Done: mapped_file577.parquet
+Done: mapped_file599.parquet
+Done: mapped_file435.parquet
+Done: mapped_file578.parquet
+Done: mapped_file639.parquet
+Done: mapped_file579.parquet
+Done: mapped_file49.parquet
+Done: mapped_file490.parquet
+Done: mapped_file491.parquet
+Done: mapped_file492.parquet
+Done: mapped_file493.parquet
+Done: mapped_file494.parquet
+Done: mapped_file495.parquet
+Done: mapped_file496.parquet
+Done: mapped_file55.parquet
+Done: mapped_file497.parquet
+Done: mapped_file550.parquet
+Done: mapped_file498.parquet
+Done: mapped_file551.parquet
+Done: mapped_file499.parquet
+Done: mapped_file51.parquet
+Done: mapped_file552.parquet
+Done: mapped_file53.parquet
+Done: mapped_file510.parquet
+Done: mapped_file553.parquet
+Done: mapped_file530.parquet
+Done: mapped_file511.parquet
+Done: mapped_file554.parquet
+Done: mapped_file531.parquet
+Done: mapped_file512.parquet
+Done: mapped_file555.parquet
+Done: mapped_file532.parquet
+Done: mapped_file513.parquet
+Done: mapped_file556.parquet
+Done: mapped_file514.parquet
+Done: mapped_file533.parquet
+Done: mapped_file557.parquet
+Done: mapped_file534.parquet
+Done: mapped_file515.parquet
+Done: mapped_file62.parquet
+Done: mapped_file558.parquet
+Done: mapped_file535.parquet
+Done: mapped_file64.parquet
+Done: mapped_file58.parquet
+Done: mapped_file516.parquet
+Done: mapped_file620.parquet
+Done: mapped_file559.parquet
+Done: mapped_file6.parquet
+Done: mapped_file536.parquet
+Done: mapped_file640.parquet
+Done: mapped_file580.parquet
+Done: mapped_file517.parquet
+Done: mapped_file621.parquet
+Done: mapped_file537.parquet
+Done: mapped_file641.parquet
+Done: mapped_file581.parquet
+Done: mapped_file518.parquet
+Done: mapped_file622.parquet
+Done: mapped_file582.parquet
+Done: mapped_file538.parquet
+Done: mapped_file623.parquet
+Done: mapped_file642.parquet
+Done: mapped_file519.parquet
+Done: mapped_file583.parquet
+Done: mapped_file539.parquet
+Done: mapped_file624.parquet
+Done: mapped_file643.parquet
+Done: mapped_file584.parquet
+Done: mapped_file625.parquet
+Done: mapped_file644.parquet
+Done: mapped_file585.parquet
+Done: mapped_file626.parquet
+Done: mapped_file645.parquet
+Done: mapped_file586.parquet
+Done: mapped_file627.parquet
+Done: mapped_file646.parquet
+Done: mapped_file587.parquet
+Done: mapped_file628.parquet
+Done: mapped_file647.parquet
+Done: mapped_file588.parquet
+Done: mapped_file629.parquet
+Done: mapped_file648.parquet
+Done: mapped_file589.parquet
+Done: mapped_file649.parquet
+Done: mapped_file5.parquet
+Done: mapped_file60.parquet
+Done: mapped_file600.parquet
+Done: mapped_file56.parquet
+Done: mapped_file601.parquet
+Done: mapped_file560.parquet
+Done: mapped_file54.parquet
+Done: mapped_file602.parquet
+Done: mapped_file561.parquet
+Done: mapped_file52.parquet
+Done: mapped_file562.parquet
+Done: mapped_file540.parquet
+Done: mapped_file603.parquet
+Done: mapped_file520.parquet
+Done: mapped_file604.parquet
+Done: mapped_file563.parquet
+Done: mapped_file541.parquet
+Done: mapped_file521.parquet
+Done: mapped_file542.parquet
+Done: mapped_file605.parquet
+Done: mapped_file564.parquet
+Done: mapped_file522.parquet
+Done: mapped_file606.parquet
+Done: mapped_file543.parquet
+Done: mapped_file523.parquet
+Done: mapped_file565.parquet
+Done: mapped_file63.parquet
+Done: mapped_file607.parquet
+Done: mapped_file544.parquet
+Done: mapped_file566.parquet
+Done: mapped_file524.parquet
+Done: mapped_file59.parquet
+Done: mapped_file608.parquet
+Done: mapped_file630.parquet
+Done: mapped_file567.parquet
+Done: mapped_file590.parquet
+Done: mapped_file545.parquet
+Done: mapped_file65.parquet
+Done: mapped_file525.parquet
+Done: mapped_file609.parquet
+Done: mapped_file631.parquet
+Done: mapped_file568.parquet
+Done: mapped_file591.parquet
+Done: mapped_file650.parquet
+Done: mapped_file661.parquet
+Done: mapped_file546.parquet
+Done: mapped_file569.parquet
+Done: mapped_file651.parquet
+Done: mapped_file592.parquet
+Done: mapped_file632.parquet
+Done: mapped_file50.parquet
+Done: mapped_file547.parquet
+Done: mapped_file662.parquet
+Done: mapped_file652.parquet
+Done: mapped_file500.parquet
+Done: mapped_file593.parquet
+Done: mapped_file633.parquet
+Done: mapped_file663.parquet
+Done: mapped_file548.parquet
+Done: mapped_file653.parquet
+Done: mapped_file501.parquet
+Done: mapped_file684.parquet
+Done: mapped_file664.parquet
+Done: mapped_file634.parquet
+Done: mapped_file706.parquet
+Done: mapped_file654.parquet
+Done: mapped_file685.parquet
+Done: mapped_file502.parquet
+Done: mapped_file665.parquet
+Done: mapped_file635.parquet
+Done: mapped_file686.parquet
+Done: mapped_file707.parquet
+Done: mapped_file655.parquet
+Done: mapped_file729.parquet
+Done: mapped_file666.parquet
+Done: mapped_file636.parquet
+Done: mapped_file656.parquet
+Done: mapped_file687.parquet
+Done: mapped_file708.parquet
+Done: mapped_file637.parquet
+Done: mapped_file667.parquet
+Done: mapped_file688.parquet
+Done: mapped_file709.parquet
+Done: mapped_file657.parquet
+Done: mapped_file638.parquet
+Done: mapped_file668.parquet
+Done: mapped_file658.parquet
+Done: mapped_file689.parquet
+Done: mapped_file751.parquet
+Done: mapped_file659.parquet
+Done: mapped_file669.parquet
+Done: mapped_file752.parquet
+Done: mapped_file753.parquet
+Done: mapped_file754.parquet
+Done: mapped_file755.parquet
+Done: mapped_file756.parquet
+Done: mapped_file757.parquet
+Done: mapped_file758.parquet
+Done: mapped_file759.parquet
+Done: mapped_file61.parquet
+Done: mapped_file610.parquet
+Done: mapped_file611.parquet
+Done: mapped_file57.parquet
+Done: mapped_file612.parquet
+Done: mapped_file570.parquet
+Done: mapped_file774.parquet
+Done: mapped_file613.parquet
+Done: mapped_file614.parquet
+Done: mapped_file775.parquet
+Done: mapped_file73.parquet
+Done: mapped_file615.parquet
+Done: mapped_file776.parquet
+Done: mapped_file730.parquet
+Done: mapped_file777.parquet
+Done: mapped_file71.parquet
+Done: mapped_file731.parquet
+Done: mapped_file69.parquet
+Done: mapped_file710.parquet
+Done: mapped_file732.parquet
+Done: mapped_file690.parquet
+Done: mapped_file66.parquet
+Done: mapped_file711.parquet
+Done: mapped_file67.parquet
+Done: mapped_file733.parquet
+Done: mapped_file660.parquet
+Done: mapped_file691.parquet
+Done: mapped_file712.parquet
+Done: mapped_file670.parquet
+Done: mapped_file734.parquet
+Done: mapped_file692.parquet
+Done: mapped_file713.parquet
+Done: mapped_file671.parquet
+Done: mapped_file735.parquet
+Done: mapped_file693.parquet
+Done: mapped_file714.parquet
+Done: mapped_file672.parquet
+Done: mapped_file736.parquet
+Done: mapped_file694.parquet
+Done: mapped_file715.parquet
+Done: mapped_file673.parquet
+Done: mapped_file737.parquet
+Done: mapped_file695.parquet
+Done: mapped_file716.parquet
+Done: mapped_file674.parquet
+Done: mapped_file738.parquet
+Done: mapped_file696.parquet
+Done: mapped_file717.parquet
+Done: mapped_file675.parquet
+Done: mapped_file739.parquet…
+Show all (21.9 kB)
+Collecting polars
+  Downloading polars-1.29.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (34.8 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 34.8/34.8 MB 18.3 MB/s eta 0:00:0000:0100:01
+Installing collected packages: polars
+Successfully installed polars-1.29.0
 
-# Load and split files into chunks
-def split_and_submit(file_path, executor, futures):
-    try:
-        df = pd.read_parquet(file_path, columns=required_cols)
-        df = df.dropna(subset=['Final Category', 'MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'])
-        df = df[df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'].str.strip() != '']
-        df = df.drop_duplicates(subset=['Final Category', 'MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'])
+🔹 Schema Group 1 - 2 file(s)
+Columns: ['CMPNT_CAT_CD_DESC', 'CMPNT_CAT_CLEAN', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_UOM_CD', 'Final Category', 'MATL_SHRT_DESC', 'MATL_SHRT_DESC_AND_CMPNT_MATL_DESC', 'RULE_HINT', 'UNIT_GROUP', 'mapping_column']
+Files:
+  - mapped_file0_chunk0.parquet
+  - mapped_file0_chunk1.parquet
 
-        total_len = len(df)
-        if total_len == 0:
-            return
+🔹 Schema Group 2 - 1200 file(s)
+Columns: ['CMPNT_CAT_CD_DESC', 'CMPNT_CAT_CLEAN', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_UOM_CD', 'Final Category', 'MATL_SHRT_DESC', 'MATL_SHRT_DESC_AND_CMPNT_MATL_DESC', 'UNIT_GROUP', 'mapping_column']
+Files:
+  - mapped_file0_chunk2.parquet
+  - mapped_file0_chunk3.parquet
+  - mapped_file100_chunk0.parquet
+  - mapped_file100_chunk1.parquet
+  - mapped_file100_chunk2.parquet
+  - mapped_file100_chunk3.parquet
+  - mapped_file101_chunk0.parquet
+  - mapped_file101_chunk1.parquet
+  - mapped_file101_chunk2.parquet
+  - mapped_file101_chunk3.parquet
+  - mapped_file102_chunk0.parquet
+  - mapped_file102_chunk1.parquet
+  - mapped_file102_chunk2.parquet
+  - mapped_file102_chunk3.parquet
+  - mapped_file103_chunk0.parquet
+  - mapped_file103_chunk1.parquet
+  - mapped_file103_chunk2.parquet
+  - mapped_file103_chunk3.parquet
+  - mapped_file104_chunk0.parquet
+  - mapped_file104_chunk1.parquet
+  - mapped_file104_chunk2.parquet
+  - mapped_file104_chunk3.parquet
+  - mapped_file105_chunk0.parquet
+  - mapped_file105_chunk1.parquet
+  - mapped_file105_chunk2.parquet
+  - mapped_file105_chunk3.parquet
+  - mapped_file106_chunk0.parquet
+  - mapped_file106_chunk1.parquet
+  - mapped_file106_chunk2.parquet
+  - mapped_file106_chunk3.parquet
+  - mapped_file107_chunk0.parquet
+  - mapped_file107_chunk1.parquet
+  - mapped_file107_chunk2.parquet
+  - mapped_file107_chunk3.parquet
+  - mapped_file108_chunk0.parquet
+  - mapped_file108_chunk1.parquet
+  - mapped_file108_chunk2.parquet
+  - mapped_file108_chunk3.parquet
+  - mapped_file109_chunk0.parquet
+  - mapped_file109_chunk1.parquet
+  - mapped_file109_chunk2.parquet
+  - mapped_file109_chunk3.parquet
+  - mapped_file10_chunk0.parquet
+  - mapped_file10_chunk1.parquet
+  - mapped_file10_chunk2.parquet
+  - mapped_file10_chunk3.parquet
+  - mapped_file110_chunk0.parquet
+  - mapped_file110_chunk1.parquet
+  - mapped_file110_chunk2.parquet
+  - mapped_file110_chunk3.parquet
+  - mapped_file111_chunk0.parquet
+  - mapped_file111_chunk1.parquet
+  - mapped_file111_chunk2.parquet
+  - mapped_file111_chunk3.parquet
+  - mapped_file112_chunk0.parquet
+  - mapped_file112_chunk1.parquet
+  - mapped_file112_chunk2.parquet
+  - mapped_file112_chunk3.parquet
+  - mapped_file113_chunk0.parquet
+  - mapped_file113_chunk1.parquet
+  - mapped_file113_chunk2.parquet
+  - mapped_file113_chunk3.parquet
+  - mapped_file114_chunk0.parquet
+  - mapped_file114_chunk1.parquet
+  - mapped_file114_chunk2.parquet
+  - mapped_file114_chunk3.parquet
+  - mapped_file115_chunk0.parquet
+  - mapped_file115_chunk1.parquet
+  - mapped_file115_chunk2.parquet
+  - mapped_file115_chunk3.parquet
+  - mapped_file116_chunk0.parquet
+  - mapped_file116_chunk1.parquet
+  - mapped_file116_chunk2.parquet
+  - mapped_file116_chunk3.parquet
+  - mapped_file117_chunk0.parquet
+  - mapped_file117_chunk1.parquet
+  - mapped_file117_chunk2.parquet
+  - mapped_file117_chunk3.parquet
+  - mapped_file118_chunk0.parquet
+  - mapped_file118_chunk1.parquet
+  - mapped_file118_chunk2.parquet
+  - mapped_file118_chunk3.parquet
+  - mapped_file119_chunk0.parquet
+  - mapped_file119_chunk1.parquet
+  - mapped_file119_chunk2.parquet
+  - mapped_file119_chunk3.parquet
+  - mapped_file11_chunk0.parquet
+  - mapped_file11_chunk1.parquet
+  - mapped_file11_chunk2.parquet
+  - mapped_file11_chunk3.parquet
+  - mapped_file120_chunk0.parquet
+  - mapped_file120_chunk1.parquet
+  - mapped_file120_chunk2.parquet
+  - mapped_file120_chunk3.parquet
+  - mapped_file121_chunk0.parquet
+  - mapped_file121_chunk1.parquet
+  - mapped_file121_chunk2.parquet
+  - mapped_file121_chunk3.parquet
+  - mapped_file122_chunk0.parquet
+  - mapped_file122_chunk1.parquet
+  - mapped_file122_chunk2.parquet
+  - mapped_file122_chunk3.parquet
+  - mapped_file123_chunk0.parquet
+  - mapped_file123_chunk1.parquet
+  - mapped_file123_chunk2.parquet
+  - mapped_file123_chunk3.parquet
+  - mapped_file124_chunk0.parquet
+  - mapped_file124_chunk1.parquet
+  - mapped_file124_chunk2.parquet
+  - mapped_file124_chunk3.parquet
+  - mapped_file125_chunk0.parquet
+  - mapped_file125_chunk1.parquet
+  - mapped_file125_chunk2.parquet
+  - mapped_file125_chunk3.parquet
+  - mapped_file126_chunk0.parquet
+  - mapped_file126_chunk1.parquet
+  - mapped_file126_chunk2.parquet
+  - mapped_file126_chunk3.parquet
+  - mapped_file127_chunk0.parquet
+  - mapped_file127_chunk1.parquet
+  - mapped_file127_chunk2.parquet
+  - mapped_file127_chunk3.parquet
+  - mapped_file128_chunk0.parquet
+  - mapped_file128_chunk1.parquet
+  - mapped_file128_chunk2.parquet
+  - mapped_file128_chunk3.parquet
+  - mapped_file129_chunk0.parquet
+  - mapped_file129_chunk1.parquet
+  - mapped_file129_chunk2.parquet
+  - mapped_file129_chunk3.parquet
+  - mapped_file12_chunk0.parquet
+  - mapped_file12_chunk1.parquet
+  - mapped_file12_chunk2.parquet
+  - mapped_file12_chunk3.parquet
+  - mapped_file130_chunk0.parquet
+  - mapped_file130_chunk1.parquet
+  - mapped_file130_chunk2.parquet
+  - mapped_file130_chunk3.parquet
+  - mapped_file131_chunk0.parquet
+  - mapped_file131_chunk1.parquet
+  - mapped_file131_chunk2.parquet
+  - mapped_file131_chunk3.parquet
+  - mapped_file132_chunk0.parquet
+  - mapped_file132_chunk1.parquet
+  - mapped_file132_chunk2.parquet
+  - mapped_file132_chunk3.parquet
+  - mapped_file133_chunk0.parquet
+  - mapped_file133_chunk1.parquet
+  - mapped_file133_chunk2.parquet
+  - mapped_file133_chunk3.parquet
+  - mapped_file134_chunk0.parquet
+  - mapped_file134_chunk1.parquet
+  - mapped_file134_chunk2.parquet
+  - mapped_file134_chunk3.parquet
+  - mapped_file135_chunk0.parquet
+  - mapped_file135_chunk1.parquet
+  - mapped_file135_chunk2.parquet
+  - mapped_file135_chunk3.parquet
+  - mapped_file136_chunk0.parquet
+  - mapped_file136_chunk1.parquet
+  - mapped_file136_chunk2.parquet
+  - mapped_file136_chunk3.parquet
+  - mapped_file137_chunk0.parquet
+  - mapped_file137_chunk1.parquet
+  - mapped_file137_chunk2.parquet
+  - mapped_file137_chunk3.parquet
+  - mapped_file138_chunk0.parquet
+  - mapped_file138_chunk1.parquet
+  - mapped_file138_chunk2.parquet
+  - mapped_file138_chunk3.parquet
+  - mapped_file139_chunk0.parquet
+  - mapped_file139_chunk1.parquet
+  - mapped_file139_chunk2.parquet
+  - mapped_file139_chunk3.parquet
+  - mapped_file13_chunk0.parquet
+  - mapped_file13_chunk1.parquet
+  - mapped_file13_chunk2.parquet
+  - mapped_file13_chunk3.parquet
+  - mapped_file140_chunk0.parquet
+  - mapped_file140_chunk1.parquet
+  - mapped_file140_chunk2.parquet
+  - mapped_file140_chunk3.parquet
+  - mapped_file141_chunk0.parquet
+  - mapped_file141_chunk1.parquet
+  - mapped_file141_chunk2.parquet
+  - mapped_file141_chunk3.parquet
+  - mapped_file142_chunk0.parquet
+  - mapped_file142_chunk1.parquet
+  - mapped_file142_chunk2.parquet
+  - mapped_file142_chunk3.parquet
+  - mapped_file143_chunk0.parquet
+  - mapped_file143_chunk1.parquet
+  - mapped_file143_chunk2.parquet
+  - mapped_file143_chunk3.parquet
+  - mapped_file144_chunk0.parquet
+  - mapped_file144_chunk1.parquet
+  - mapped_file144_chunk2.parquet
+  - mapped_file144_chunk3.parquet
+  - mapped_file145_chunk0.parquet
+  - mapped_file145_chunk1.parquet
+  - mapped_file145_chunk2.parquet
+  - mapped_file145_chunk3.parquet
+  - mapped_file146_chunk0.parquet
+  - mapped_file146_chunk1.parquet
+  - mapped_file146_chunk2.parquet
+  - mapped_file146_chunk3.parquet
+  - mapped_file147_chunk0.parquet
+  - mapped_file147_chunk1.parquet
+  - mapped_file147_chunk2.parquet
+  - mapped_file147_chunk3.parquet
+  - mapped_file148_chunk0.parquet
+  - mapped_file148_chunk1.parquet
+  - mapped_file148_chunk2.parquet
+  - mapped_file148_chunk3.parquet
+  - mapped_file149_chunk0.parquet
+  - mapped_file149_chunk1.parquet
+  - mapped_file149_chunk2.parquet
+  - mapped_file149_chunk3.parquet
+  - mapped_file14_chunk0.parquet
+  - mapped_file14_chunk1.parquet
+  - mapped_file14_chunk2.parquet
+  - mapped_file14_chunk3.parquet
+  - mapped_file150_chunk0.parquet
+  - mapped_file150_chunk1.parquet
+  - mapped_file150_chunk2.parquet
+  - mapped_file150_chunk3.parquet
+  - mapped_file151_chunk0.parquet
+  - mapped_file151_chunk1.parquet
+  - mapped_file151_chunk2.parquet
+  - mapped_file151_chunk3.parquet
+  - mapped_file152_chunk0.parquet
+  - mapped_file152_chunk1.parquet
+  - mapped_file152_chunk2.parquet
+  - mapped_file152_chunk3.parquet
+  - mapped_file153_chunk0.parquet
+  - mapped_file153_chunk1.parquet
+  - mapped_file153_chunk2.parquet
+  - mapped_file153_chunk3.parquet
+  - mapped_file154_chunk0.parquet
+  - mapped_file154_chunk1.parquet
+  - mapped_file154_chunk2.parquet
+  - mapped_file154_chunk3.parquet
+  - mapped_file155_chunk0.parquet
+  - mapped_file155_chunk1.parquet
+  - mapped_file155_chunk2.parquet
+  - mapped_file155_chunk3.parquet
+  - mapped_file156_chunk0.parquet
+  - mapped_file156_chunk1.parquet
+  - mapped_file156_chunk2.parquet
+  - mapped_file156_chunk3.parquet
+  - mapped_file157_chunk0.parquet
+  - mapped_file157_chunk1.parquet
+  - mapped_file157_chunk2.parquet
+  - mapped_file157_chunk3.parquet
+  - mapped_file158_chunk0.parquet
+  - mapped_file158_chunk1.parquet
+  - mapped_file158_chunk2.parquet
+  - mapped_file158_chunk3.parquet
+  - mapped_file159_chunk0.parquet
+  - mapped_file159_chunk1.parquet
+  - mapped_file159_chunk2.parquet
+  - mapped_file159_chunk3.parquet
+  - mapped_file15_chunk0.parquet
+  - mapped_file15_chunk1.parquet
+  - mapped_file15_chunk2.parquet
+  - mapped_file15_chunk3.parquet
+  - mapped_file160_chunk0.parquet
+  - mapped_file160_chunk1.parquet
+  - mapped_file160_chunk2.parquet
+  - mapped_file160_chunk3.parquet
+  - mapped_file161_chunk0.parquet
+  - mapped_file161_chunk1.parquet
+  - mapped_file161_chunk2.parquet
+  - mapped_file161_chunk3.parquet
+  - mapped_file162_chunk0.parquet
+  - mapped_file162_chunk1.parquet
+  - mapped_file162_chunk2.parquet
+  - mapped_file162_chunk3.parquet
+  - mapped_file163_chunk0.parquet
+  - mapped_file163_chunk1.parquet
+  - mapped_file163_chunk2.parquet
+  - mapped_file163_chunk3.parquet
+  - mapped_file164_chunk0.parquet
+  - mapped_file164_chunk1.parquet
+  - mapped_file164_chunk2.parquet
+  - mapped_file164_chunk3.parquet
+  - mapped_file165_chunk0.parquet
+  - mapped_file165_chunk1.parquet
+  - mapped_file165_chunk2.parquet
+  - mapped_file165_chunk3.parquet
+  - mapped_file166_chunk0.parquet
+  - mapped_file166_chunk1.parquet
+  - mapped_file166_chunk2.parquet
+  - mapped_file166_chunk3.parquet
+  - mapped_file167_chunk0.parquet
+  - mapped_file167_chunk1.parquet
+  - mapped_file167_chunk2.parquet
+  - mapped_file167_chunk3.parquet
+  - mapped_file168_chunk0.parquet
+  - mapped_file168_chunk1.parquet
+  - mapped_file168_chunk2.parquet
+  - mapped_file168_chunk3.parquet
+  - mapped_file169_chunk0.parquet
+  - mapped_file169_chunk1.parquet
+  - mapped_file169_chunk2.parquet
+  - mapped_file169_chunk3.parquet
+  - mapped_file16_chunk0.parquet
+  - mapped_file16_chunk1.parquet
+  - mapped_file16_chunk2.parquet
+  - mapped_file16_chunk3.parquet
+  - mapped_file170_chunk0.parquet
+  - mapped_file170_chunk1.parquet
+  - mapped_file170_chunk2.parquet
+  - mapped_file170_chunk3.parquet
+  - mapped_file171_chunk0.parquet
+  - mapped_file171_chunk1.parquet
+  - mapped_file171_chunk2.parquet
+  - mapped_file171_chunk3.parquet
+  - mapped_file172_chunk0.parquet
+  - mapped_file172_chunk1.parquet
+  - mapped_file172_chunk2.parquet
+  - mapped_file172_chunk3.parquet
+  - mapped_file173_chunk0.parquet
+  - mapped_file173_chunk1.parquet
+  - mapped_file173_chunk2.parquet
+  - mapped_file173_chunk3.parquet
+  - mapped_file174_chunk0.parquet
+  - mapped_file174_chunk1.parquet
+  - mapped_file174_chunk2.parquet
+  - mapped_file174_chunk3.parquet
+  - mapped_file175_chunk0.parquet
+  - mapped_file175_chunk1.parquet
+  - mapped_file175_chunk2.parquet
+  - mapped_file175_chunk3.parquet
+  - mapped_file176_chunk0.parquet
+  - mapped_file176_chunk1.parquet
+  - mapped_file176_chunk2.parquet
+  - mapped_file176_chunk3.parquet
+  - mapped_file177_chunk0.parquet
+  - mapped_file177_chunk1.parquet
+  - mapped_file177_chunk2.parquet
+  - mapped_file177_chunk3.parquet
+  - mapped_file178_chunk0.parquet
+  - mapped_file178_chunk1.parquet
+  - mapped_file178_chunk2.parquet
+  - mapped_file178_chunk3.parquet
+  - mapped_file179_chunk0.parquet
+  - mapped_file179_chunk1.parquet
+  - mapped_file179_chunk2.parquet
+  - mapped_file179_chunk3.parquet
+  - mapped_file17_chunk0.parquet
+  - mapped_file17_chunk1.parquet
+  - mapped_file17_chunk2.parquet
+  - mapped_file17_chunk3.parquet
+  - mapped_file180_chunk0.parquet
+  - mapped_file180_chunk1.parquet
+  - mapped_file180_chunk2.parquet
+  - mapped_file180_chunk3.parquet
+  - mapped_file181_chunk0.parquet
+  - mapped_file181_chunk1.parquet
+  - mapped_file181_chunk2.parquet
+  - mapped_file181_chunk3.parquet
+  - mapped_file182_chunk0.parquet
+  - mapped_file182_chunk1.parquet
+  - mapped_file182_chunk2.parquet
+  - mapped_file182_chunk3.parquet
+  - mapped_file183_chunk0.parquet
+  - mapped_file183_chunk1.parquet
+  - mapped_file183_chunk2.parquet
+  - mapped_file183_chunk3.parquet
+  - mapped_file184_chunk0.parquet
+  - mapped_file184_chunk1.parquet
+  - mapped_file184_chunk2.parquet
+  - mapped_file184_chunk3.parquet
+  - mapped_file185_chunk0.parquet
+  - mapped_file185_chunk1.parquet
+  - mapped_file185_chunk2.parquet
+  - mapped_file185_chunk3.parquet
+  - mapped_file186_chunk0.parquet
+  - mapped_file186_chunk1.parquet
+  - mapped_file186_chunk2.parquet
+  - mapped_file186_chunk3.parquet
+  - mapped_file187_chunk0.parquet
+  - mapped_file187_chunk1.parquet
+  - mapped_file187_chunk2.parquet
+  - mapped_file187_chunk3.parquet
+  - mapped_file188_chunk0.parquet
+  - mapped_file188_chunk1.parquet
+  - mapped_file188_chunk2.parquet
+  - mapped_file188_chunk3.parquet
+  - mapped_file189_chunk0.parquet
+  - mapped_file189_chunk1.parquet
+  - mapped_file189_chunk2.parquet
+  - mapped_file189_chunk3.parquet
+  - mapped_file18_chunk0.parquet
+  - mapped_file18_chunk1.parquet
+  - mapped_file18_chunk2.parquet
+  - mapped_file18_chunk3.parquet
+  - mapped_file190_chunk0.parquet
+  - mapped_file190_chunk1.parquet
+  - mapped_file190_chunk2.parquet
+  - mapped_file190_chunk3.parquet
+  - mapped_file191_chunk0.parquet
+  - mapped_file191_chunk1.parquet
+  - mapped_file191_chunk2.parquet
+  - mapped_file191_chunk3.parquet
+  - mapped_file192_chunk0.parquet
+  - mapped_file192_chunk1.parquet
+  - mapped_file192_chunk2.parquet
+  - mapped_file192_chunk3.parquet
+  - mapped_file193_chunk0.parquet
+  - mapped_file193_chunk1.parquet
+  - mapped_file193_chunk2.parquet
+  - mapped_file193_chunk3.parquet
+  - mapped_file194_chunk0.parquet
+  - mapped_file194_chunk1.parquet
+  - mapped_file194_chunk2.parquet
+  - mapped_file194_chunk3.parquet
+  - mapped_file195_chunk0.parquet
+  - mapped_file195_chunk1.parquet
+  - mapped_file195_chunk2.parquet
+  - mapped_file195_chunk3.parquet
+  - mapped_file196_chunk0.parquet
+  - mapped_file196_chunk1.parquet
+  - mapped_file196_chunk2.parquet
+  - mapped_file196_chunk3.parquet
+  - mapped_file197_chunk0.parquet
+  - mapped_file197_chunk1.parquet
+  - mapped_file197_chunk2.parquet
+  - mapped_file197_chunk3.parquet
+  - mapped_file198_chunk0.parquet
+  - mapped_file198_chunk1.parquet
+  - mapped_file198_chunk2.parquet
+  - mapped_file198_chunk3.parquet
+  - mapped_file199_chunk0.parquet
+  - mapped_file199_chunk1.parquet
+  - mapped_file199_chunk2.parquet
+  - mapped_file199_chunk3.parquet
+  - mapped_file19_chunk0.parquet
+  - mapped_file19_chunk1.parquet
+  - mapped_file19_chunk2.parquet
+  - mapped_file19_chunk3.parquet
+  - mapped_file1_chunk0.parquet
+  - mapped_file1_chunk1.parquet
+  - mapped_file1_chunk2.parquet
+  - mapped_file1_chunk3.parquet
+  - mapped_file200_chunk0.parquet
+  - mapped_file200_chunk1.parquet
+  - mapped_file200_chunk2.parquet
+  - mapped_file200_chunk3.parquet
+  - mapped_file201_chunk0.parquet
+  - mapped_file201_chunk1.parquet
+  - mapped_file201_chunk2.parquet
+  - mapped_file201_chunk3.parquet
+  - mapped_file202_chunk0.parquet
+  - mapped_file202_chunk1.parquet
+  - mapped_file202_chunk2.parquet
+  - mapped_file202_chunk3.parquet
+  - mapped_file203_chunk0.parquet
+  - mapped_file203_chunk1.parquet
+  - mapped_file203_chunk2.parquet
+  - mapped_file203_chunk3.parquet
+  - mapped_file204_chunk0.parquet
+  - mapped_file204_chunk1.parquet
+  - mapped_file204_chunk2.parquet
+  - mapped_file204_chunk3.parquet
+  - mapped_file205_chunk0.parquet
+  - mapped_file205_chunk1.parquet
+  - mapped_file205_chunk2.parquet
+  - mapped_file205_chunk3.parquet
+  - mapped_file206_chunk0.parquet
+  - mapped_file206_chunk1.parquet
+  - mapped_file206_chunk2.parquet
+  - mapped_file206_chunk3.parquet
+  - mapped_file207_chunk0.parquet
+  - mapped_file207_chunk1.parquet
+  - mapped_file207_chunk2.parquet
+  - mapped_file207_chunk3.parquet
+  - mapped_file208_chunk0.parquet
+  - mapped_file208_chunk1.parquet
+  - mapped_file208_chunk2.parquet
+  - mapped_file208_chunk3.parquet
+  - mapped_file209_chunk0.parquet
+  - mapped_file209_chunk1.parquet
+  - mapped_file209_chunk2.parquet
+  - mapped_file209_chunk3.parquet
+  - mapped_file20_chunk0.parquet
+  - mapped_file20_chunk1.parquet
+  - mapped_file20_chunk2.parquet
+  - mapped_file20_chunk3.parquet
+  - mapped_file210_chunk0.parquet
+  - mapped_file210_chunk1.parquet
+  - mapped_file210_chunk2.parquet
+  - mapped_file210_chunk3.parquet
+  - mapped_file211_chunk0.parquet
+  - mapped_file211_chunk1.parquet
+  - mapped_file211_chunk2.parquet
+  - mapped_file211_chunk3.parquet
+  - mapped_file212_chunk0.parquet
+  - mapped_file212_chunk1.parquet
+  - mapped_file212_chunk2.parquet
+  - mapped_file212_chunk3.parquet
+  - mapped_file213_chunk0.parquet
+  - mapped_file213_chunk1.parquet
+  - mapped_file213_chunk2.parquet
+  - mapped_file213_chunk3.parquet
+  - mapped_file214_chunk0.parquet
+  - mapped_file214_chunk1.parquet
+  - mapped_file214_chunk2.parquet
+  - mapped_file214_chunk3.parquet
+  - mapped_file215_chunk0.parquet
+  - mapped_file215_chunk1.parquet
+  - mapped_file215_chunk2.parquet
+  - mapped_file215_chunk3.parquet
+  - mapped_file216_chunk0.parquet
+  - mapped_file216_chunk1.parquet
+  - mapped_file216_chunk2.parquet
+  - mapped_file216_chunk3.parquet
+  - mapped_file217_chunk0.parquet
+  - mapped_file217_chunk1.parquet
+  - mapped_file217_chunk2.parquet
+  - mapped_file217_chunk3.parquet
+  - mapped_file218_chunk0.parquet
+  - mapped_file218_chunk1.parquet
+  - mapped_file218_chunk2.parquet
+  - mapped_file218_chunk3.parquet
+  - mapped_file219_chunk0.parquet
+  - mapped_file219_chunk1.parquet
+  - mapped_file219_chunk2.parquet
+  - mapped_file219_chunk3.parquet
+  - mapped_file21_chunk0.parquet
+  - mapped_file21_chunk1.parquet
+  - mapped_file21_chunk2.parquet
+  - mapped_file21_chunk3.parquet
+  - mapped_file220_chunk0.parquet
+  - mapped_file220_chunk1.parquet
+  - mapped_file220_chunk2.parquet
+  - mapped_file220_chunk3.parquet
+  - mapped_file221_chunk0.parquet
+  - mapped_file221_chunk1.parquet
+  - mapped_file221_chunk2.parquet
+  - mapped_file221_chunk3.parquet
+  - mapped_file222_chunk0.parquet
+  - mapped_file222_chunk1.parquet
+  - mapped_file222_chunk2.parquet
+  - mapped_file222_chunk3.parquet
+  - mapped_file223_chunk0.parquet
+  - mapped_file223_chunk1.parquet
+  - mapped_file223_chunk2.parquet
+  - mapped_file223_chunk3.parquet
+  - mapped_file224_chunk0.parquet
+  - mapped_file224_chunk1.parquet
+  - mapped_file224_chunk2.parquet
+  - mapped_file224_chunk3.parquet
+  - mapped_file225_chunk0.parquet
+  - mapped_file225_chunk1.parquet
+  - mapped_file225_chunk2.parquet
+  - mapped_file225_chunk3.parquet
+  - mapped_file226_chunk0.parquet
+  - mapped_file226_chunk1.parquet
+  - mapped_file226_chunk2.parquet
+  - mapped_file226_chunk3.parquet
+  - mapped_file227_chunk0.parquet
+  - mapped_file227_chunk1.parquet
+  - mapped_file227_chunk2.parquet
+  - mapped_file227_chunk3.parquet
+  - mapped_file228_chunk0.parquet
+  - mapped_file228_chunk1.parquet
+  - mapped_file228_chunk2.parquet
+  - mapped_file228_chunk3.parquet
+  - mapped_file229_chunk0.parquet
+  - mapped_file229_chunk1.parquet
+  - mapped_file229_chunk2.parquet…
+Show all (71.3 kB)
 
-        chunk_size = total_len // num_chunks
-        for i in range(num_chunks):
-            start = i * chunk_size
-            end = None if i == num_chunks - 1 else (i + 1) * chunk_size
-            chunk = df.iloc[start:end].copy()
-            chunk_id = f"{Path(file_path).stem}_chunk{i}"
-            futures.append(executor.submit(process_dataframe_chunk, chunk, chunk_id))
+ Processing: mapped_file0_chunk0.parquet
 
-    except Exception as e:
-        print(f"❌ Failed to process {file_path}: {e}")
+ Processing: mapped_file0_chunk1.parquet
 
-if __name__ == '__main__':
-    all_files = list(Path(input_path).glob("*.parquet"))
-    # Uncomment below for testing with only one file
-    # all_files = [all_files[0]]
+ Processing: mapped_file0_chunk2.parquet
 
-    print(f"📁 Total files: {len(all_files)}")
+ Processing: mapped_file0_chunk3.parquet
+Sample records:
+Sample records:
+Sample records:
+shape: (5, 9)
+┌───────────┬───────────┬───────────┬───────────┬───┬───────────┬───────────┬───────────┬──────────┐
+│ CMPNT_CAT ┆ CMPNT_MAT ┆ CMPNT_MAT ┆ CMPNT_UOM ┆ … ┆ MATL_SHRT ┆ MATL_SHRT ┆ CMPNT_CAT ┆ UNIT_GRO │
+│ _CD_DESC  ┆ L_DESC    ┆ L_TYPE_CD ┆ _CD       ┆   ┆ _DESC     ┆ _DESC_AND ┆ _CLEAN    ┆ UP       │
+│ ---       ┆ ---       ┆ ---       ┆ ---       ┆   ┆ ---       ┆ _CMPNT_MA ┆ ---       ┆ ---      │
+│ str       ┆ str       ┆ str       ┆ str       ┆   ┆ str       ┆ TL_…      ┆ str       ┆ str      │
+│           ┆           ┆           ┆           ┆   ┆           ┆ ---       ┆           ┆          │
+│           ┆           ┆           ┆           ┆   ┆           ┆ str       ┆           ┆          │
+╞═══════════╪═══════════╪═══════════╪═══════════╪═══╪═══════════╪═══════════╪═══════════╪══════════╡
+│ Other     ┆ polyethyl ┆ ROH       ┆ EA        ┆ … ┆ es        ┆ es        ┆ other     ┆ Discrete │
+│ Packaging ┆ ene bulk  ┆           ┆           ┆   ┆ tylenol   ┆ tylenol   ┆ packaging ┆          │
+│           ┆ bags 32 x ┆           ┆           ┆   ┆ rapid rls ┆ rapid rls ┆           ┆          │
+│           ┆ 48        ┆           ┆           ┆   ┆ gelcap    ┆ gelcap    ┆           ┆          │
+│           ┆           ┆           ┆           ┆   ┆ 29…       ┆ 29…       ┆           ┆          │
+│ US Granul ┆ ty es     ┆ HALB      ┆ KG        ┆ … ┆ es        ┆ es        ┆ us granul ┆ CHM      │
+│ ation     ┆ rapid rls ┆           ┆           ┆   ┆ tylenol   ┆ tylenol   ┆ ation     ┆          │
+│           ┆ gelcap    ┆           ┆           ┆   ┆ rapid rls ┆ rapid rls ┆           ┆          │
+│           ┆ grn 500…  ┆           ┆           ┆   ┆ gelcap    ┆ gelcap    ┆           ┆          │
+│           ┆           ┆           ┆           ┆   ┆ 29…       ┆ 29…       ┆           ┆          │
+│ Thickener ┆ pregel    ┆ ROH       ┆ KG        ┆ … ┆ es        ┆ es        ┆ thickener ┆ CHM      │
+│ s         ┆ starch nf ┆           ┆           ┆   ┆ tylenol   ┆ tylenol   ┆ s         ┆          │
+│           ┆ 1551      ┆           ┆           ┆   ┆ rapid rls ┆ rapid rls ┆           ┆          │
+│           ┆ unipure … ┆           ┆           ┆   ┆ gelcap    ┆ gelcap    ┆           ┆          │
+│           ┆           ┆           ┆           ┆   ┆ 29…       ┆ 29…       ┆           ┆          │
+│ Thickener ┆ pregel    ┆ ROH       ┆ KG        ┆ … ┆ es        ┆ es        ┆ thickener ┆ CHM      │
+│ s         ┆ starch nf ┆           ┆           ┆   ┆ tylenol   ┆ tylenol   ┆ s         ┆          │
+│           ┆ k lycatab ┆           ┆           ┆   ┆ rapid rls ┆ rapid rls ┆           ┆          │
+│           ┆ pgs…      ┆           ┆           ┆   ┆ gelcap    ┆ gelcap    ┆           ┆          │
+│           ┆           ┆           ┆           ┆   ┆ 29…       ┆ 29…       ┆           ┆          │
+│ Indirect  ┆ lockrim 7 ┆ UNBW      ┆ EA        ┆ … ┆ es        ┆ es        ┆ indirect  ┆ Discrete │
+│ Default   ┆ 12 19 gal ┆           ┆           ┆   ┆ tylenol   ┆ tylenol   ┆ default   ┆          │
+│           ┆ drums     ┆           ┆           ┆   ┆ rapid rls ┆ rapid rls ┆           ┆          │
+│           ┆           ┆           ┆           ┆   ┆ gelcap    ┆ gelcap    ┆           ┆          │
+│           ┆           ┆           ┆           ┆   ┆ 29…       ┆ 29…       ┆           ┆          │
+└───────────┴───────────┴───────────┴───────────┴───┴───────────┴───────────┴───────────┴──────────┘
+Sample records:
+shape: (5, 9)
+┌───────────┬───────────┬───────────┬───────────┬───┬───────────┬───────────┬───────────┬──────────┐
+│ CMPNT_CAT ┆ CMPNT_MAT ┆ CMPNT_MAT ┆ CMPNT_UOM ┆ … ┆ MATL_SHRT ┆ MATL_SHRT ┆ CMPNT_CAT ┆ UNIT_GRO │
+│ _CD_DESC  ┆ L_DESC    ┆ L_TYPE_CD ┆ _CD       ┆   ┆ _DESC     ┆ _DESC_AND ┆ _CLEAN    ┆ UP       │
+│ ---       ┆ ---       ┆ ---       ┆ ---       ┆   ┆ ---       ┆ _CMPNT_MA ┆ ---       ┆ ---      │
+│ str       ┆ str       ┆ str       ┆ str       ┆   ┆ str       ┆ TL_…      ┆ str       ┆ str      │
+│           ┆           ┆           ┆           ┆   ┆           ┆ ---       ┆           ┆          │
+│           ┆           ┆           ┆           ┆   ┆           ┆ str       ┆           ┆          │
+╞═══════════╪═══════════╪═══════════╪═══════════╪═══╪═══════════╪═══════════╪═══════════╪══════════╡
+│ Semi      ┆ lam pe hm ┆ HALB      ┆ M2        ┆ … ┆ lam pe hm ┆ lam pe hm ┆ semi      ┆ Dimensio │
+│ Acabados  ┆ perf cars ┆           ┆           ┆   ┆ perf cars ┆ perf cars ┆ acabados  ┆ nal      │
+│           ┆ 13 5 8    ┆           ┆           ┆   ┆ 13 5 8    ┆ 13 5 8    ┆           ┆          │
+│           ┆ 260…      ┆           ┆           ┆   ┆ 63m…      ┆ 63m…      ┆           ┆          │
+│ Corrugate ┆ tubete    ┆ ROH       ┆ EA        ┆ … ┆ lam pe hm ┆ lam pe hm ┆ corrugate ┆ Discrete │
+│ d         ┆ pap       ┆           ┆           ┆   ┆ perf cars ┆ perf cars ┆ d         ┆          │
+│           ┆ tuboleve  ┆           ┆           ┆   ┆ 13 5 8    ┆ 13 5 8    ┆           ┆          │
+│           ┆ esp 15mm  ┆           ┆           ┆   ┆ 63m…      ┆ 63m…      ┆           ┆          │
+│           ┆ 2…        ┆           ┆           ┆   ┆           ┆           ┆           ┆          │
+│ Corrugate ┆ tubete    ┆ ROH       ┆ EA        ┆ … ┆ lam pe hm ┆ lam pe hm ┆ corrugate ┆ Discrete │
+│ d         ┆ pap       ┆           ┆           ┆   ┆ perf cars ┆ perf cars ┆ d         ┆          │
+│           ┆ tuboleve  ┆           ┆           ┆   ┆ 13 5 8    ┆ 13 5 8    ┆           ┆          │
+│           ┆ esp 7mm   ┆           ┆           ┆   ┆ 63m…      ┆ 63m…      ┆           ┆          │
+│           ┆ 63…       ┆           ┆           ┆   ┆           ┆           ┆           ┆          │
+│ Purchasin ┆ lam pe hm ┆ HALB      ┆ M2        ┆ … ┆ lam pe hm ┆ lam pe hm ┆ purchasin ┆ Dimensio │
+│ g WIP     ┆ cars 13 5 ┆           ┆           ┆   ┆ perf cars ┆ perf cars ┆ g wip     ┆ nal      │
+│           ┆ 8 260mm   ┆           ┆           ┆   ┆ 13 5 8    ┆ 13 5 8    ┆           ┆          │
+│           ┆           ┆           ┆           ┆   ┆ 63m…      ┆ 63m…      ┆           ┆          │
+│ Release   ┆ disco     ┆ ROH       ┆ TH        ┆ … ┆ lam pe hm ┆ lam pe hm ┆ release   ┆ Unclassi │
+│ Paper     ┆ glassine  ┆           ┆           ┆   ┆ perf cars ┆ perf cars ┆ paper     ┆ fied     │
+│           ┆ bi silico ┆           ┆           ┆   ┆ 13 5 8    ┆ 13 5 8    ┆           ┆          │
+│           ┆ nado d…   ┆           ┆           ┆   ┆ 63m…      ┆ 63m…      ┆           ┆          │
+└───────────┴───────────┴───────────┴───────────┴───┴───────────┴───────────┴───────────┴──────────┘
+shape: (5, 9)
+┌───────────┬───────────┬───────────┬───────────┬───┬───────────┬───────────┬───────────┬──────────┐
+│ CMPNT_CAT ┆ CMPNT_MAT ┆ CMPNT_MAT ┆ CMPNT_UOM ┆ … ┆ MATL_SHRT ┆ MATL_SHRT ┆ CMPNT_CAT ┆ UNIT_GRO │
+│ _CD_DESC  ┆ L_DESC    ┆ L_TYPE_CD ┆ _CD       ┆   ┆ _DESC     ┆ _DESC_AND ┆ _CLEAN    ┆ UP       │
+│ ---       ┆ ---       ┆ ---       ┆ ---       ┆   ┆ ---       ┆ _CMPNT_MA ┆ ---       ┆ ---      │
+│ str       ┆ str       ┆ str       ┆ str       ┆   ┆ str       ┆ TL_…      ┆ str       ┆ str      │
+│           ┆           ┆           ┆           ┆   ┆           ┆ ---       ┆           ┆          │
+│           ┆           ┆           ┆           ┆   ┆           ┆ str       ┆           ┆          │
+╞═══════════╪═══════════╪═══════════╪═══════════╪═══╪═══════════╪═══════════╪═══════════╪══════════╡
+│ null      ┆ johnsons  ┆ TRAD      ┆ ST        ┆ … ┆ johnsons  ┆ johnsons  ┆ null      ┆ Discrete │
+│           ┆ cottntouc ┆           ┆           ┆   ┆ baby      ┆ baby      ┆           ┆          │
+│           ┆ h lotion  ┆           ┆           ┆   ┆ cottch    ┆ cottch    ┆           ┆          │
+│           ┆ 200…      ┆           ┆           ┆   ┆ lotion    ┆ lotion    ┆           ┆          │
+│           ┆           ┆           ┆           ┆   ┆ 20…       ┆ 20…       ┆           ┆          │
+│ Affiliate ┆ jb lego   ┆ FERT      ┆ PC        ┆ … ┆ ws dec    ┆ ws dec    ┆ affiliate ┆ Discrete │
+│ FG        ┆ on pack 4 ┆           ┆           ┆   ┆ 2001 baby ┆ 2001 baby ┆ fg        ┆          │
+│           ┆ body soft ┆           ┆           ┆   ┆ soft      ┆ soft jb   ┆           ┆          │
+│           ┆ o         ┆           ┆           ┆   ┆           ┆ lego …    ┆           ┆          │
+│ Affiliate ┆ jb        ┆ FERT      ┆ PC        ┆ … ┆ null      ┆ jb        ┆ affiliate ┆ Discrete │
+│ FG        ┆ skincare  ┆           ┆           ┆   ┆           ┆ skincare  ┆ fg        ┆          │
+│           ┆ wipes tub ┆           ┆           ┆   ┆           ┆ wipes tub ┆           ┆          │
+│ Affiliate ┆ jb        ┆ FERT      ┆ PC        ┆ … ┆ null      ┆ jb        ┆ affiliate ┆ Discrete │
+│ FG        ┆ skincare  ┆           ┆           ┆   ┆           ┆ skincare  ┆ fg        ┆          │
+│           ┆ wipes     ┆           ┆           ┆   ┆           ┆ wipes     ┆           ┆          │
+│           ┆ refill    ┆           ┆           ┆   ┆           ┆ refill    ┆           ┆          │
+│ Affiliate ┆ jb top to ┆ FERT      ┆ PC        ┆ … ┆ null      ┆ jb top to ┆ affiliate ┆ Discrete │
+│ FG        ┆ toe wash  ┆           ┆           ┆   ┆           ┆ toe wash  ┆ fg        ┆          │
+│           ┆ 500ml o   ┆           ┆           ┆   ┆           ┆ 500ml o   ┆           ┆          │
+└───────────┴───────────┴───────────┴───────────┴───┴───────────┴───────────┴───────────┴──────────┘
+shape: (5, 9)
+┌───────────┬───────────┬───────────┬───────────┬───┬───────────┬───────────┬───────────┬──────────┐
+│ CMPNT_CAT ┆ CMPNT_MAT ┆ CMPNT_MAT ┆ CMPNT_UOM ┆ … ┆ MATL_SHRT ┆ MATL_SHRT ┆ CMPNT_CAT ┆ UNIT_GRO │
+│ _CD_DESC  ┆ L_DESC    ┆ L_TYPE_CD ┆ _CD       ┆   ┆ _DESC     ┆ _DESC_AND ┆ _CLEAN    ┆ UP       │
+│ ---       ┆ ---       ┆ ---       ┆ ---       ┆   ┆ ---       ┆ _CMPNT_MA ┆ ---       ┆ ---      │
+│ str       ┆ str       ┆ str       ┆ str       ┆   ┆ str       ┆ TL_…      ┆ str       ┆ str      │
+│           ┆           ┆           ┆           ┆   ┆           ┆ ---       ┆           ┆          │
+│           ┆           ┆           ┆           ┆   ┆           ┆ str       ┆           ┆          │
+╞═══════════╪═══════════╪═══════════╪═══════════╪═══╪═══════════╪═══════════╪═══════════╪══════════╡
+│ NCC       ┆ betadex d ┆ 91        ┆ G         ┆ … ┆ nicassist ┆ nicassist ┆ ncc       ┆ CHM      │
+│           ┆ c         ┆           ┆           ┆   ┆ mtab 2mg  ┆ mtab 2mg  ┆           ┆          │
+│           ┆           ┆           ┆           ┆   ┆ 100st xb  ┆ 100st xb  ┆           ┆          │
+│           ┆           ┆           ┆           ┆   ┆           ┆ be…       ┆           ┆          │
+│ Leaflets  ┆ b nica    ┆ 71        ┆ ST        ┆ … ┆ nicassist ┆ nicassist ┆ leaflets  ┆ Discrete │
+│           ┆ mtab 2mg  ┆           ┆           ┆   ┆ mtab 2mg  ┆ mtab 2mg  ┆           ┆          │
+│           ┆ xb        ┆           ┆           ┆   ┆ 100st xb  ┆ 100st xb  ┆           ┆          │
+│           ┆           ┆           ┆           ┆   ┆           ┆ b …       ┆           ┆          │
+│ Supermark ┆ nikotinbe ┆ 95        ┆ ST        ┆ … ┆ nicassist ┆ nicassist ┆ supermark ┆ Discrete │
+│ et        ┆ tadex     ┆           ┆           ┆   ┆ mtab 2mg  ┆ mtab 2mg  ┆ et        ┆          │
+│           ┆ kombo     ┆           ┆           ┆   ┆ 100st xb  ┆ 100st xb  ┆           ┆          │
+│           ┆ 123275g   ┆           ┆           ┆   ┆           ┆ ni…       ┆           ┆          │
+│ OPP Film  ┆ opp film  ┆ 72        ┆ KG        ┆ … ┆ nicassist ┆ nicassist ┆ opp film  ┆ CHM      │
+│           ┆ neutral   ┆           ┆           ┆   ┆ mtab 2mg  ┆ mtab 2mg  ┆           ┆          │
+│           ┆ 270mm     ┆           ┆           ┆   ┆ 100st xb  ┆ 100st xb  ┆           ┆          │
+│           ┆           ┆           ┆           ┆   ┆           ┆ op…       ┆           ┆          │
+│ Supermark ┆ aerosil   ┆ 95        ┆ ST        ┆ … ┆ nicassist ┆ nicassist ┆ supermark ┆ Discrete │
+│ et        ┆ 200 1575g ┆           ┆           ┆   ┆ mtab 2mg  ┆ mtab 2mg  ┆ et        ┆          │
+│           ┆           ┆           ┆           ┆   ┆ 100st xb  ┆ 100st xb  ┆           ┆          │
+│           ┆           ┆           ┆           ┆   ┆           ┆ ae…       ┆           ┆          │
+└───────────┴───────────┴───────────┴───────────┴───┴───────────┴───────────┴───────────┴──────────┘
+ Updated: mapped_file0_chunk3.parquet | Time: 299.08s
 
-    global_unigrams = defaultdict(Counter)
-    global_bigrams = defaultdict(Counter)
+ Processing: mapped_file100_chunk0.parquet
+ Updated: mapped_file0_chunk0.parquet | Time: 299.18s
 
-    with ProcessPoolExecutor(max_workers=6) as executor:
-        futures = []
-        for file_path in all_files:
-            split_and_submit(file_path, executor, futures)
+ Processing: mapped_file100_chunk1.parquet
+ Updated: mapped_file0_chunk1.parquet | Time: 299.39s
 
-        for f in as_completed(futures):
-            file_unigrams, file_bigrams = f.result()
-            for cat in file_unigrams:
-                global_unigrams[cat].update(file_unigrams[cat])
-            for cat in file_bigrams:
-                global_bigrams[cat].update(file_bigrams[cat])
+ Processing: mapped_file100_chunk2.parquet
+ Updated: mapped_file0_chunk2.parquet | Time: 299.59s
 
-    # Flatten and export results
-    unigram_rows = []
-    bigram_rows = []
+ Processing: mapped_file100_chunk3.parquet
+Sample records:
+shape: (5, 9)
+┌───────────┬───────────┬───────────┬───────────┬───┬───────────┬───────────┬───────────┬──────────┐
+│ CMPNT_CAT ┆ CMPNT_MAT ┆ CMPNT_MAT ┆ CMPNT_UOM ┆ … ┆ MATL_SHRT ┆ MATL_SHRT ┆ CMPNT_CAT ┆ UNIT_GRO │
+│ _CD_DESC  ┆ L_DESC    ┆ L_TYPE_CD ┆ _CD       ┆   ┆ _DESC     ┆ _DESC_AND ┆ _CLEAN    ┆ UP       │
+│ ---       ┆ ---       ┆ ---       ┆ ---       ┆   ┆ ---       ┆ _CMPNT_MA ┆ ---       ┆ ---      │
+│ str       ┆ str       ┆ str       ┆ str       ┆   ┆ str       ┆ TL_…      ┆ str       ┆ str      │
+│           ┆           ┆           ┆           ┆   ┆           ┆ ---       ┆           ┆          │
+│           ┆           ┆           ┆           ┆   ┆           ┆ str       ┆           ┆          │
+╞═══════════╪═══════════╪═══════════╪═══════════╪═══╪═══════════╪═══════════╪═══════════╪══════════╡
+│ null      ┆ pepcid    ┆           ┆ EA        ┆ … ┆ null      ┆ pepcid    ┆ null      ┆ Discrete │
+│           ┆ tropical  ┆           ┆           ┆   ┆           ┆ tropical  ┆           ┆          │
+│           ┆ fruittest ┆           ┆           ┆   ┆           ┆ fruittest ┆           ┆          │
+│           ┆ bulk      ┆           ┆           ┆   ┆           ┆ bulk      ┆           ┆          │
+│ null      ┆ shipper   ┆           ┆ EA        ┆ … ┆ null      ┆ shipper   ┆ null      ┆ Discrete │
+│           ┆ 38        ┆           ┆           ┆   ┆           ┆ 38        ┆           ┆          │
+│           ┆ 18x12x12  ┆           ┆           ┆   ┆           ┆ 18x12x12  ┆           ┆          │
+│           ┆ new       ┆           ┆           ┆   ┆           ┆ new       ┆           ┆          │
+│ null      ┆ test      ┆           ┆ EA        ┆ … ┆ null      ┆ test      ┆ null      ┆ Discrete │
+│           ┆ pepcid    ┆           ┆           ┆   ┆           ┆ pepcid    ┆           ┆          │
+│           ┆ 38mm ct   ┆           ┆           ┆   ┆           ┆ 38mm ct   ┆           ┆          │
+│           ┆ closure   ┆           ┆           ┆   ┆           ┆ closure   ┆           ┆          │
+│ null      ┆ test      ┆           ┆ LB        ┆ … ┆ null      ┆ test      ┆ null      ┆ CHM      │
+│           ┆ pepcid    ┆           ┆           ┆   ┆           ┆ pepcid    ┆           ┆          │
+│           ┆ 12g       ┆           ┆           ┆   ┆           ┆ 12g       ┆           ┆          │
+│           ┆ cotton    ┆           ┆           ┆   ┆           ┆ cotton    ┆           ┆          │
+│           ┆ coil      ┆           ┆           ┆   ┆           ┆ coil      ┆           ┆          │
+│ null      ┆ pepcid    ┆           ┆ EA        ┆ … ┆ null      ┆ pepcid    ┆ null      ┆ Discrete │
+│           ┆ 200cc     ┆           ┆           ┆   ┆           ┆ 200cc     ┆           ┆          │
+│           ┆ bottle    ┆           ┆           ┆   ┆           ┆ bottle    ┆           ┆          │
+└───────────┴───────────┴───────────┴───────────┴───┴───────────┴───────────┴───────────┴──────────┘
+Sample records:
+shape: (5, 9)
+┌───────────┬───────────┬───────────┬───────────┬───┬───────────┬───────────┬───────────┬──────────┐
+│ CMPNT_CAT ┆ CMPNT_MAT ┆ CMPNT_MAT ┆ CMPNT_UOM ┆ … ┆ MATL_SHRT ┆ MATL_SHRT ┆ CMPNT_CAT ┆ UNIT_GRO │
+│ _CD_DESC  ┆ L_DESC    ┆ L_TYPE_CD ┆ _CD       ┆   ┆ _DESC     ┆ _DESC_AND ┆ _CLEAN    ┆ UP       │
+│ ---       ┆ ---       ┆ ---       ┆ ---       ┆   ┆ ---       ┆ _CMPNT_MA ┆ ---       ┆ ---      │
+│ str       ┆ str       ┆ str       ┆ str       ┆   ┆ str       ┆ TL_…      ┆ str       ┆ str      │
+│           ┆           ┆           ┆           ┆   ┆           ┆ ---       ┆           ┆          │
+│           ┆           ┆           ┆           ┆   ┆           ┆ str       ┆           ┆          │
+╞═══════════╪═══════════╪═══════════╪═══════════╪═══╪═══════════╪═══════════╪═══════════╪══════════╡
+│ CHM-Activ ┆ sodium    ┆ ROH       ┆ KG        ┆ … ┆ listerine ┆ listerine ┆ chm       ┆ CHM      │
+│ es        ┆ fluoride  ┆           ┆           ┆   ┆ green tea ┆ green tea ┆ actives   ┆          │
+│           ┆ usp       ┆           ┆           ┆   ┆ 500ml     ┆ 500ml     ┆           ┆          │
+│           ┆ sunlit    ┆           ┆           ┆   ┆ crea…     ┆ crea…     ┆           ┆          │
+│           ┆ flu…      ┆           ┆           ┆   ┆           ┆           ┆           ┆          │
+│ CHM-Activ ┆ thymol    ┆ ROH       ┆ KG        ┆ … ┆ listerine ┆ listerine ┆ chm       ┆ CHM      │
+│ es        ┆ jindal    ┆           ┆           ┆   ┆ green tea ┆ green tea ┆ actives   ┆          │
+│           ┆ drugs     ┆           ┆           ┆   ┆ 500ml     ┆ 500ml     ┆           ┆          │
+│           ┆           ┆           ┆           ┆   ┆ crea…     ┆ crea…     ┆           ┆          │
+│ PKG-Caps/ ┆ cream cap ┆ PACK      ┆ PC        ┆ … ┆ listerine ┆ listerine ┆ pkg caps  ┆ Discrete │
+│ Closures/ ┆ listerine ┆           ┆           ┆   ┆ green tea ┆ green tea ┆ closures  ┆          │
+│ Li        ┆ 500ml us  ┆           ┆           ┆   ┆ 500ml     ┆ 500ml     ┆ li        ┆          │
+│           ┆ er…       ┆           ┆           ┆   ┆ crea…     ┆ crea…     ┆           ┆          │
+│ CHM-Activ ┆ thymol is ┆ ROH       ┆ KG        ┆ … ┆ listerine ┆ listerine ┆ chm       ┆ CHM      │
+│ es        ┆ symrise   ┆           ┆           ┆   ┆ green tea ┆ green tea ┆ actives   ┆          │
+│           ┆           ┆           ┆           ┆   ┆ 500ml     ┆ 500ml     ┆           ┆          │
+│           ┆           ┆           ┆           ┆   ┆ crea…     ┆ crea…     ┆           ┆          │
+│ CHM-Prese ┆ xinkang   ┆ ROH       ┆ KG        ┆ … ┆ listerine ┆ listerine ┆ chm prese ┆ CHM      │
+│ rvatives  ┆ sb nf     ┆           ┆           ┆   ┆ green tea ┆ green tea ┆ rvatives  ┆          │
+│           ┆ wuhan     ┆           ┆           ┆   ┆ 500ml     ┆ 500ml     ┆           ┆          │
+│           ┆ youji     ┆           ┆           ┆   ┆ crea…     ┆ crea…     ┆           ┆          │
+└───────────┴───────────┴───────────┴───────────┴───┴───────────┴───────────┴───────────┴──────────┘
+Sample records:
+shape: (5, 9)
+┌───────────┬───────────┬───────────┬───────────┬───┬───────────┬───────────┬───────────┬──────────┐
+│ CMPNT_CAT ┆ CMPNT_MAT ┆ CMPNT_MAT ┆ CMPNT_UOM ┆ … ┆ MATL_SHRT ┆ MATL_SHRT ┆ CMPNT_CAT ┆ UNIT_GRO │
+│ _CD_DESC  ┆ L_DESC    ┆ L_TYPE_CD ┆ _CD       ┆   ┆ _DESC     ┆ _DESC_AND ┆ _CLEAN    ┆ UP       │
+│ ---       ┆ ---       ┆ ---       ┆ ---       ┆   ┆ ---       ┆ _CMPNT_MA ┆ ---       ┆ ---      │
+│ str       ┆ str       ┆ str       ┆ str       ┆   ┆ str       ┆ TL_…      ┆ str       ┆ str      │
+│           ┆           ┆           ┆           ┆   ┆           ┆ ---       ┆           ┆          │
+│           ┆           ┆           ┆           ┆   ┆           ┆ str       ┆           ┆          │
+╞═══════════╪═══════════╪═══════════╪═══════════╪═══╪═══════════╪═══════════╪═══════════╪══════════╡
+│ Labels    ┆ crot list ┆ PACK      ┆ TH        ┆ … ┆ list cool ┆ list cool ┆ labels    ┆ Unclassi │
+│           ┆ cool mint ┆           ┆   …
+Show all (62.6 kB)
+---------------------------------------------------------------------------
+KeyboardInterrupt                         Traceback (most recent call last)
+Cell In[8], line 89
+     86 input_path = './data/target_map_parquet_files'
+     87 files = glob.glob(os.path.join(input_path, '*.parquet'))
+---> 89 with ThreadPoolExecutor(max_workers=4) as executor:
+     90     executor.map(process_file, files)
 
-    print("\n🔍 Preview of top 5 grams per category:\n")
+File /anaconda/envs/azureml_py38/lib/python3.10/concurrent/futures/_base.py:649, in Executor.__exit__(self, exc_type, exc_val, exc_tb)
+    648 def __exit__(self, exc_type, exc_val, exc_tb):
+--> 649     self.shutdown(wait=True)
+    650     return False
 
-    for cat, counter in global_unigrams.items():
-        filtered = [(w, c) for w, c in counter.items() if c > threshold]
-        unigram_rows.extend([
-            {'category': cat, 'word': word, 'count': count}
-            for word, count in filtered
-        ])
+File /anaconda/envs/azureml_py38/lib/python3.10/concurrent/futures/thread.py:235, in ThreadPoolExecutor.shutdown(self, wait, cancel_futures)
+    233 if wait:
+    234     for t in self._threads:
+--> 235         t.join()
 
-        print(f"📘 {cat} - Top unigrams:")
-        for word, count in Counter(dict(filtered)).most_common(5):
-            print(f"  {word}: {count}")
-        print()
+File /anaconda/envs/azureml_py38/lib/python3.10/threading.py:1096, in Thread.join(self, timeout)
+   1093     raise RuntimeError("cannot join current thread")
+   1095 if timeout is None:
+-> 1096     self._wait_for_tstate_lock()
+   1097 else:
+   1098     # the behavior of a negative timeout isn't documented, but
+   1099     # historically .join(timeout=x) for x<0 has acted as if timeout=0
+   1100     self._wait_for_tstate_lock(timeout=max(timeout, 0))
 
-    for cat, counter in global_bigrams.items():
-        filtered = [(f"{w1} {w2}", c) for (w1, w2), c in counter.items() if c > threshold]
-        bigram_rows.extend([
-            {'category': cat, 'bigram': bigram, 'count': count}
-            for bigram, count in filtered
-        ])
+File /anaconda/envs/azureml_py38/lib/python3.10/threading.py:1116, in Thread._wait_for_tstate_lock(self, block, timeout)
+   1113     return
+   1115 try:
+-> 1116     if lock.acquire(block, timeout):
+   1117         lock.release()
+   1118         self._stop()
 
-        print(f"📗 {cat} - Top bigrams:")
-        for bigram, count in Counter(dict(filtered)).most_common(5):
-            print(f"  {bigram}: {count}")
-        print()
+KeyboardInterrupt: 
+shape: (342_016, 8)
+┌────────────┬────────────┬────────────┬───────────┬───────────┬───────────┬───────────┬───────────┐
+│ MATL_SHRT_ ┆ CMPNT_MATL ┆ CMPNT_MATL ┆ CMPNT_CAT ┆ CMPNT_UOM ┆ Final     ┆ MATL_SHRT ┆ CMPNT_UOM │
+│ DESC       ┆ _DESC      ┆ _TYPE_CD   ┆ _CD_DESC  ┆ _CD       ┆ Category  ┆ _DESC_AND ┆ _CD_GROUP │
+│ ---        ┆ ---        ┆ ---        ┆ ---       ┆ ---       ┆ ---       ┆ _CMPNT_MA ┆ ---       │
+│ str        ┆ str        ┆ str        ┆ str       ┆ str       ┆ str       ┆ TL_…      ┆ str       │
+│            ┆            ┆            ┆           ┆           ┆           ┆ ---       ┆           │
+│            ┆            ┆            ┆           ┆           ┆           ┆ str       ┆           │
+╞════════════╪════════════╪════════════╪═══════════╪═══════════╪═══════════╪═══════════╪═══════════╡
+│ b tone     ┆ avena      ┆ A          ┆ man       ┆ KG        ┆ CHM       ┆ b tone    ┆ CHM       │
+│ texture    ┆ sativa oat ┆            ┆ active    ┆           ┆           ┆ texture   ┆           │
+│ aveeno     ┆ kernel     ┆            ┆ natural   ┆           ┆           ┆ aveeno    ┆           │
+│ firming …  ┆ flour      ┆            ┆           ┆           ┆           ┆ firming … ┆           │
+│ nicorette  ┆ sucralose  ┆ 95         ┆ supermark ┆ ST        ┆ null      ┆ nicorette ┆ Discrete  │
+│ 4mg cf 96  ┆ 1323g      ┆            ┆ et        ┆           ┆           ┆ 4mg cf 96 ┆           │
+│ acma ca    ┆            ┆            ┆           ┆           ┆           ┆ acma ca   ┆           │
+│            ┆            ┆            ┆           ┆           ┆           ┆ SU…       ┆           │
+│ massa      ┆ sodio      ┆ V          ┆ impianti  ┆ KG        ┆ null      ┆ massa pos ┆ CHM       │
+│ positively ┆ bisolfito  ┆            ┆ generali  ┆           ┆           ┆ itively   ┆           │
+│ radiant    ┆ aliment    ┆            ┆           ┆           ┆           ┆ radiant   ┆           │
+│ 01861…     ┆ anidro     ┆            ┆           ┆           ┆           ┆ 01861…    ┆           │
+│ aveeno app ┆ pallet uk  ┆ B          ┆ pk pallet ┆ EA        ┆ PKG       ┆ aveeno    ┆ Discrete  │
+│ cid vin    ┆ chep       ┆            ┆           ┆           ┆           ┆ app cid   ┆           │
+│ conditione ┆            ┆            ┆           ┆           ┆           ┆ vin condi ┆           │
+│ r…         ┆            ┆            ┆           ┆           ┆           ┆ tioner…   ┆           │
+│ ogxc       ┆ miscela c  ┆ D          ┆ wip       ┆ KG        ┆ PKG       ┆ ogxc      ┆ CHM       │
+│ shampoo 88 ┆ concentrat ┆            ┆ premix    ┆           ┆           ┆ shampoo   ┆           │
+│ 7 biotin   ┆ a 50       ┆            ┆ cosmetic  ┆           ┆           ┆ 88 7      ┆           │
+│ colla…     ┆            ┆            ┆           ┆           ┆           ┆ biotin    ┆           │
+│            ┆            ┆            ┆           ┆           ┆           ┆ colla…    ┆           │
+│ …          ┆ …          ┆ …          ┆ …         ┆ …         ┆ …         ┆ …         ┆ …         │
+│ ogx colour ┆ crodasorb  ┆ A          ┆ man condi ┆ KG        ┆ CHM       ┆ ogx       ┆ CHM       │
+│ care       ┆ uv hpp     ┆            ┆ tioners   ┆           ┆           ┆ colour    ┆           │
+│ shampoo    ┆ vogue      ┆            ┆           ┆           ┆           ┆ care      ┆           │
+│ 385ml …    ┆            ┆            ┆           ┆           ┆           ┆ shampoo   ┆           │
+│            ┆            ┆            ┆           ┆           ┆           ┆ 385ml …   ┆           │
+│ c free 24  ┆ cartuccia  ┆ B          ┆ consumabl ┆ GR        ┆ null      ┆ c free 24 ┆ CHM       │
+│ organic    ┆ hp printer ┆            ┆ es        ┆           ┆           ┆ organic   ┆           │
+│ long ge    ┆ cm557h sp  ┆            ┆           ┆           ┆           ┆ long ge   ┆           │
+│ cee        ┆            ┆            ┆           ┆           ┆           ┆ cee …     ┆           │
+│ b lotion   ┆ glycerine  ┆ A          ┆ glycerine ┆ KG        ┆ CHM       ┆ b lotion  ┆ CHM       │
+│ 300 italia ┆ 99 50      ┆            ┆           ┆           ┆           ┆ 300       ┆           │
+│ spagna     ┆            ┆            ┆           ┆           ┆           ┆ italia    ┆           │
+│ tur…       ┆            ┆            ┆           ┆           ┆           ┆ spagna    ┆           │
+│            ┆            ┆            ┆           ┆           ┆           ┆ tur…      ┆           │
+│ neutrogena ┆ etiq       ┆ 30AC       ┆ null      ┆ MI        ┆ null      ┆ neutrogen ┆ Dimension │
+│ n f hnd    ┆ vierge     ┆            ┆           ┆           ┆           ┆ a n f hnd ┆ al        │
+│ cream unsc ┆ standard   ┆            ┆           ┆           ┆           ┆ cream     ┆           │
+│ …          ┆ 90 deg 10… ┆            ┆           ┆           ┆           ┆ unsc …    ┆           │
+│ ogx        ┆ massa      ┆ D          ┆ wip       ┆ KG        ┆ PKG       ┆ ogx       ┆ CHM       │
+│ shampoo    ┆ positively ┆            ┆ cosmetic  ┆           ┆           ┆ shampoo   ┆           │
+│ 385        ┆ radiant    ┆            ┆           ┆           ┆           ┆ 385       ┆           │
+│ rosemary   ┆ 00040…     ┆            ┆           ┆           ┆           ┆ rosemary  ┆           │
+│ mint …     ┆            ┆            ┆           ┆           ┆           ┆ mint …    ┆           │
+└────────────┴────────────┴────────────┴───────────┴───────────┴───────────┴───────────┴───────────┘
+🔄 Processing: mapped_file0_chunk0.parquet🔄 Processing: mapped_file140_chunk0.parquet🔄 Processing: mapped_file11_chunk2.parquet🔄 Processing: mapped_file160_chunk2.parquet🔄 Processing: mapped_file200_chunk2.parquet🔄 Processing: mapped_file181_chunk0.parquet
 
-    # Save results
-    pd.DataFrame(unigram_rows).to_csv(output_path / "all_categories_unigrams.csv", index=False)
-    pd.DataFrame(bigram_rows).to_csv(output_path / "all_categories_bigrams.csv", index=False)
-    print("✅ Saved CSVs with threshold > 20.")
+
+
+
+
+---------------------------------------------------------------------------
+KeyboardInterrupt                         Traceback (most recent call last)
+Cell In[17], line 12
+      9 num_procs = max(1, int(cpu_count() * 0.8))
+     11 with Pool(processes=num_procs) as pool:
+---> 12     pool.map(process_one_file, files)
+
+File /anaconda/envs/azureml_py38/lib/python3.10/multiprocessing/pool.py:367, in Pool.map(self, func, iterable, chunksize)
+    362 def map(self, func, iterable, chunksize=None):
+    363     '''
+    364     Apply `func` to each element in `iterable`, collecting the results
+    365     in a list that is returned.
+    366     '''
+--> 367     return self._map_async(func, iterable, mapstar, chunksize).get()
+
+File /anaconda/envs/azureml_py38/lib/python3.10/multiprocessing/pool.py:768, in ApplyResult.get(self, timeout)
+    767 def get(self, timeout=None):
+--> 768     self.wait(timeout)
+    769     if not self.ready():
+    770         raise TimeoutError
+
+File /anaconda/envs/azureml_py38/lib/python3.10/multiprocessing/pool.py:765, in ApplyResult.wait(self, timeout)
+    764 def wait(self, timeout=None):
+--> 765     self._event.wait(timeout)
+
+File /anaconda/envs/azureml_py38/lib/python3.10/threading.py:607, in Event.wait(self, timeout)
+    605 signaled = self._flag
+    606 if not signaled:
+--> 607     signaled = self._cond.wait(timeout)
+    608 return signaled
+
+File /anaconda/envs/azureml_py38/lib/python3.10/threading.py:320, in Condition.wait(self, timeout)
+    318 try:    # restore state no matter what (e.g., KeyboardInterrupt)
+    319     if timeout is None:
+--> 320         waiter.acquire()
+    321         gotit = True
+    322     else:
+
+KeyboardInterrupt: 
+                              MATL_SHRT_DESC  \
+0                sl lpm sg 250 mimosalem fra   
+1  bebe face moist cr matt    50ml ltd edtde   
+2            granel js    calming ven 12x200   
+3  semi listerine green tea    250ml th 0916   
+4                 dschc 400 abact lemon east   
+
+                              CMPNT_MATL_DESC CMPNT_MATL_TYPE_CD  \
+0                          citric acid usp bb                  A   
+1  etiq av bebe face moist cr matt    50ml de               30AC   
+2                   sodium hydroxide and aqua                ROH   
+3           methyl salicylate ip jindal drugs                ROH   
+4                        premix sodio cloruro                  D   
+
+                CMPNT_CAT_CD_DESC CMPNT_UOM_CD Final Category  \
+0  OTHER CHEMICALS                          KG            CHM   
+1                            None           MI           None   
+2             Acids/Buffers/Salts            G            CHM   
+3                     CHM-Actives           KG            CHM   
+4  WIP PREMIX COSMETIC                      KG            PKG   
+
+                  MATL_SHRT_DESC_AND_CMPNT_MATL_DESC  
+0  sl LePetitMarseillais sg 250 mimosalem fra cit...  
+1  bebe face moisturizing cream matt    50ml ltd ...  
+2  granel johnsons    calming ven 12x200 sodium h...  
+3  semi listerine green tea    250ml th 0916 meth...  
+4    dschc 400 abact lemon east premix sodio cloruro  
+Process ForkPoolWorker-12:
+Process ForkPoolWorker-15:
+Process ForkPoolWorker-13:
+Process ForkPoolWorker-11:
+---------------------------------------------------------------------------
+KeyboardInterrupt                         Traceback (most recent call last)
+Cell In[3], line 97
+     94 all_files = glob.glob(os.path.join(input_path, '*.parquet'))
+     96 with Pool(processes=cpu_count()) as pool:
+---> 97     pool.map(process_file, all_files)
+
+File /anaconda/envs/azureml_py38/lib/python3.10/multiprocessing/pool.py:367, in Pool.map(self, func, iterable, chunksize)
+    362 def map(self, func, iterable, chunksize=None):
+    363     '''
+    364     Apply `func` to each element in `iterable`, collecting the results
+    365     in a list that is returned.
+    366     '''
+--> 367     return self._map_async(func, iterable, mapstar, chunksize).get()
+
+File /anaconda/envs/azureml_py38/lib/python3.10/multiprocessing/pool.py:768, in ApplyResult.get(self, timeout)
+    767 def get(self, timeout=None):
+--> 768     self.wait(timeout)
+    769     if not self.ready():
+    770         raise TimeoutError
+
+File /anaconda/envs/azureml_py38/lib/python3.10/multiprocessing/pool.py:765, in ApplyResult.wait(self, timeout)
+    764 def wait(self, timeout=None):
+--> 765     self._event.wait(timeout)
+
+File /anaconda/envs/azureml_py38/lib/python3.10/threading.py:607, in Event.wait(self, timeout)
+    605 signaled = self._flag
+    606 if not signaled:
+--> 607     signaled = self._cond.wait(timeout)
+    608 return signaled
+
+File /anaconda/envs/azureml_py38/lib/python3.10/threading.py:320, in Condition.wait(self, timeout)
+    318 try:    # restore state no matter what (e.g., KeyboardInterrupt)
+    319     if timeout is None:
+--> 320         waiter.acquire()
+    321         gotit = True
+    322     else:
+
+KeyboardInterrupt: 
+📁 Total files: 778
+✅ mapped_file0_chunk1 in 705.35s
+✅ mapped_file0_chunk0 in 709.14s
+✅ mapped_file0_chunk3 in 710.16s
+✅ mapped_file0_chunk2 in 713.32s
+✅ mapped_file0_chunk4 in 715.84s
+✅ mapped_file1_chunk0 in 709.68s
+✅ mapped_file1_chunk3 in 710.10s
+✅ mapped_file1_chunk2 in 713.56s
+✅ mapped_file1_chunk1 in 719.53s
+✅ mapped_file1_chunk4 in 715.43s
+✅ mapped_file10_chunk1 in 717.77s
+✅ mapped_file10_chunk0 in 723.99s
+✅ mapped_file100_chunk0 in 673.24s
+✅ mapped_file100_chunk1 in 677.84s
+✅ mapped_file100_chunk2 in 681.38s
+✅ mapped_file10_chunk2 in 723.84s
+✅ mapped_file10_chunk3 in 727.10s
+✅ mapped_file10_chunk4 in 727.69s
