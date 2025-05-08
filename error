@@ -1,6 +1,123 @@
-✅ mapped_file0_chunk0 in 1162.93s
-✅ mapped_file1_chunk1 in 1160.08s
-✅ mapped_file1_chunk0 in 1166.32s
-✅ mapped_file0_chunk2 in 1172.20s
-✅ mapped_file1_chunk2 in 1169.72s
-✅ mapped_file0_chunk1 in 1176.13s
+import pandas as pd
+import spacy
+from collections import Counter, defaultdict
+from itertools import islice
+from pathlib import Path
+import os
+import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
+
+# Global NLP model (loaded per process)
+nlp = None
+def init_spacy():
+    global nlp
+    if nlp is None:
+        nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])
+
+# Config
+input_path = './data/target_map_cleaned'
+output_path = Path('./data/gram_outputs/frequent_terms_by_category')
+output_path.mkdir(parents=True, exist_ok=True)
+required_cols = ['Final Category', 'MATL_SHRT_DESC_AND_CMPNT_MATL_DESC']
+num_chunks = 3  # Number of in-memory chunks per file
+
+# Chunk processor
+def process_dataframe_chunk(df_chunk, chunk_name):
+    init_spacy()
+    start_time = time.time()
+    unigram_freq = defaultdict(Counter)
+    bigram_freq = defaultdict(Counter)
+
+    for category, group in df_chunk.groupby('Final Category'):
+        texts = group['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'].astype(str).tolist()
+        for doc in nlp.pipe(texts, batch_size=100, n_process=2):
+            words = [token.lemma_ for token in doc if token.is_alpha and not token.is_stop]
+            unigram_freq[category].update(set(words))  # unique per row
+            bigram_freq[category].update(zip(words, islice(words, 1, None)))
+
+    print(f"✅ {chunk_name} in {time.time() - start_time:.2f}s")
+    return unigram_freq, bigram_freq
+
+# Load and split files into chunks
+def split_and_submit(file_path, executor, futures):
+    try:
+        df = pd.read_parquet(file_path, columns=required_cols)
+        df = df.dropna(subset=['Final Category', 'MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'])
+        df = df[df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'].str.strip() != '']
+        df = df.drop_duplicates(subset=['Final Category', 'MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'])
+
+        total_len = len(df)
+        if total_len == 0:
+            print(f"⚠️ Skipped {file_path.name} (empty after filtering)")
+            return
+
+        chunk_size = total_len // num_chunks
+        for i in range(num_chunks):
+            start = i * chunk_size
+            end = None if i == num_chunks - 1 else (i + 1) * chunk_size
+            chunk = df.iloc[start:end].copy()
+            chunk_id = f"{Path(file_path).stem}_chunk{i}"
+            futures.append(executor.submit(process_dataframe_chunk, chunk, chunk_id))
+
+    except Exception as e:
+        print(f"❌ Failed to split {file_path}: {e}")
+
+if __name__ == '__main__':
+    all_files = list(Path(input_path).glob("*.parquet"))
+    print(f"📁 Total files: {len(all_files)}")
+
+    global_unigrams = defaultdict(Counter)
+    global_bigrams = defaultdict(Counter)
+
+    with ProcessPoolExecutor(max_workers=6) as executor:
+        futures = []
+        for file_path in all_files:
+            split_and_submit(file_path, executor, futures)
+
+        for f in as_completed(futures):
+            file_unigrams, file_bigrams = f.result()
+            for cat in file_unigrams:
+                global_unigrams[cat].update(file_unigrams[cat])
+            for cat in file_bigrams:
+                global_bigrams[cat].update(file_bigrams[cat])
+
+    # Flatten and export results (no threshold)
+    unigram_rows = []
+    bigram_rows = []
+
+    print("\n🔍 Preview of results (top 5 per category):\n")
+
+    for cat, counter in global_unigrams.items():
+        unigram_rows.extend([
+            {'category': cat, 'word': word, 'count': count}
+            for word, count in counter.items()
+        ])
+
+        print(f"📘 Top unigrams for {cat} ({len(counter)} total):")
+        top_words = counter.most_common(5)
+        if top_words:
+            for word, count in top_words:
+                print(f"  {word}: {count}")
+        else:
+            print("  ⚠️ No unigrams found.")
+        print()
+
+    for cat, counter in global_bigrams.items():
+        bigram_rows.extend([
+            {'category': cat, 'bigram': f"{w1} {w2}", 'count': count}
+            for (w1, w2), count in counter.items()
+        ])
+
+        print(f"📗 Top bigrams for {cat} ({len(counter)} total):")
+        top_bigrams = counter.most_common(5)
+        if top_bigrams:
+            for (w1, w2), count in top_bigrams:
+                print(f"  {w1} {w2}: {count}")
+        else:
+            print("  ⚠️ No bigrams found.")
+        print()
+
+    # Save final results
+    pd.DataFrame(unigram_rows).to_csv(output_path / "all_categories_unigrams.csv", index=False)
+    pd.DataFrame(bigram_rows).to_csv(output_path / "all_categories_bigrams.csv", index=False)
+    print("✅ Saved final unigram and bigram CSV files.")
