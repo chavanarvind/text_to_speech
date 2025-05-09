@@ -1,65 +1,66 @@
+#data cleaning step
 import os
+import re
+import time
 import glob
 import pandas as pd
 from multiprocessing import Pool, cpu_count
+from functools import partial
 
-# UNIT_GROUP mapping
-unit_group_map = {
-    'KG': 'CHM', 'KGS': 'CHM', 'KGA': 'CHM', 'KGW': 'CHM', 'G': 'CHM', 'GR': 'CHM', 'GM': 'CHM', 'MG': 'CHM',
-    'LB': 'CHM', 'LBS': 'CHM', 'OZ': 'CHM', 'OZA': 'CHM', 'GW': 'CHM', 'TON': 'CHM', 'DR': 'CHM',
-    'L': 'Liquid', 'LT': 'Liquid', 'ML': 'Liquid', 'CC': 'Liquid', 'CL': 'Liquid', 'CCM': 'Liquid', 'GLL': 'Liquid',
-    'EA': 'Discrete', 'PC': 'Discrete', 'PCS': 'Discrete', 'Pcs': 'Discrete', 'PKT': 'Discrete', 'PK': 'Discrete',
-    'PAK': 'Discrete', 'PCK': 'Discrete', 'CS': 'Discrete', 'CSE': 'Discrete', 'CT': 'Discrete', 'CA': 'Discrete',
-    'ST': 'Discrete', 'GRO': 'Discrete', 'BX': 'Discrete',
-    'BOT': 'Containers', 'BOTTLE': 'Containers', 'ROLL': 'Containers', 'ROL': 'Containers', 'REEL': 'Containers', 'KAR': 'Containers',
-    'FT': 'Dimensional', 'YD': 'Dimensional', 'KM': 'Dimensional', 'DM': 'Dimensional', 'M': 'Dimensional',
-    'M1': 'Dimensional', 'M2': 'Dimensional', 'KM2': 'Dimensional', 'YD2': 'Dimensional', 'FT3': 'Dimensional',
-    'SQM': 'Dimensional', 'sqm': 'Dimensional', 'MYD': 'Dimensional', 'MI': 'Dimensional', 'SM': 'Dimensional',
-    'LM': 'Dimensional', 'LF': 'Dimensional', 'MH': 'Dimensional', 'KN': 'Dimensional', 'CH': 'Dimensional',
-    'TH': 'Unclassified', 'THU': 'Unclassified', 'IM': 'Unclassified', 'NOS': 'Unclassified', 'NO': 'Unclassified',
-    'TS': 'Unclassified', 'KA': 'Unclassified', 'ZPC': 'Unclassified', 'ZCT': 'Unclassified', '0%': 'Unclassified',
-    'KP': 'Unclassified', 'GP': 'Unclassified', 'KAI': 'Unclassified', 'SY': 'Unclassified', 'UN': 'Unclassified',
-    'MU': 'Unclassified', 'UM': 'Unclassified', 'HU': 'Unclassified'
+# --- Precompiled regex patterns ---
+patterns = {
+    'non_alphanumeric': re.compile(r'[^A-Za-z0-9&% ]+'),
+    'percent_space': re.compile(r"\s*%\s*"),
+    'canada_variants': re.compile(r'(canada|can|(ca\d+)$|ca)'),
+    'remove_canada': re.compile(r'canada\s*(\d{2,})|(canada\d+)|canada|can\s*(\d{2,})|(can\d+)|can|(ca\d+)|ca\s(\d{2,})|ca$|(ca\s)'),
+    'units': re.compile(r"(\D)(\d+)(\s*)(ml|l|gr|gm|g|ct)"),
+    'spf_space': re.compile(r"(\s)(spf)\s*([\d+])"),
+    'units_no_space': re.compile(r'([\d+])\s*(?:ml|l|gr|gm|g|ct)(?: |$)'),
+    'spf_number': re.compile(r"(\D)(spf\d+)")
 }
 
-# Function to process a single file
-def process_file(file_path):
+def clean_series(series):
+    return (series.str.lower()
+        .str.replace(patterns['non_alphanumeric'], '', regex=True)
+        .str.replace(patterns['percent_space'], '% ', regex=True)
+        .str.replace(patterns['canada_variants'], r' \1', regex=True)
+        .str.replace(patterns['remove_canada'], '', regex=True)
+        .str.replace(patterns['units'], r'\1 \2\3\4 ', regex=True)
+        .str.replace(patterns['spf_space'], r'\1\2\3', regex=True)
+        .str.replace(patterns['units_no_space'], lambda z: z.group().replace(" ", ""), regex=True)
+        .str.replace(patterns['spf_number'], r'\1 \2 ', regex=True)
+    )
+
+def text_clean_step(file, input_path, output_path):
     try:
-        df = pd.read_parquet(file_path)
+        df = pd.read_parquet(file)
 
-        # Filter rows where 'Final Category' is not null
-        df = df[df['Final Category'].notna()]
-        if df.empty:
-            print(f"⚠️ Skipped (no valid rows): {os.path.basename(file_path)}")
-            return
+        df['MATL_SHRT_DESC'] = clean_series(df['MATL_SHRT_DESC'].fillna(''))
+        df['CMPNT_MATL_DESC'] = clean_series(df['CMPNT_MATL_DESC'].fillna(''))
 
-        # Compute length of material descriptions
-        df['MATL_SHRT_DESC_LEN'] = df['MATL_SHRT_DESC'].astype(str).str.len()
-        df['CMPNT_MATL_DESC_LEN'] = df['CMPNT_MATL_DESC'].astype(str).str.len()
+        df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'] = (
+            df['MATL_SHRT_DESC'] + ' ' + df['CMPNT_MATL_DESC']
+        ).str.strip()
 
-        # Map unit to group
-        df['UNIT_GROUP'] = (
-            df['CMPNT_UOM_CD']
-            .fillna('')
-            .str.upper()
-            .map(unit_group_map)
-            .fillna('Unclassified')
-        )
-
-        # Save to new folder (target_map_with_rules)
-        output_file = file_path.replace("train_test_data", "target_map_with_rules")
+        rel_path = os.path.relpath(file, input_path)
+        output_file = os.path.join(output_path, rel_path)
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
         df.to_parquet(output_file, index=False)
 
-        print(f"✅ Done: {os.path.basename(file_path)}")
-
+        print(f"Done: {os.path.basename(file)}")
     except Exception as e:
-        print(f"❌ Failed: {os.path.basename(file_path)} -> {e}")
+        print(f"Failed: {os.path.basename(file)} -> {e}")
 
-# Main parallel execution
+# --- Setup & execution ---
 if __name__ == '__main__':
-    input_path = './data/train_test_data'
+    input_path = './data/target_map_parquet_files'
+    output_path = './data/target_map_cleaned_non_null_target'
+    max_processes = cpu_count()  # Or set manually
+
     all_files = glob.glob(os.path.join(input_path, '*.parquet'))
 
-    with Pool(cpu_count()) as pool:
-        pool.map(process_file, all_files)
+    # Use functools.partial to pass static args to worker
+    worker_func = partial(text_clean_step, input_path=input_path, output_path=output_path)
+
+    with Pool(processes=max_processes) as pool:
+        pool.map(worker_func, all_files)
