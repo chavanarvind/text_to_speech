@@ -1,41 +1,41 @@
-#abbreviation step
 import os
 import re
 import glob
 import pandas as pd
 from multiprocessing import Pool, cpu_count
 
-# --- Load abbreviation mapping ---
+# --- Load abbreviation map ---
 abbrev_csv_path = './data/abbreviation_expension_updated.csv'
 abbrev_df = pd.read_csv(abbrev_csv_path)
 abbrev_map = {k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])}
+abbrev_pattern = re.compile(r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b', flags=re.IGNORECASE)
 
-# --- Compile regex for full-word, case-insensitive matching ---
-abbrev_pattern = re.compile(
-    r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b',
-    flags=re.IGNORECASE
-)
+def expand_abbreviations(text):
+    return abbrev_pattern.sub(lambda m: abbrev_map.get(m.group(0).lower(), m.group(0)), text)
 
-# --- Function for match replacement using the map ---
-def replace_match(m):
-    return abbrev_map.get(m.group(0).lower(), m.group(0))
-
-# --- Worker function for one file ---
+# --- Worker function ---
 def process_file(file):
     try:
         df = pd.read_parquet(file)
 
-        # Expand abbreviations in the combined text column
-        df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'] = df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'].str.replace(
-            abbrev_pattern, replace_match, regex=True
-        )
+        # Filter out rows with null Final Category
+        df = df[df['Final Category'].notna()]
+        if df.empty:
+            print(f"⚠️ Skipped (no valid rows): {os.path.basename(file)}")
+            return
 
+        # Apply abbreviation expansion only
+        df['MATL_SHRT_DESC'] = df['MATL_SHRT_DESC'].fillna('').apply(expand_abbreviations)
+        df['CMPNT_MATL_DESC'] = df['CMPNT_MATL_DESC'].fillna('').apply(expand_abbreviations)
+
+        # Overwrite file
         df.to_parquet(file, index=False)
-        print(f"Done: {os.path.basename(file)}")
-    except Exception as e:
-        print(f"Failed: {os.path.basename(file)} -> {e}")
+        print(f"✅ Done: {os.path.basename(file)}")
 
-# --- Run multiprocessing pool ---
+    except Exception as e:
+        print(f"❌ Failed: {os.path.basename(file)} -> {e}")
+
+# --- Execute in parallel ---
 if __name__ == '__main__':
     input_path = './data/target_map_cleaned'
     files = glob.glob(os.path.join(input_path, '*.parquet'))
