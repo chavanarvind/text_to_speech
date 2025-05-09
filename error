@@ -1,26 +1,23 @@
-# Re-import after kernel reset
-import os
-import glob
-import pandas as pd
-import numpy as np
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.linear_model import SGDClassifier
-from sklearn.metrics import log_loss, accuracy_score, classification_report, top_k_accuracy_score
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import OrdinalEncoder, StandardScaler
+from sklearn.metrics import log_loss, accuracy_score, classification_report, top_k_accuracy_score
+import glob
+import os
+import pandas as pd
+import numpy as np
 
-# Load and concatenate parquet files
+# Load and combine parquet files
 input_path = './data/target_map_cleaned_non_null_target'
 all_files = glob.glob(os.path.join(input_path, '*.parquet'))
 df = pd.concat([pd.read_parquet(f) for f in all_files], ignore_index=True)
 df = df[df['Final Category'].notna()].copy()
-
-# Optional: unify ambiguous labels
 df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
 
-# Define features and target
+# Features and target
 features = [
     'MATL_SHRT_DESC', 'CMPNT_MATL_DESC',
     'MATL_SHRT_DESC_LEN', 'CMPNT_MATL_DESC_LEN',
@@ -31,23 +28,25 @@ X = df[features]
 y = df[target]
 classes = np.unique(y)
 
-# Train/test split
+# Train-test split
 X_train, X_val, y_train, y_val = train_test_split(X, y, stratify=y, test_size=0.2, random_state=42)
 
-# Preprocessor
+# Preprocessing pipeline with OrdinalEncoder
 preprocessor = ColumnTransformer(transformers=[
     ('text1', TfidfVectorizer(ngram_range=(1, 2), max_features=8000), 'MATL_SHRT_DESC'),
     ('text2', TfidfVectorizer(ngram_range=(1, 2), max_features=8000), 'CMPNT_MATL_DESC'),
     ('num', StandardScaler(), ['MATL_SHRT_DESC_LEN', 'CMPNT_MATL_DESC_LEN']),
-    ('cat', OneHotEncoder(handle_unknown='ignore'), ['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']),
+    ('cat', OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1),
+     ['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']),
 ])
 
-# Transform training data once
+# Transform data
 X_train_transformed = preprocessor.fit_transform(X_train)
 X_val_transformed = preprocessor.transform(X_val)
 
-# Classifier with warm_start for incremental updates
-clf = SGDClassifier(loss='log_loss', max_iter=1, tol=None, warm_start=True, random_state=42, class_weight='balanced')
+# Initialize SGDClassifier with partial_fit
+clf = SGDClassifier(loss='log_loss', max_iter=1, tol=None, warm_start=True,
+                    random_state=42, class_weight='balanced')
 
 # Training loop with early stopping
 best_loss = float('inf')
