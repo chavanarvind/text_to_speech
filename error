@@ -3,45 +3,81 @@ import glob
 import pandas as pd
 from multiprocessing import Pool, cpu_count
 
-# --- Category mapping function ---
+# --- Smart category mapping function ---
 def map_cmpnt_type_category(val):
     if pd.isna(val):
         return 'OTHER'
-    val = str(val).strip().lower()
-    if len(val) <= 5 and val.isalnum():
-        return 'ERP_CODE'
-    if any(x in val for x in ['packaging', 'bottle', 'jar', 'cap', 'carton', 'tube', 'pouch', 'closure']):
+    
+    val_clean = str(val).strip()
+    val_lower = val_clean.lower()
+    val_upper = val_clean.upper()
+
+    # ERP material type mapping (preserving ERP business meaning)
+    erp_type_map = {
+        'FERT': 'FINISHED_PRODUCT',
+        'HALB': 'SEMI_FINISHED',
+        'ROH': 'RAW_MATERIAL',
+        'VERP': 'PACKAGING_MATERIAL',
+        'TRAD': 'TRADED_GOOD',
+        'ERSA': 'SUBCONTRACT_COMPONENT',
+        'API': 'API',
+        'TPF': 'TRADE_PRODUCT',
+        'PACK': 'PACKAGING',
+        'ZHBG': 'INTERMEDIATE',
+        'EPC': 'EXCIPIENT',
+        'EPF': 'FINISHED_PRODUCT',
+        'HAWA': 'TRADING_GOOD',
+        'ZEXI': 'EXCIPIENT',
+        'ZROH': 'RAW_MATERIAL',
+        'SAPR': 'PACKAGING',
+        'IM': 'INTERMEDIATE',
+        'UNBW': 'NON_VALUATED',
+        'IG': 'INTERMEDIATE_GOOD'
+    }
+
+    # Priority 1: Known ERP codes
+    if val_upper in erp_type_map:
+        return erp_type_map[val_upper]
+
+    # Priority 2: Descriptive pattern matching
+    if any(x in val_lower for x in ['packaging', 'bottle', 'jar', 'cap', 'carton', 'tube', 'pouch', 'closure']):
         return 'PACKAGING'
-    if any(x in val for x in ['chemical', 'solvent', 'alcohol', 'acid', 'buffer', 'salt', 'preservative']):
+    if any(x in val_lower for x in ['chemical', 'solvent', 'alcohol', 'acid', 'buffer', 'salt', 'preservative']):
         return 'CHEMICAL'
-    if any(x in val for x in ['actives', 'naturals', 'flavor', 'fragrance', 'api']):
+    if any(x in val_lower for x in ['actives', 'naturals', 'flavor', 'fragrance', 'api']):
         return 'ACTIVES_NATURALS'
-    if any(x in val for x in ['film', 'foil', 'label', 'sleeve']):
+    if any(x in val_lower for x in ['film', 'foil', 'label', 'sleeve']):
         return 'FILMS_LABELS'
-    if any(x in val for x in ['soap', 'conditioner', 'emulsifier', 'thickener', 'talc', 'sunscreen']):
+    if any(x in val_lower for x in ['soap', 'conditioner', 'emulsifier', 'thickener', 'talc', 'sunscreen']):
         return 'COSMETIC_BASE'
-    if any(x in val for x in ['glass', 'pump', 'puff']):
+    if any(x in val_lower for x in ['glass', 'pump', 'puff']):
         return 'CONTAINERS'
+
+    # Priority 3: Unrecognized short ERP-like code
+    if len(val_clean) <= 5 and val_clean.isalnum():
+        return 'ERP_CODE'
+
+    # Fallback
     return 'OTHER'
 
-# --- Processing function ---
+# --- Per-file processing ---
 def process_file(file_path):
     try:
         df = pd.read_parquet(file_path)
 
-        # Filter only rows with non-null Final Category
+        # Only process rows where Final Category is not null
         df = df[df['Final Category'].notna()]
         if df.empty:
             print(f"⚠️ Skipped (no valid rows): {os.path.basename(file_path)}")
             return
 
-        # Apply category mapping
+        # Apply mapping
         df['CMPNT_MATL_TYPE_CATEGORY'] = df['CMPNT_MATL_TYPE_CD'].apply(map_cmpnt_type_category)
 
-        # ✅ Overwrite the same file
+        # Overwrite original file with new column
         df.to_parquet(file_path, index=False)
-
         print(f"✅ Updated: {os.path.basename(file_path)}")
+
     except Exception as e:
         print(f"❌ Failed: {os.path.basename(file_path)} -> {e}")
 
