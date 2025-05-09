@@ -35,15 +35,13 @@ def process_file(file_path):
             print(f"⚠️ Skipped (no valid rows): {os.path.basename(file_path)}")
             return
 
-        # Apply CMPNT_TYPE_CATEGORY logic
+        # Apply category mapping
         df['CMPNT_MATL_TYPE_CATEGORY'] = df['CMPNT_MATL_TYPE_CD'].apply(map_cmpnt_type_category)
 
-        # Save updated file
-        output_file = file_path.replace("target_map_cleaned_non_null_target", "target_map_with_rules")
-        os.makedirs(os.path.dirname(output_file), exist_ok=True)
-        df.to_parquet(output_file, index=False)
+        # ✅ Overwrite the same file
+        df.to_parquet(file_path, index=False)
 
-        print(f"✅ Done: {os.path.basename(file_path)}")
+        print(f"✅ Updated: {os.path.basename(file_path)}")
     except Exception as e:
         print(f"❌ Failed: {os.path.basename(file_path)} -> {e}")
 
