@@ -1,13 +1,11 @@
-#data cleaning step
 import os
 import re
-import time
 import glob
 import pandas as pd
 from multiprocessing import Pool, cpu_count
 from functools import partial
 
-# --- Precompiled regex patterns ---
+# Precompiled regex patterns
 patterns = {
     'non_alphanumeric': re.compile(r'[^A-Za-z0-9&% ]+'),
     'percent_space': re.compile(r"\s*%\s*"),
@@ -35,32 +33,37 @@ def text_clean_step(file, input_path, output_path):
     try:
         df = pd.read_parquet(file)
 
+        # Keep only rows with Final Category
+        df = df[df['Final Category'].notna()]
+        if df.empty:
+            print(f"⚠️ Skipped (no valid rows): {os.path.basename(file)}")
+            return
+
+        # Clean both columns separately
         df['MATL_SHRT_DESC'] = clean_series(df['MATL_SHRT_DESC'].fillna(''))
         df['CMPNT_MATL_DESC'] = clean_series(df['CMPNT_MATL_DESC'].fillna(''))
 
+        # Combine cleaned text
         df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'] = (
             df['MATL_SHRT_DESC'] + ' ' + df['CMPNT_MATL_DESC']
         ).str.strip()
 
+        # Save to new path
         rel_path = os.path.relpath(file, input_path)
         output_file = os.path.join(output_path, rel_path)
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
         df.to_parquet(output_file, index=False)
 
-        print(f"Done: {os.path.basename(file)}")
+        print(f"✅ Done: {os.path.basename(file)}")
     except Exception as e:
-        print(f"Failed: {os.path.basename(file)} -> {e}")
+        print(f"❌ Failed: {os.path.basename(file)} -> {e}")
 
-# --- Setup & execution ---
+# Run the cleaning process in parallel
 if __name__ == '__main__':
     input_path = './data/target_map_parquet_files'
     output_path = './data/target_map_cleaned_non_null_target'
-    max_processes = cpu_count()  # Or set manually
-
     all_files = glob.glob(os.path.join(input_path, '*.parquet'))
 
-    # Use functools.partial to pass static args to worker
     worker_func = partial(text_clean_step, input_path=input_path, output_path=output_path)
-
-    with Pool(processes=max_processes) as pool:
+    with Pool(processes=cpu_count()) as pool:
         pool.map(worker_func, all_files)
