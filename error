@@ -1,107 +1,27 @@
 import pandas as pd
-import spacy
-from collections import Counter
-from itertools import islice
 from pathlib import Path
-import os
-import time
-from concurrent.futures import ProcessPoolExecutor, as_completed
 
-# Initialize global spaCy model per worker
-nlp = None
-def init_spacy():
-    global nlp
-    if nlp is None:
-        nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])
-
-# Configuration
-input_path = './data/target_map_cleaned'
-output_path = Path('./data/gram_outputs/frequent_terms_by_category')
+# Paths
 temp_path = Path('./data/temp_grams')
-output_path.mkdir(parents=True, exist_ok=True)
-temp_path.mkdir(parents=True, exist_ok=True)
-
-required_cols = ['Final Category', 'MATL_SHRT_DESC_AND_CMPNT_MATL_DESC']
-num_chunks = 4
-max_workers = 12
+output_path = Path('./data/gram_outputs/frequent_terms_by_category')
 threshold = 20
 
-# Chunk processor
+# Load and aggregate unigram CSVs
+all_uni = pd.concat([pd.read_csv(f) for f in temp_path.glob("unigrams_*.csv")], ignore_index=True)
+final_uni = (
+    all_uni.groupby(['category', 'word'])['count']
+    .sum().reset_index()
+    .query("count > @threshold")
+)
+final_uni.to_csv(output_path / "all_categories_unigrams.csv", index=False)
 
-def process_dataframe_chunk(df_chunk, chunk_name):
-    init_spacy()
-    start_time = time.time()
+# Load and aggregate bigram CSVs
+all_bi = pd.concat([pd.read_csv(f) for f in temp_path.glob("bigrams_*.csv")], ignore_index=True)
+final_bi = (
+    all_bi.groupby(['category', 'bigram'])['count']
+    .sum().reset_index()
+    .query("count > @threshold")
+)
+final_bi.to_csv(output_path / "all_categories_bigrams.csv", index=False)
 
-    unigram_rows = []
-    bigram_rows = []
-
-    for category, group in df_chunk.groupby('Final Category'):
-        texts = group['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'].astype(str).tolist()
-        for doc in nlp.pipe(texts, batch_size=100, n_process=2):
-            words = [token.lemma_ for token in doc if token.is_alpha and not token.is_stop]
-            unique_unigrams = set(words)
-            bigrams = zip(words, islice(words, 1, None))
-
-            unigram_rows.extend([{'category': category, 'word': w, 'count': 1} for w in unique_unigrams])
-            bigram_rows.extend([{'category': category, 'bigram': f"{w1} {w2}", 'count': 1} for w1, w2 in bigrams])
-
-    pd.DataFrame(unigram_rows).to_csv(temp_path / f"unigrams_{chunk_name}.csv", index=False)
-    pd.DataFrame(bigram_rows).to_csv(temp_path / f"bigrams_{chunk_name}.csv", index=False)
-    print(f"✅ {chunk_name} processed in {time.time() - start_time:.2f}s")
-
-# Split files into chunks and submit to executor
-
-def split_and_submit(file_path, executor, futures):
-    try:
-        df = pd.read_parquet(file_path, columns=required_cols)
-        df = df.dropna(subset=['Final Category', 'MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'])
-        df = df[df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'].str.strip() != '']
-        df = df.drop_duplicates(subset=['Final Category', 'MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'])
-
-        total_len = len(df)
-        if total_len == 0:
-            return
-
-        chunk_size = total_len // num_chunks
-        for i in range(num_chunks):
-            start = i * chunk_size
-            end = None if i == num_chunks - 1 else (i + 1) * chunk_size
-            chunk = df.iloc[start:end].copy()
-            chunk_id = f"{Path(file_path).stem}_chunk{i}"
-            futures.append(executor.submit(process_dataframe_chunk, chunk, chunk_id))
-
-    except Exception as e:
-        print(f"❌ Failed on {file_path.name}: {e}")
-
-# Main execution block
-
-if __name__ == '__main__':
-    all_files = list(Path(input_path).glob("*.parquet"))
-    print(f"📁 Total files: {len(all_files)}")
-
-    with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        futures = []
-        for file_path in all_files:
-            split_and_submit(file_path, executor, futures)
-        for f in as_completed(futures):
-            f.result()
-
-    print("\n🔄 Aggregating per-chunk CSVs...")
-
-    all_uni = pd.concat([pd.read_csv(f) for f in temp_path.glob("unigrams_*.csv")], ignore_index=True)
-    all_bi = pd.concat([pd.read_csv(f) for f in temp_path.glob("bigrams_*.csv")], ignore_index=True)
-
-    final_uni = (
-        all_uni.groupby(['category', 'word'])['count']
-        .sum().reset_index()
-        .query("count > @threshold")
-    )
-    final_bi = (
-        all_bi.groupby(['category', 'bigram'])['count']
-        .sum().reset_index()
-        .query("count > @threshold")
-    )
-
-    final_uni.to_csv(output_path / "all_categories_unigrams.csv", index=False)
-    final_bi.to_csv(output_path / "all_categories_bigrams.csv", index=False)
-    print("✅ Final CSVs saved.")
+print("✅ Aggregation complete. Final CSVs saved.")
