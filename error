@@ -1,1 +1,108 @@
-ValueError: class_weight 'balanced' is not supported for partial_fit. In order to use 'balanced' weights, use compute_class_weight('balanced', classes=classes, y=y). In place of y you can use a large enough sample of the full training set target to properly estimate the class frequency distributions. Pass the resulting weights as the class_weight parameter.
+from sklearn.utils.class_weight import compute_class_weight
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.feature_extraction.text import HashingVectorizer
+from sklearn.linear_model import SGDClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import OrdinalEncoder, StandardScaler
+from sklearn.metrics import log_loss, accuracy_score, classification_report, top_k_accuracy_score
+import glob
+import os
+import pandas as pd
+import numpy as np
+from scipy.sparse import hstack
+
+# Setup
+input_path = './data/target_map_cleaned_non_null_target'
+all_files = glob.glob(os.path.join(input_path, '*.parquet'))
+
+# Load a sample for encoder fitting and class weight computation
+sample_data = pd.concat([pd.read_parquet(f) for f in all_files[:2]], ignore_index=True)
+sample_data = sample_data[sample_data['Final Category'].notna()].copy()
+sample_data['Final Category'] = sample_data['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
+
+# Prepare encoders
+text_vec1 = HashingVectorizer(n_features=2**14, alternate_sign=False, ngram_range=(1, 2))
+text_vec2 = HashingVectorizer(n_features=2**14, alternate_sign=False, ngram_range=(1, 2))
+ordinal_enc = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
+scaler = StandardScaler()
+
+# Fit encoders
+ordinal_enc.fit(sample_data[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+scaler.fit(sample_data[['MATL_SHRT_DESC_LEN', 'CMPNT_MATL_DESC_LEN']])
+
+# Class labels and class weights
+classes = np.unique(sample_data['Final Category'])
+class_weights_arr = compute_class_weight(class_weight='balanced', classes=classes, y=sample_data['Final Category'])
+class_weight_dict = dict(zip(classes, class_weights_arr))
+
+# Train-test split for validation
+X_sample = sample_data[[
+    'MATL_SHRT_DESC', 'CMPNT_MATL_DESC',
+    'MATL_SHRT_DESC_LEN', 'CMPNT_MATL_DESC_LEN',
+    'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY'
+]]
+y_sample = sample_data['Final Category']
+X_train, X_val, y_train, y_val = train_test_split(X_sample, y_sample, stratify=y_sample, test_size=0.2, random_state=42)
+
+# Transform validation set
+X_val_trans = hstack([
+    text_vec1.transform(X_val['MATL_SHRT_DESC'].astype(str)),
+    text_vec2.transform(X_val['CMPNT_MATL_DESC'].astype(str)),
+    scaler.transform(X_val[['MATL_SHRT_DESC_LEN', 'CMPNT_MATL_DESC_LEN']]),
+    ordinal_enc.transform(X_val[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+])
+
+# Initialize classifier with manual class weights
+clf = SGDClassifier(loss='log_loss', max_iter=1, tol=None, warm_start=True,
+                    random_state=42, class_weight=class_weight_dict)
+
+# Training loop
+best_loss = float('inf')
+patience = 2
+no_improve_count = 0
+n_epochs = 10
+
+for epoch in range(1, n_epochs + 1):
+    print(f"\n🔁 Epoch {epoch}")
+    for file in all_files:
+        df = pd.read_parquet(file)
+        df = df[df['Final Category'].notna()].copy()
+        df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
+
+        X_batch = df[[
+            'MATL_SHRT_DESC', 'CMPNT_MATL_DESC',
+            'MATL_SHRT_DESC_LEN', 'CMPNT_MATL_DESC_LEN',
+            'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY'
+        ]]
+        y_batch = df['Final Category']
+
+        X_batch_trans = hstack([
+            text_vec1.transform(X_batch['MATL_SHRT_DESC'].astype(str)),
+            text_vec2.transform(X_batch['CMPNT_MATL_DESC'].astype(str)),
+            scaler.transform(X_batch[['MATL_SHRT_DESC_LEN', 'CMPNT_MATL_DESC_LEN']]),
+            ordinal_enc.transform(X_batch[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+        ])
+
+        clf.partial_fit(X_batch_trans, y_batch, classes=classes)
+
+    y_val_proba = clf.predict_proba(X_val_trans)
+    val_loss = log_loss(y_val, y_val_proba, labels=classes)
+    val_acc = accuracy_score(y_val, clf.predict(X_val_trans))
+    val_top3 = top_k_accuracy_score(y_val, y_val_proba, k=3, labels=classes)
+
+    print(f"📘 Val Loss = {val_loss:.4f} | Top-1 Acc = {val_acc:.4f} | Top-3 Acc = {val_top3:.4f}")
+
+    if val_loss < best_loss - 1e-4:
+        best_loss = val_loss
+        best_model = clf
+        no_improve_count = 0
+    else:
+        no_improve_count += 1
+        if no_improve_count >= patience:
+            print(f"🛑 Early stopping at epoch {epoch}")
+            break
+
+# Final classification report
+print("\n📊 Final Classification Report:")
+print(classification_report(y_val, best_model.predict(X_val_trans), digits=3))
