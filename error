@@ -1,28 +1,26 @@
+# Re-import after kernel reset
 import os
 import glob
 import pandas as pd
+import numpy as np
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.linear_model import SGDClassifier
-from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
-from sklearn.metrics import classification_report, confusion_matrix
-import seaborn as sns
-import matplotlib.pyplot as plt
+from sklearn.metrics import log_loss, accuracy_score, classification_report, top_k_accuracy_score
+from sklearn.model_selection import train_test_split
 
-# 1. Load and combine parquet files
+# Load and concatenate parquet files
 input_path = './data/target_map_cleaned_non_null_target'
 all_files = glob.glob(os.path.join(input_path, '*.parquet'))
 df = pd.concat([pd.read_parquet(f) for f in all_files], ignore_index=True)
-
-# 2. Drop rows with missing target
 df = df[df['Final Category'].notna()].copy()
 
-# 3. Optional: clean up labels (e.g., unify 'FNW or CHM')
+# Optional: unify ambiguous labels
 df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
 
-# 4. Define features and target
+# Define features and target
 features = [
     'MATL_SHRT_DESC', 'CMPNT_MATL_DESC',
     'MATL_SHRT_DESC_LEN', 'CMPNT_MATL_DESC_LEN',
@@ -31,42 +29,52 @@ features = [
 target = 'Final Category'
 X = df[features]
 y = df[target]
+classes = np.unique(y)
 
-# 5. Train/test split with stratification
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, stratify=y, test_size=0.2, random_state=42
-)
+# Train/test split
+X_train, X_val, y_train, y_val = train_test_split(X, y, stratify=y, test_size=0.2, random_state=42)
 
-# 6. Column-wise transformers
+# Preprocessor
 preprocessor = ColumnTransformer(transformers=[
-    ('text1', TfidfVectorizer(ngram_range=(1,2), max_features=8000), 'MATL_SHRT_DESC'),
-    ('text2', TfidfVectorizer(ngram_range=(1,2), max_features=8000), 'CMPNT_MATL_DESC'),
+    ('text1', TfidfVectorizer(ngram_range=(1, 2), max_features=8000), 'MATL_SHRT_DESC'),
+    ('text2', TfidfVectorizer(ngram_range=(1, 2), max_features=8000), 'CMPNT_MATL_DESC'),
     ('num', StandardScaler(), ['MATL_SHRT_DESC_LEN', 'CMPNT_MATL_DESC_LEN']),
-    ('cat', OneHotEncoder(handle_unknown='ignore'), ['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY'])
+    ('cat', OneHotEncoder(handle_unknown='ignore'), ['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']),
 ])
 
-# 7. Classifier with balanced class weights
-classifier = SGDClassifier(loss='log_loss', class_weight='balanced', random_state=42)
+# Transform training data once
+X_train_transformed = preprocessor.fit_transform(X_train)
+X_val_transformed = preprocessor.transform(X_val)
 
-pipeline = Pipeline(steps=[
-    ('preprocessor', preprocessor),
-    ('classifier', classifier)
-])
+# Classifier with warm_start for incremental updates
+clf = SGDClassifier(loss='log_loss', max_iter=1, tol=None, warm_start=True, random_state=42, class_weight='balanced')
 
-# 8. Train the pipeline
-pipeline.fit(X_train, y_train)
+# Training loop with early stopping
+best_loss = float('inf')
+patience = 3
+no_improve_count = 0
+n_epochs = 20
 
-# 9. Evaluate on test set
-y_pred = pipeline.predict(X_test)
-print("\n📊 Classification Report:\n")
-print(classification_report(y_test, y_pred, digits=3))
+for epoch in range(1, n_epochs + 1):
+    clf.partial_fit(X_train_transformed, y_train, classes=classes)
 
-# 10. Optional: Confusion matrix plot
-plt.figure(figsize=(10, 6))
-sns.heatmap(confusion_matrix(y_test, y_pred, labels=pipeline.classes_),
-            annot=True, fmt='d', cmap='Blues', xticklabels=pipeline.classes_, yticklabels=pipeline.classes_)
-plt.title("Confusion Matrix")
-plt.xlabel("Predicted")
-plt.ylabel("Actual")
-plt.tight_layout()
-plt.show()
+    y_val_proba = clf.predict_proba(X_val_transformed)
+    val_loss = log_loss(y_val, y_val_proba, labels=classes)
+    val_acc = accuracy_score(y_val, clf.predict(X_val_transformed))
+    val_top3 = top_k_accuracy_score(y_val, y_val_proba, k=3, labels=classes)
+
+    print(f"📘 Epoch {epoch}: Val Loss = {val_loss:.4f} | Top-1 Acc = {val_acc:.4f} | Top-3 Acc = {val_top3:.4f}")
+
+    if val_loss < best_loss - 1e-4:
+        best_loss = val_loss
+        best_model = clf
+        no_improve_count = 0
+    else:
+        no_improve_count += 1
+        if no_improve_count >= patience:
+            print(f"🛑 Early stopping triggered at epoch {epoch}")
+            break
+
+# Final classification report
+print("\n📊 Final Classification Report:")
+print(classification_report(y_val, best_model.predict(X_val_transformed), digits=3))
