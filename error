@@ -1,1 +1,149 @@
-Columns: [MATL_SHRT_DESC, CMPNT_MATL_DESC, CMPNT_MATL_TYPE_CD, CMPNT_CAT_CD_DESC, CMPNT_UOM_CD, Final Category, MATL_SHRT_DESC_AND_CMPNT_MATL_DESC, MATL_SHRT_DESC_LEN, CMPNT_MATL_DESC_LEN, UNIT_GROUP]
+CMPNT_MATL_TYPE_CD
+FERT
+G
+73
+N
+B
+62
+32AC
+I
+91
+0
+30AC
+6
+HALB
+D
+02PF
+Z
+61
+7
+PROM
+71
+40MP
+H
+M
+ROH
+SAPR
+UNBW
+41
+JM01
+VERP
+20SF
+95
+X
+A
+3
+8
+P
+F
+V
+U
+2
+50PM
+TRAD
+42
+R
+5
+92
+79
+W
+72
+41MP
+Z001
+Y
+EDUC
+PACK
+93
+ZEXR
+DISP
+Fiber (excluding Pulp & Rayon)
+Chemicals-Alcohol/Solvent
+Chemicals-Actives/Naturals
+Corrugated
+Packaging
+Fatty Acids/Fatty Alcohols
+Dyes/Colorants
+Films (PVC)
+Chemicals-Corn Derivatives/Sweeteners
+Other
+Bottles (PP)
+Labels/Inserts/Leaflets
+Foils
+Chemicals-Surfactant
+Bottles (HDPE)
+Packaging-Others
+Films (Polybags)
+Sleeves
+Thermoformed Packaging
+Packaging-Sleeves
+Sweeteners
+Chemicals-Preservatives
+WIP
+Flavors/Fragrances
+Conversion
+Films (Plastic)
+Caps/Closures/Lids DM
+Packaging-Caps/Closures/Li
+Chemicals-Dyes/Colorants
+Preservatives
+null
+Soap Chips
+Actives
+Actives/Naturals
+Films (Other)
+Conditioners/Emollients
+Films (Laminates)
+Pumps
+Sunscreens
+Ancillary & NonDirected
+FNW
+Naturals
+Glass bottle
+Chemicals-Surfactants
+Acids/Buffers/Salts
+Chemicals
+Corn Derivatives
+Vitamin
+Other Chemicals (waxes & new items)
+Barrier & Pouch Films
+Adhesives
+Surfactants (Commodity)
+Acids/Buffer/Salts
+Labels
+Alcohols/Solvents
+Mineral Oil/Petrolatum
+Silicones
+Films(Secondary)
+Bottles (PET)
+Caps/Closures/Lids
+Cartons
+Vitamins
+Other Nonwovens
+Films (Primary)
+Packaging-Bottles (PET)
+Glycerin
+Tubes
+Alcohol/Solvent
+Jars
+API
+Injection Molded Components
+Puff
+Naturals/Actives
+Exfolients
+Packaging-Corrugated
+Thickeners
+Other Packaging
+Emulsifiers
+Talc
+Packaging-Labels
+Chemicals-Flavors/Fragrances
+EPF
+ZHBG
+HAWA
+IM
+EPC
+IG
+ZEXI
+ZROH
+ERSA
+TPF
