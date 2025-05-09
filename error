@@ -1,9 +1,72 @@
-Columns: [MATL_SHRT_DESC, CMPNT_MATL_DESC, CMPNT_MATL_TYPE_CD, CMPNT_CAT_CD_DESC, CMPNT_UOM_CD, Final Category, MATL_SHRT_DESC_AND_CMPNT_MATL_DESC, MATL_SHRT_DESC_LEN, CMPNT_MATL_DESC_LEN, UNIT_GROUP, CMPNT_MATL_TYPE_CATEGORY]
+import os
+import glob
+import pandas as pd
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.linear_model import SGDClassifier
+from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
+from sklearn.metrics import classification_report, confusion_matrix
+import seaborn as sns
+import matplotlib.pyplot as plt
 
-target categories: col name : Final Category
-CHM
-FNW or CHM
-FNW
-PKG
-API
-Liquids and Creams
+# 1. Load and combine parquet files
+input_path = './data/target_map_cleaned_non_null_target'
+all_files = glob.glob(os.path.join(input_path, '*.parquet'))
+df = pd.concat([pd.read_parquet(f) for f in all_files], ignore_index=True)
+
+# 2. Drop rows with missing target
+df = df[df['Final Category'].notna()].copy()
+
+# 3. Optional: clean up labels (e.g., unify 'FNW or CHM')
+df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
+
+# 4. Define features and target
+features = [
+    'MATL_SHRT_DESC', 'CMPNT_MATL_DESC',
+    'MATL_SHRT_DESC_LEN', 'CMPNT_MATL_DESC_LEN',
+    'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY'
+]
+target = 'Final Category'
+X = df[features]
+y = df[target]
+
+# 5. Train/test split with stratification
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, stratify=y, test_size=0.2, random_state=42
+)
+
+# 6. Column-wise transformers
+preprocessor = ColumnTransformer(transformers=[
+    ('text1', TfidfVectorizer(ngram_range=(1,2), max_features=8000), 'MATL_SHRT_DESC'),
+    ('text2', TfidfVectorizer(ngram_range=(1,2), max_features=8000), 'CMPNT_MATL_DESC'),
+    ('num', StandardScaler(), ['MATL_SHRT_DESC_LEN', 'CMPNT_MATL_DESC_LEN']),
+    ('cat', OneHotEncoder(handle_unknown='ignore'), ['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY'])
+])
+
+# 7. Classifier with balanced class weights
+classifier = SGDClassifier(loss='log_loss', class_weight='balanced', random_state=42)
+
+pipeline = Pipeline(steps=[
+    ('preprocessor', preprocessor),
+    ('classifier', classifier)
+])
+
+# 8. Train the pipeline
+pipeline.fit(X_train, y_train)
+
+# 9. Evaluate on test set
+y_pred = pipeline.predict(X_test)
+print("\n📊 Classification Report:\n")
+print(classification_report(y_test, y_pred, digits=3))
+
+# 10. Optional: Confusion matrix plot
+plt.figure(figsize=(10, 6))
+sns.heatmap(confusion_matrix(y_test, y_pred, labels=pipeline.classes_),
+            annot=True, fmt='d', cmap='Blues', xticklabels=pipeline.classes_, yticklabels=pipeline.classes_)
+plt.title("Confusion Matrix")
+plt.xlabel("Predicted")
+plt.ylabel("Actual")
+plt.tight_layout()
+plt.show()
