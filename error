@@ -1,149 +1,65 @@
-CMPNT_MATL_TYPE_CD
-FERT
-G
-73
-N
-B
-62
-32AC
-I
-91
-0
-30AC
-6
-HALB
-D
-02PF
-Z
-61
-7
-PROM
-71
-40MP
-H
-M
-ROH
-SAPR
-UNBW
-41
-JM01
-VERP
-20SF
-95
-X
-A
-3
-8
-P
-F
-V
-U
-2
-50PM
-TRAD
-42
-R
-5
-92
-79
-W
-72
-41MP
-Z001
-Y
-EDUC
-PACK
-93
-ZEXR
-DISP
-Fiber (excluding Pulp & Rayon)
-Chemicals-Alcohol/Solvent
-Chemicals-Actives/Naturals
-Corrugated
-Packaging
-Fatty Acids/Fatty Alcohols
-Dyes/Colorants
-Films (PVC)
-Chemicals-Corn Derivatives/Sweeteners
-Other
-Bottles (PP)
-Labels/Inserts/Leaflets
-Foils
-Chemicals-Surfactant
-Bottles (HDPE)
-Packaging-Others
-Films (Polybags)
-Sleeves
-Thermoformed Packaging
-Packaging-Sleeves
-Sweeteners
-Chemicals-Preservatives
-WIP
-Flavors/Fragrances
-Conversion
-Films (Plastic)
-Caps/Closures/Lids DM
-Packaging-Caps/Closures/Li
-Chemicals-Dyes/Colorants
-Preservatives
-null
-Soap Chips
-Actives
-Actives/Naturals
-Films (Other)
-Conditioners/Emollients
-Films (Laminates)
-Pumps
-Sunscreens
-Ancillary & NonDirected
-FNW
-Naturals
-Glass bottle
-Chemicals-Surfactants
-Acids/Buffers/Salts
-Chemicals
-Corn Derivatives
-Vitamin
-Other Chemicals (waxes & new items)
-Barrier & Pouch Films
-Adhesives
-Surfactants (Commodity)
-Acids/Buffer/Salts
-Labels
-Alcohols/Solvents
-Mineral Oil/Petrolatum
-Silicones
-Films(Secondary)
-Bottles (PET)
-Caps/Closures/Lids
-Cartons
-Vitamins
-Other Nonwovens
-Films (Primary)
-Packaging-Bottles (PET)
-Glycerin
-Tubes
-Alcohol/Solvent
-Jars
-API
-Injection Molded Components
-Puff
-Naturals/Actives
-Exfolients
-Packaging-Corrugated
-Thickeners
-Other Packaging
-Emulsifiers
-Talc
-Packaging-Labels
-Chemicals-Flavors/Fragrances
-EPF
-ZHBG
-HAWA
-IM
-EPC
-IG
-ZEXI
-ZROH
-ERSA
-TPF
+import os
+import glob
+import pandas as pd
+from multiprocessing import Pool, cpu_count
+
+# UNIT_GROUP mapping
+unit_group_map = {
+    'KG': 'CHM', 'KGS': 'CHM', 'KGA': 'CHM', 'KGW': 'CHM', 'G': 'CHM', 'GR': 'CHM', 'GM': 'CHM', 'MG': 'CHM',
+    'LB': 'CHM', 'LBS': 'CHM', 'OZ': 'CHM', 'OZA': 'CHM', 'GW': 'CHM', 'TON': 'CHM', 'DR': 'CHM',
+    'L': 'Liquid', 'LT': 'Liquid', 'ML': 'Liquid', 'CC': 'Liquid', 'CL': 'Liquid', 'CCM': 'Liquid', 'GLL': 'Liquid',
+    'EA': 'Discrete', 'PC': 'Discrete', 'PCS': 'Discrete', 'Pcs': 'Discrete', 'PKT': 'Discrete', 'PK': 'Discrete',
+    'PAK': 'Discrete', 'PCK': 'Discrete', 'CS': 'Discrete', 'CSE': 'Discrete', 'CT': 'Discrete', 'CA': 'Discrete',
+    'ST': 'Discrete', 'GRO': 'Discrete', 'BX': 'Discrete',
+    'BOT': 'Containers', 'BOTTLE': 'Containers', 'ROLL': 'Containers', 'ROL': 'Containers', 'REEL': 'Containers', 'KAR': 'Containers',
+    'FT': 'Dimensional', 'YD': 'Dimensional', 'KM': 'Dimensional', 'DM': 'Dimensional', 'M': 'Dimensional',
+    'M1': 'Dimensional', 'M2': 'Dimensional', 'KM2': 'Dimensional', 'YD2': 'Dimensional', 'FT3': 'Dimensional',
+    'SQM': 'Dimensional', 'sqm': 'Dimensional', 'MYD': 'Dimensional', 'MI': 'Dimensional', 'SM': 'Dimensional',
+    'LM': 'Dimensional', 'LF': 'Dimensional', 'MH': 'Dimensional', 'KN': 'Dimensional', 'CH': 'Dimensional',
+    'TH': 'Unclassified', 'THU': 'Unclassified', 'IM': 'Unclassified', 'NOS': 'Unclassified', 'NO': 'Unclassified',
+    'TS': 'Unclassified', 'KA': 'Unclassified', 'ZPC': 'Unclassified', 'ZCT': 'Unclassified', '0%': 'Unclassified',
+    'KP': 'Unclassified', 'GP': 'Unclassified', 'KAI': 'Unclassified', 'SY': 'Unclassified', 'UN': 'Unclassified',
+    'MU': 'Unclassified', 'UM': 'Unclassified', 'HU': 'Unclassified'
+}
+
+# Function to process a single file
+def process_file(file_path):
+    try:
+        df = pd.read_parquet(file_path)
+
+        # Filter rows where 'Final Category' is not null
+        df = df[df['Final Category'].notna()]
+        if df.empty:
+            print(f"⚠️ Skipped (no valid rows): {os.path.basename(file_path)}")
+            return
+
+        # Compute length of material descriptions
+        df['MATL_SHRT_DESC_LEN'] = df['MATL_SHRT_DESC'].astype(str).str.len()
+        df['CMPNT_MATL_DESC_LEN'] = df['CMPNT_MATL_DESC'].astype(str).str.len()
+
+        # Map unit to group
+        df['UNIT_GROUP'] = (
+            df['CMPNT_UOM_CD']
+            .fillna('')
+            .str.upper()
+            .map(unit_group_map)
+            .fillna('Unclassified')
+        )
+
+        # Save to new folder (target_map_with_rules)
+        output_file = file_path.replace("train_test_data", "target_map_with_rules")
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        df.to_parquet(output_file, index=False)
+
+        print(f"✅ Done: {os.path.basename(file_path)}")
+
+    except Exception as e:
+        print(f"❌ Failed: {os.path.basename(file_path)} -> {e}")
+
+# Main parallel execution
+if __name__ == '__main__':
+    input_path = './data/target_map_cleaned_non_null_target'
+    all_files = glob.glob(os.path.join(input_path, '*.parquet'))
+
+    with Pool(cpu_count()) as pool:
+        pool.map(process_file, all_files)
