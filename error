@@ -36,7 +36,7 @@ def process_file(file_path):
             return
 
         # Apply CMPNT_TYPE_CATEGORY logic
-        df['CMPNT_TYPE_CATEGORY'] = df['CMPNT_MATL_TYPE_CD'].apply(map_cmpnt_type_category)
+        df['CMPNT_MATL_TYPE_CATEGORY'] = df['CMPNT_MATL_TYPE_CD'].apply(map_cmpnt_type_category)
 
         # Save updated file
         output_file = file_path.replace("target_map_cleaned_non_null_target", "target_map_with_rules")
