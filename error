@@ -1,30 +1,7 @@
-import glob
-import os
-import pandas as pd
-
-# Setup
-input_path = './data/target_map_cleaned_non_null_target'
-all_files = glob.glob(os.path.join(input_path, '*.parquet'))
-
-# Category column
-target_col = 'Final Category'
-category_counts = {}
-
-# Read and count
-for file in all_files:
-    df = pd.read_parquet(file, columns=[target_col])
-    df = df[df[target_col].notna()]
-    df[target_col] = df[target_col].replace({'FNW or CHM': 'FNW_CHM'})
-    
-    counts = df[target_col].value_counts().to_dict()
-    for cat, count in counts.items():
-        category_counts[cat] = category_counts.get(cat, 0) + count
-
-# Convert to DataFrame
-dist_df = pd.DataFrame.from_dict(category_counts, orient='index', columns=['count'])
-dist_df = dist_df.sort_values(by='count', ascending=False).reset_index()
-dist_df.columns = ['category', 'count']
-
-# Display
-print("\n📊 Category Distribution:")
-print(dist_df)
+          category      count
+0                 CHM  294354131
+1                 PKG  244395506
+2                 FNW   47820274
+3             FNW_CHM    8892358
+4  Liquids and Creams    2185074
+5                 API     926530
