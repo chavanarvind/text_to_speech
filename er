@@ -1,3 +1,5 @@
+pip install -U sentence-transformers
+
 # Single-Stage Classification Pipeline using BioBERT Embeddings
 import os
 import glob
