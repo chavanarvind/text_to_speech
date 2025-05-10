@@ -58,7 +58,7 @@ train_df, val_df = train_test_split(
 classes = np.unique(train_df['Final Category'])
 
 # Fit transformers
-tfidf_vec = TfidfVectorizer(ngram_range=(1, 2), max_features=2**14)
+tfidf_vec = TfidfVectorizer(ngram_range=(1, 2), max_features=2**14, stop_words='english')
 tfidf_vec.fit(train_df['CMPNT_MATL_DESC'].astype(str))
 
 ordinal_enc = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
