@@ -1,2 +1,114 @@
-🔁 Epoch 1
-📘 Val Loss = 0.2682 | Top-1 Acc = 0.9555 | Top-3 Acc = 0.9906
+import glob
+import os
+import pandas as pd
+import numpy as np
+from sklearn.utils.class_weight import compute_class_weight
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import OrdinalEncoder, StandardScaler
+from sklearn.linear_model import SGDClassifier
+from sklearn.metrics import log_loss, accuracy_score, classification_report, top_k_accuracy_score
+from sklearn.model_selection import train_test_split
+from scipy.sparse import hstack
+
+# Paths
+input_path = './data/target_map_cleaned_non_null_target'
+all_files = glob.glob(os.path.join(input_path, '*.parquet'))
+
+# STEP 1: Sample 2 files to fit vectorizers/encoders
+sample_df = pd.concat([pd.read_parquet(f) for f in all_files[:2]], ignore_index=True)
+sample_df = sample_df[sample_df['Final Category'].notna()].copy()
+sample_df['Final Category'] = sample_df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
+sample_df.drop_duplicates(inplace=True)
+
+# Prepare y and feature columns
+classes = np.unique(sample_df['Final Category'])
+
+# Fit encoders/vectorizers on sample
+tfidf_vec = TfidfVectorizer(ngram_range=(1, 2), max_features=2**14)
+tfidf_vec.fit(sample_df['CMPNT_MATL_DESC'].astype(str))
+
+ordinal_enc = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
+ordinal_enc.fit(sample_df[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+
+scaler = StandardScaler()
+scaler.fit(sample_df[['CMPNT_MATL_DESC_LEN']])
+
+# Class weights
+class_weights = compute_class_weight(class_weight='balanced', classes=classes, y=sample_df['Final Category'])
+class_weight_dict = dict(zip(classes, class_weights))
+
+# Prepare validation set
+X_sample = sample_df[[
+    'CMPNT_MATL_DESC', 'CMPNT_MATL_DESC_LEN', 'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY'
+]]
+y_sample = sample_df['Final Category']
+
+X_train, X_val, y_train, y_val = train_test_split(
+    X_sample, y_sample, test_size=0.2, stratify=y_sample, random_state=42
+)
+
+X_val_trans = hstack([
+    tfidf_vec.transform(X_val['CMPNT_MATL_DESC'].astype(str)),
+    scaler.transform(X_val[['CMPNT_MATL_DESC_LEN']]),
+    ordinal_enc.transform(X_val[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+])
+
+# Initialize model
+clf = SGDClassifier(
+    loss='log_loss',
+    max_iter=1,
+    warm_start=True,
+    random_state=42,
+    class_weight=class_weight_dict,
+    tol=None
+)
+
+# TRAINING LOOP: Incremental
+best_loss = float('inf')
+no_improve_count = 0
+patience = 2
+n_epochs = 10
+
+for epoch in range(1, n_epochs + 1):
+    print(f"\n🔁 Epoch {epoch}")
+    for file in all_files:
+        df = pd.read_parquet(file)
+        df = df[df['Final Category'].notna()].copy()
+        df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
+        df.drop_duplicates(inplace=True)
+
+        if df.empty:
+            continue
+
+        X_batch = df[['CMPNT_MATL_DESC', 'CMPNT_MATL_DESC_LEN', 'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']]
+        y_batch = df['Final Category']
+
+        X_batch_trans = hstack([
+            tfidf_vec.transform(X_batch['CMPNT_MATL_DESC'].astype(str)),
+            scaler.transform(X_batch[['CMPNT_MATL_DESC_LEN']]),
+            ordinal_enc.transform(X_batch[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+        ])
+
+        clf.partial_fit(X_batch_trans, y_batch, classes=classes)
+
+    # Validation
+    y_val_proba = clf.predict_proba(X_val_trans)
+    val_loss = log_loss(y_val, y_val_proba, labels=classes)
+    val_acc = accuracy_score(y_val, clf.predict(X_val_trans))
+    val_top3 = top_k_accuracy_score(y_val, y_val_proba, k=3, labels=classes)
+
+    print(f"📘 Val Loss = {val_loss:.4f} | Top-1 Acc = {val_acc:.4f} | Top-3 Acc = {val_top3:.4f}")
+
+    if val_loss < best_loss - 1e-4:
+        best_loss = val_loss
+        best_model = clf
+        no_improve_count = 0
+    else:
+        no_improve_count += 1
+        if no_improve_count >= patience:
+            print(f"🛑 Early stopping at epoch {epoch}")
+            break
+
+# Final report
+print("\n📊 Final Classification Report:")
+print(classification_report(y_val, best_model.predict(X_val_trans), digits=3))
