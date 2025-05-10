@@ -1,4 +1,4 @@
-# Layered Classification Pipeline using SentenceTransformer Embeddings
+# Single-Stage Classification Pipeline using BioBERT Embeddings
 import os
 import glob
 import joblib
@@ -13,14 +13,6 @@ from sentence_transformers import SentenceTransformer
 # --- CONFIGURATION ---
 input_path = './data/target_map_cleaned_non_null_target'
 all_files = glob.glob(os.path.join(input_path, '*.parquet'))
-grouped_map = {
-    'CHM': 'CHM_GROUP',
-    'Liquids and Creams': 'CHM_GROUP',
-    'FNW': 'FNW_GROUP',
-    'FNW_CHM': 'FNW_GROUP',
-    'PKG': 'PKG',
-    'API': 'RARE'
-}
 required_cols = [
     'CMPNT_MATL_DESC', 'CMPNT_MATL_DESC_LEN', 'UNIT_GROUP',
     'CMPNT_MATL_TYPE_CATEGORY', 'Final Category'
@@ -33,8 +25,6 @@ for file in all_files:
     df = pd.read_parquet(file, columns=required_cols)
     df = df[df['Final Category'].notna() & df['CMPNT_MATL_DESC'].notna()].copy()
     df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
-    df['Coarse Category'] = df['Final Category'].map(grouped_map)
-    df.dropna(subset=['Coarse Category'], inplace=True)
     df.drop_duplicates(inplace=True)
     sample_list.append(df)
 
@@ -49,54 +39,30 @@ ordinal.fit(df_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
 scaler.fit(df_all[['CMPNT_MATL_DESC_LEN']])
 
 def transform(df):
-    desc_emb = encoder.encode(df['CMPNT_MATL_DESC'].astype(str).tolist(), show_progress_bar=False)
+    desc_emb = encoder.encode(df['CMPNT_MATL_DESC'].astype(str).tolist(), show_progress_bar=True)
     length_scaled = scaler.transform(df[['CMPNT_MATL_DESC_LEN']])
     cat_encoded = ordinal.transform(df[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
     return np.hstack([desc_emb, length_scaled, cat_encoded])
 
 # --- SPLIT ---
-train_df, test_df = train_test_split(df_all, test_size=0.2, stratify=df_all['Coarse Category'], random_state=42)
-val_df, test_df = train_test_split(test_df, test_size=0.5, stratify=test_df['Coarse Category'], random_state=42)
+train_df, test_df = train_test_split(df_all, test_size=0.2, stratify=df_all['Final Category'], random_state=42)
+val_df, test_df = train_test_split(test_df, test_size=0.5, stratify=test_df['Final Category'], random_state=42)
 
-# --- TRAIN COARSE MODEL ---
+# --- TRAIN FINAL CATEGORY MODEL ---
 X_train = transform(train_df)
-y_train = train_df['Coarse Category']
+y_train = train_df['Final Category']
 X_val = transform(val_df)
-y_val = val_df['Coarse Category']
+y_val = val_df['Final Category']
 
-coarse_model = LGBMClassifier(class_weight='balanced', random_state=42)
-coarse_model.fit(X_train, y_train, eval_set=[(X_val, y_val)], early_stopping_rounds=10, verbose=10)
-joblib.dump(coarse_model, './saved_model/coarse_biobert_model.joblib')
-
-# --- TRAIN SUBMODELS ---
-fine_models = {}
-for group in df_all['Coarse Category'].unique():
-    if group == 'PKG':
-        continue
-    sub_df = df_all[df_all['Coarse Category'] == group].copy()
-    X_sub = transform(sub_df)
-    y_sub = sub_df['Final Category']
-    model = LGBMClassifier(class_weight='balanced', random_state=42)
-    model.fit(X_sub, y_sub)
-    fine_models[group] = model
-    joblib.dump(model, f'./saved_model/{group.lower()}_biobert_model.joblib')
+final_model = LGBMClassifier(class_weight='balanced', random_state=42)
+final_model.fit(X_train, y_train, eval_set=[(X_val, y_val)], early_stopping_rounds=10, verbose=10)
+joblib.dump(final_model, './saved_model/final_biobert_model.joblib')
 
 # --- INFERENCE ---
 X_test = transform(test_df)
-preds_coarse = coarse_model.predict(X_test)
-final_preds = []
-for i, row in test_df.iterrows():
-    group = preds_coarse[i]
-    if group == 'PKG':
-        final_preds.append('PKG')
-    else:
-        row_df = pd.DataFrame([row])
-        x = transform(row_df)
-        pred = fine_models[group].predict(x)[0]
-        final_preds.append(pred)
-
-test_df['Predicted'] = final_preds
-test_df.to_csv('./saved_model/biobert_test_predictions.csv', index=False)
+predicted = final_model.predict(X_test)
+test_df['Predicted'] = predicted
+test_df.to_csv('./saved_model/final_biobert_predictions.csv', index=False)
 
 # --- EVALUATION ---
 print("\nClassification Report:")
