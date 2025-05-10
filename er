@@ -134,20 +134,56 @@ for epoch in range(1, 11):
 
 # Train sub-models to recover original categories
 fine_models = {}
+sub_patience = 2
+sub_epochs = 5
+
 for group in ['CHM_GROUP', 'FNW_GROUP', 'RARE']:
-    sub_df = sample_df[sample_df['Coarse Category'] == group].copy()
-    if sub_df.empty:
-        continue
-    X_sub = transform(sub_df)
-    y_sub = sub_df['Final Category']
+    best_sub_loss = float('inf')
+    sub_no_improve = 0
+    sub_clf = SGDClassifier(loss='log_loss', max_iter=1, warm_start=True, tol=None, random_state=42)
+    
+    for epoch in range(1, sub_epochs + 1):
+        print(f"
+🔁 Training {group} model - Epoch {epoch}")
+        for file in all_files:
+            df = pd.read_parquet(file, columns=required_cols)
+            df = df[df['Final Category'].notna() & df['CMPNT_MATL_DESC'].notna()]
+            df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
+            df['Coarse Category'] = df['Final Category'].map(coarse_map)
+            df = df[df['Coarse Category'] == group]
+            df.drop_duplicates(inplace=True)
 
-    sub_clf = SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3, random_state=42)
-    sub_clf.fit(X_sub, y_sub)
-    joblib.dump(sub_clf, f"./saved_model/{group.lower()}_classifier.joblib")
-    fine_models[group] = sub_clf
+            if df.empty:
+                continue
+
+            X_batch = transform(df)
+            y_batch = df['Final Category']
+            sub_clf.partial_fit(X_batch, y_batch, classes=np.unique(sample_df['Final Category']))
+
+        # Evaluate on full group sample
+        eval_df = sample_df[sample_df['Coarse Category'] == group].copy()
+        if eval_df.empty:
+            continue
+        X_eval = transform(eval_df)
+        y_eval = eval_df['Final Category']
+        y_eval_proba = sub_clf.predict_proba(X_eval)
+        eval_loss = log_loss(y_eval, y_eval_proba, labels=np.unique(sample_df['Final Category']))
+
+        print(f"📘 {group} Val Loss = {eval_loss:.4f}")
+
+        if eval_loss < best_sub_loss - 1e-4:
+            best_sub_loss = eval_loss
+            best_model_sub = sub_clf
+            sub_no_improve = 0
+        else:
+            sub_no_improve += 1
+            if sub_no_improve >= sub_patience:
+                print(f"🛑 Early stopping {group} model at epoch {epoch}")
+                break
+
+    joblib.dump(best_model_sub, f"./saved_model/{group.lower()}_classifier.joblib")
+    fine_models[group] = best_model_sub
     print(f"✅ Trained and saved {group} fine classifier.")
-
-# Save models and transformers
 os.makedirs("./saved_model", exist_ok=True)
 joblib.dump(best_model, "./saved_model/coarse_model.joblib")
 joblib.dump(vectorizer, "./saved_model/tfidf_vectorizer.joblib")
