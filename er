@@ -1,8 +1,2 @@
- 1969     raise RuntimeError(
-   1970         f"Failed to import {self.__name__}.{module_name} because of the following error (look up to see its"
-   1971         f" traceback):\n{e}"
-   1972     ) from e
-
-RuntimeError: Failed to import transformers.integrations.integration_utils because of the following error (look up to see its traceback):
-Failed to import transformers.modeling_tf_utils because of the following error (look up to see its traceback):
-Your currently installed version of Keras is Keras 3, but this is not yet supported in Transformers. Please install the backwards-compatible tf-keras package with `pip install tf-keras`.
+pip uninstall keras -y && pip install tf-keras
+pip install "transformers[torch]" --upgrade
