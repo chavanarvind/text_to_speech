@@ -1,60 +1,69 @@
-from sklearn.utils.class_weight import compute_class_weight
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import SGDClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import OrdinalEncoder, StandardScaler
-from sklearn.metrics import log_loss, accuracy_score, classification_report, top_k_accuracy_score
-from scipy.sparse import hstack
-import pandas as pd
-import numpy as np
 import glob
 import os
+import pandas as pd
+import numpy as np
+from sklearn.utils.class_weight import compute_class_weight
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import OrdinalEncoder, StandardScaler
+from sklearn.linear_model import SGDClassifier
+from sklearn.metrics import log_loss, accuracy_score, classification_report, top_k_accuracy_score
+from sklearn.model_selection import train_test_split
+from scipy.sparse import hstack
 
-# Setup
+# Paths
 input_path = './data/target_map_cleaned_non_null_target'
 all_files = glob.glob(os.path.join(input_path, '*.parquet'))
 
-# Load a sample for fitting
-sample_data = pd.concat([pd.read_parquet(f) for f in all_files[:2]], ignore_index=True)
-sample_data = sample_data[sample_data['Final Category'].notna()].copy()
-sample_data['Final Category'] = sample_data['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
+# STEP 1: Sample 2 files to fit vectorizers/encoders
+sample_df = pd.concat([pd.read_parquet(f) for f in all_files[:2]], ignore_index=True)
+sample_df = sample_df[sample_df['Final Category'].notna()].copy()
+sample_df['Final Category'] = sample_df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
+sample_df.drop_duplicates(inplace=True)
 
-# Prepare encoders and scalers (only CMPNT_MATL_DESC and structured features)
-text_vec = TfidfVectorizer(ngram_range=(1, 2), max_features=2**14)
+# Prepare y and feature columns
+classes = np.unique(sample_df['Final Category'])
+
+# Fit encoders/vectorizers on sample
+tfidf_vec = TfidfVectorizer(ngram_range=(1, 2), max_features=2**14)
+tfidf_vec.fit(sample_df['CMPNT_MATL_DESC'].astype(str))
+
 ordinal_enc = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
-scaler = StandardScaler()
+ordinal_enc.fit(sample_df[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
 
-# Fit on sample
-text_vec.fit(sample_data['CMPNT_MATL_DESC'].astype(str))
-ordinal_enc.fit(sample_data[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
-scaler.fit(sample_data[['CMPNT_MATL_DESC_LEN']])
+scaler = StandardScaler()
+scaler.fit(sample_df[['CMPNT_MATL_DESC_LEN']])
 
 # Class weights
-classes = np.unique(sample_data['Final Category'])
-class_weights_arr = compute_class_weight(class_weight='balanced', classes=classes, y=sample_data['Final Category'])
-class_weight_dict = dict(zip(classes, class_weights_arr))
+class_weights = compute_class_weight(class_weight='balanced', classes=classes, y=sample_df['Final Category'])
+class_weight_dict = dict(zip(classes, class_weights))
 
-# Validation set
-X_sample = sample_data[[
-    'CMPNT_MATL_DESC',
-    'CMPNT_MATL_DESC_LEN',
-    'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY'
+# Prepare validation set
+X_sample = sample_df[[
+    'CMPNT_MATL_DESC', 'CMPNT_MATL_DESC_LEN', 'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY'
 ]]
-y_sample = sample_data['Final Category']
-X_train, X_val, y_train, y_val = train_test_split(X_sample, y_sample, stratify=y_sample, test_size=0.2, random_state=42)
+y_sample = sample_df['Final Category']
 
-# Transform validation data
+X_train, X_val, y_train, y_val = train_test_split(
+    X_sample, y_sample, test_size=0.2, stratify=y_sample, random_state=42
+)
+
 X_val_trans = hstack([
-    text_vec.transform(X_val['CMPNT_MATL_DESC'].astype(str)),
+    tfidf_vec.transform(X_val['CMPNT_MATL_DESC'].astype(str)),
     scaler.transform(X_val[['CMPNT_MATL_DESC_LEN']]),
     ordinal_enc.transform(X_val[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
 ])
 
-# Initialize classifier
-clf = SGDClassifier(loss='log_loss', max_iter=1, tol=None, warm_start=True,
-                    random_state=42, class_weight=class_weight_dict)
+# Initialize model
+clf = SGDClassifier(
+    loss='log_loss',
+    max_iter=1,
+    warm_start=True,
+    random_state=42,
+    class_weight=class_weight_dict,
+    tol=None
+)
 
-# Training loop
+# TRAINING LOOP: Incremental
 best_loss = float('inf')
 no_improve_count = 0
 patience = 2
@@ -66,22 +75,23 @@ for epoch in range(1, n_epochs + 1):
         df = pd.read_parquet(file)
         df = df[df['Final Category'].notna()].copy()
         df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
+        df.drop_duplicates(inplace=True)
 
-        X_batch = df[[
-            'CMPNT_MATL_DESC',
-            'CMPNT_MATL_DESC_LEN',
-            'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY'
-        ]]
+        if df.empty:
+            continue
+
+        X_batch = df[['CMPNT_MATL_DESC', 'CMPNT_MATL_DESC_LEN', 'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']]
         y_batch = df['Final Category']
 
         X_batch_trans = hstack([
-            text_vec.transform(X_batch['CMPNT_MATL_DESC'].astype(str)),
+            tfidf_vec.transform(X_batch['CMPNT_MATL_DESC'].astype(str)),
             scaler.transform(X_batch[['CMPNT_MATL_DESC_LEN']]),
             ordinal_enc.transform(X_batch[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
         ])
 
         clf.partial_fit(X_batch_trans, y_batch, classes=classes)
 
+    # Validation
     y_val_proba = clf.predict_proba(X_val_trans)
     val_loss = log_loss(y_val, y_val_proba, labels=classes)
     val_acc = accuracy_score(y_val, clf.predict(X_val_trans))
@@ -99,6 +109,6 @@ for epoch in range(1, n_epochs + 1):
             print(f"🛑 Early stopping at epoch {epoch}")
             break
 
-# Final classification report
+# Final report
 print("\n📊 Final Classification Report:")
 print(classification_report(y_val, best_model.predict(X_val_trans), digits=3))
