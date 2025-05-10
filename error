@@ -1,16 +1,30 @@
-✅ Sampled 2059128 rows from 454 files.
+import glob
+import os
+import pandas as pd
 
-🔁 Epoch 1
-📘 Val Loss = 1.4295 | Top-1 Acc = 0.5685 | Top-3 Acc = 0.9576
+# Setup
+input_path = './data/target_map_cleaned_non_null_target'
+all_files = glob.glob(os.path.join(input_path, '*.parquet'))
 
-🔁 Epoch 2
-📘 Val Loss = 1.4205 | Top-1 Acc = 0.5686 | Top-3 Acc = 0.9562
+# Category column
+target_col = 'Final Category'
+category_counts = {}
 
-🔁 Epoch 3
+# Read and count
+for file in all_files:
+    df = pd.read_parquet(file, columns=[target_col])
+    df = df[df[target_col].notna()]
+    df[target_col] = df[target_col].replace({'FNW or CHM': 'FNW_CHM'})
+    
+    counts = df[target_col].value_counts().to_dict()
+    for cat, count in counts.items():
+        category_counts[cat] = category_counts.get(cat, 0) + count
 
+# Convert to DataFrame
+dist_df = pd.DataFrame.from_dict(category_counts, orient='index', columns=['count'])
+dist_df = dist_df.sort_values(by='count', ascending=False).reset_index()
+dist_df.columns = ['category', 'count']
 
- Epoch 1
- Val Loss = 1.3338 | Top-1 Acc = 0.5760 | Top-3 Acc = 0.9655
-
- Epoch 2
- Val Loss = 1.3254 | Top-1 Acc = 0.5762 | Top-3 Acc = 0.9657
+# Display
+print("\n📊 Category Distribution:")
+print(dist_df)
