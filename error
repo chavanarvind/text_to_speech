@@ -7,3 +7,10 @@
 📘 Val Loss = 1.4205 | Top-1 Acc = 0.5686 | Top-3 Acc = 0.9562
 
 🔁 Epoch 3
+
+
+ Epoch 1
+ Val Loss = 1.3338 | Top-1 Acc = 0.5760 | Top-3 Acc = 0.9655
+
+ Epoch 2
+ Val Loss = 1.3254 | Top-1 Acc = 0.5762 | Top-3 Acc = 0.9657
