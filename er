@@ -1,2 +1,3 @@
-pip uninstall -y numba numpy llvmlite
-pip install numpy==1.24.4 llvmlite==0.40.1 numba==0.57.1
+W0000 00:00:1746906071.961157   65738 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
+2025-05-10 19:41:11.966595: I tensorflow/core/platform/cpu_feature_guard.cc:210] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
