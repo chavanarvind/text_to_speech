@@ -41,7 +41,7 @@ for file in all_files:
 df_all = pd.concat(sample_list, ignore_index=True)
 
 # --- ENCODERS ---
-encoder = SentenceTransformer('all-MiniLM-L6-v2')
+encoder = SentenceTransformer('pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb')
 ordinal = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
 scaler = StandardScaler()
 
@@ -66,7 +66,7 @@ y_val = val_df['Coarse Category']
 
 coarse_model = LGBMClassifier(class_weight='balanced', random_state=42)
 coarse_model.fit(X_train, y_train, eval_set=[(X_val, y_val)], early_stopping_rounds=10, verbose=10)
-joblib.dump(coarse_model, './saved_model/coarse_bert_model.joblib')
+joblib.dump(coarse_model, './saved_model/coarse_biobert_model.joblib')
 
 # --- TRAIN SUBMODELS ---
 fine_models = {}
@@ -79,7 +79,7 @@ for group in df_all['Coarse Category'].unique():
     model = LGBMClassifier(class_weight='balanced', random_state=42)
     model.fit(X_sub, y_sub)
     fine_models[group] = model
-    joblib.dump(model, f'./saved_model/{group.lower()}_bert_model.joblib')
+    joblib.dump(model, f'./saved_model/{group.lower()}_biobert_model.joblib')
 
 # --- INFERENCE ---
 X_test = transform(test_df)
@@ -96,7 +96,7 @@ for i, row in test_df.iterrows():
         final_preds.append(pred)
 
 test_df['Predicted'] = final_preds
-test_df.to_csv('./saved_model/bert_test_predictions.csv', index=False)
+test_df.to_csv('./saved_model/biobert_test_predictions.csv', index=False)
 
 # --- EVALUATION ---
 print("\nClassification Report:")
