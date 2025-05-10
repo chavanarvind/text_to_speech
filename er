@@ -1,23 +1,187 @@
-import pandas as pd
 import glob
 import os
+import pandas as pd
+import numpy as np
+from sklearn.utils.class_weight import compute_class_weight
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import OrdinalEncoder, StandardScaler
+from sklearn.linear_model import SGDClassifier
+from sklearn.metrics import (
+    log_loss, accuracy_score, classification_report,
+    top_k_accuracy_score, f1_score, confusion_matrix
+)
+from sklearn.model_selection import train_test_split
+from scipy.sparse import hstack
+import joblib
+import warnings
+warnings.filterwarnings("ignore")
 
-input_path = './data/target_map_parquet'
+# Paths
+input_path = './data/target_map_cleaned_non_null_target'
+all_files = glob.glob(os.path.join(input_path, '*.parquet'))
 
-# Process each existing mapped Parquet file
-for file in glob.glob(os.path.join(input_path, '*.parquet')):
-    try:
-        df = pd.read_parquet(file)
+# Group mapping for layered classification
+coarse_map = {
+    'CHM': 'CHM_GROUP',
+    'Liquids and Creams': 'CHM_GROUP',
+    'PKG': 'PKG',
+    'FNW': 'FNW_GROUP',
+    'FNW_CHM': 'FNW_GROUP',
+    'API': 'RARE'
+}
 
-        # ✅ Create 'mapping_column' with fallback logic
-        df['mapping_column'] = df['CMPNT_CAT_CD_DESC'].fillna('').replace('', pd.NA)
-        df['mapping_column'] = df['mapping_column'].fillna(df['CMPNT_MATL_TYPE_CD'].fillna('').replace('', pd.NA))
-        df['mapping_column'] = df['mapping_column'].fillna(df['CMPNT_MATL_DESC'].fillna('').replace('', pd.NA))
-        df['mapping_column'] = df['mapping_column'].fillna('No data for prediction')
+required_cols = [
+    'CMPNT_MATL_DESC', 'CMPNT_MATL_DESC_LEN',
+    'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY', 'Final Category'
+]
 
-        # Overwrite the same file with the new column added
-        df.to_parquet(file, index=False)
-        print(f"Updated: {file}")
+# Sample and preprocess
+sample_list = []
+for f in all_files:
+    df = pd.read_parquet(f, columns=required_cols)
+    df = df[df['Final Category'].notna() & df['CMPNT_MATL_DESC'].notna()]
+    df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
+    df['Coarse Category'] = df['Final Category'].map(coarse_map)
+    df = df[df['Coarse Category'].notna()]
+    df.drop_duplicates(inplace=True)
 
-    except Exception as e:
-        print(f"Error updating {file}: {e}")
+    total_rows = len(df)
+    num_classes = df['Coarse Category'].nunique()
+    sample_size = max(1000, int(0.05 * total_rows))
+    per_class_limit = max(10, sample_size // num_classes)
+
+    df_sampled = df.groupby('Coarse Category', group_keys=False).apply(
+        lambda x: x.sample(min(len(x), per_class_limit), random_state=42)
+    )
+    sample_list.append(df_sampled)
+
+sample_df = pd.concat(sample_list, ignore_index=True)
+print(f"\n✅ Sampled {len(sample_df)} rows from {len(all_files)} files.")
+
+# Split coarse model data
+train_val_df, test_df = train_test_split(
+    sample_df, test_size=0.2, stratify=sample_df['Coarse Category'], random_state=42
+)
+train_df, val_df = train_test_split(
+    train_val_df, test_size=0.25, stratify=train_val_df['Coarse Category'], random_state=42
+)
+classes_coarse = np.unique(train_df['Coarse Category'])
+
+# Fit transformers
+vectorizer = TfidfVectorizer(ngram_range=(1, 1), max_features=2**13, stop_words='english')
+vectorizer.fit(train_df['CMPNT_MATL_DESC'].astype(str))
+
+ordinal_enc = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
+ordinal_enc.fit(train_df[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+
+scaler = StandardScaler()
+scaler.fit(train_df[['CMPNT_MATL_DESC_LEN']])
+
+def transform(df):
+    return hstack([
+        vectorizer.transform(df['CMPNT_MATL_DESC'].astype(str)),
+        scaler.transform(df[['CMPNT_MATL_DESC_LEN']]),
+        ordinal_enc.transform(df[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+    ])
+
+X_val = transform(val_df)
+y_val = val_df['Coarse Category']
+X_test = transform(test_df)
+y_test = test_df['Coarse Category']
+
+# Train coarse classifier
+coarse_clf = SGDClassifier(
+    loss='log_loss', max_iter=1, warm_start=True, tol=None,
+    class_weight='balanced', random_state=42
+)
+
+best_loss = float('inf')
+no_improve = 0
+patience = 2
+
+for epoch in range(1, 11):
+    print(f"\n🔁 Epoch {epoch}")
+    for file in all_files:
+        df = pd.read_parquet(file, columns=required_cols)
+        df = df[df['Final Category'].notna() & df['CMPNT_MATL_DESC'].notna()]
+        df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
+        df['Coarse Category'] = df['Final Category'].map(coarse_map)
+        df = df[df['Coarse Category'].notna()]
+        df.drop_duplicates(inplace=True)
+
+        if df.empty:
+            continue
+
+        X_batch = transform(df)
+        y_batch = df['Coarse Category']
+        coarse_clf.partial_fit(X_batch, y_batch, classes=classes_coarse)
+
+    y_val_proba = coarse_clf.predict_proba(X_val)
+    val_loss = log_loss(y_val, y_val_proba, labels=classes_coarse)
+    val_acc = accuracy_score(y_val, coarse_clf.predict(X_val))
+    val_top3 = top_k_accuracy_score(y_val, y_val_proba, k=3, labels=classes_coarse)
+    print(f"📘 Val Loss = {val_loss:.4f} | Top-1 Acc = {val_acc:.4f} | Top-3 Acc = {val_top3:.4f}")
+
+    if val_loss < best_loss - 1e-4:
+        best_model = coarse_clf
+        best_loss = val_loss
+        no_improve = 0
+    else:
+        no_improve += 1
+        if no_improve >= patience:
+            print("🛑 Early stopping")
+            break
+
+# Train sub-models to recover original categories
+fine_models = {}
+for group in ['CHM_GROUP', 'FNW_GROUP', 'RARE']:
+    sub_df = sample_df[sample_df['Coarse Category'] == group].copy()
+    if sub_df.empty:
+        continue
+    X_sub = transform(sub_df)
+    y_sub = sub_df['Final Category']
+
+    sub_clf = SGDClassifier(loss='log_loss', max_iter=1000, tol=1e-3, random_state=42)
+    sub_clf.fit(X_sub, y_sub)
+    joblib.dump(sub_clf, f"./saved_model/{group.lower()}_classifier.joblib")
+    fine_models[group] = sub_clf
+    print(f"✅ Trained and saved {group} fine classifier.")
+
+# Save models and transformers
+os.makedirs("./saved_model", exist_ok=True)
+joblib.dump(best_model, "./saved_model/coarse_model.joblib")
+joblib.dump(vectorizer, "./saved_model/tfidf_vectorizer.joblib")
+joblib.dump(ordinal_enc, "./saved_model/ordinal_encoder.joblib")
+joblib.dump(scaler, "./saved_model/standard_scaler.joblib")
+print("\n💾 Saved coarse model and transformers to ./saved_model/")
+
+# Final predictions on test data
+final_preds = []
+true_labels = []
+
+for idx, row in test_df.iterrows():
+    x_row = transform(pd.DataFrame([row]))
+    coarse_pred = best_model.predict(x_row)[0]
+
+    if coarse_pred == 'PKG':
+        final_pred = 'PKG'
+    elif coarse_pred in fine_models:
+        final_pred = fine_models[coarse_pred].predict(x_row)[0]
+    else:
+        final_pred = coarse_pred  # fallback
+
+    final_preds.append(final_pred)
+    true_labels.append(row['Final Category'])
+
+# Save predictions
+result_df = test_df.copy()
+result_df['Predicted Final Category'] = final_preds
+result_df.to_csv("./saved_model/test_predictions.csv", index=False)
+print("\n📁 Saved final predictions to ./saved_model/test_predictions.csv")
+
+# Evaluate final predictions
+print("\n📊 Final Classification Report on Test Data:")
+print(classification_report(true_labels, final_preds, digits=3))
+print("\n✅ Confusion Matrix:")
+print(confusion_matrix(true_labels, final_preds))
+print(f"F1 Weighted: {f1_score(true_labels, final_preds, average='weighted'):.4f}")
