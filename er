@@ -1,1 +1,22 @@
-pip install -U lightgbm
+from lightgbm import LGBMClassifier
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+
+# Sample data
+X, y = load_iris(return_X_y=True)
+X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.3, random_state=42)
+
+# Train LightGBM with early stopping
+model = LGBMClassifier(n_estimators=100, random_state=42)
+model.fit(
+    X_train,
+    y_train,
+    eval_set=[(X_val, y_val)],
+    early_stopping_rounds=5,
+    verbose=10
+)
+
+# Predict and evaluate
+y_pred = model.predict(X_val)
+print(f"Accuracy: {accuracy_score(y_val, y_pred):.4f}")
