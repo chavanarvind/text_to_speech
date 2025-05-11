@@ -1,8 +1,8 @@
-#bert without layer
-# Single-Stage Classification Pipeline using BioBERT Embeddings
+# Single-Stage Classification Pipeline using BioBERT Embeddings (Optimized)
 import os
 import glob
 import joblib
+import torch
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
@@ -12,7 +12,8 @@ from lightgbm import LGBMClassifier
 from sentence_transformers import SentenceTransformer
 
 # --- ENCODERS ---
-encoder = SentenceTransformer('pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb')
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+encoder = SentenceTransformer('pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb', device=device)
 ordinal = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
 scaler = StandardScaler()
 
@@ -36,20 +37,24 @@ for file in all_files:
 
 df_all = pd.concat(sample_list, ignore_index=True)
 
-
-
+# --- FIT SCALERS ---
 ordinal.fit(df_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
 scaler.fit(df_all[['CMPNT_MATL_DESC_LEN']])
 
 def transform(df):
-    desc_emb = encoder.encode(df['CMPNT_MATL_DESC'].astype(str).tolist(), show_progress_bar=True)
+    desc_emb = encoder.encode(
+        df['CMPNT_MATL_DESC'].astype(str).tolist(),
+        batch_size=128,
+        show_progress_bar=True,
+        convert_to_numpy=True
+    )
     length_scaled = scaler.transform(df[['CMPNT_MATL_DESC_LEN']])
     cat_encoded = ordinal.transform(df[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
     return np.hstack([desc_emb, length_scaled, cat_encoded])
 
 # --- SPLIT ---
-train_df, test_df = train_test_split(df_all, test_size=0.2, stratify=df_all['Final Category'], random_state=42)
-val_df, test_df = train_test_split(test_df, test_size=0.5, stratify=test_df['Final Category'], random_state=42)
+train_df, temp_df = train_test_split(df_all, test_size=0.2, stratify=df_all['Final Category'], random_state=42)
+val_df, test_df = train_test_split(temp_df, test_size=0.5, stratify=temp_df['Final Category'], random_state=42)
 
 # --- TRAIN FINAL CATEGORY MODEL ---
 X_train = transform(train_df)
@@ -69,7 +74,16 @@ test_df.to_csv('./saved_model/final_biobert_predictions.csv', index=False)
 
 # --- EVALUATION ---
 print("\nClassification Report:")
-print(classification_report(test_df['Final Category'], test_df['Predicted']))
+report = classification_report(test_df['Final Category'], test_df['Predicted'])
+print(report)
+
 print("\nConfusion Matrix:")
 print(confusion_matrix(test_df['Final Category'], test_df['Predicted']))
-print(f"\nF1 Score (weighted): {f1_score(test_df['Final Category'], test_df['Predicted'], average='weighted'):.4f}")
+
+f1 = f1_score(test_df['Final Category'], test_df['Predicted'], average='weighted')
+print(f"\nF1 Score (weighted): {f1:.4f}")
+
+# --- SAVE REPORT ---
+with open('./saved_model/classification_report.txt', 'w') as f:
+    f.write(report)
+    f.write(f"\nF1 Score (weighted): {f1:.4f}\n")
