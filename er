@@ -1,1 +1,2 @@
-ValueError: numpy.dtype size changed, may indicate binary incompatibility. Expected 96 from C header, got 88 from PyObject
+pip uninstall -y numpy pandas pyarrow
+pip install numpy==1.24.4 pandas==1.5.3 pyarrow==12.0.1
