@@ -1,8 +1,1 @@
-📊 Sample distribution by Final Category:
-PKG                   6657883
-CHM                    541745
-FNW                    138079
-Liquids and Creams       8122
-API                      7051
-FNW_CHM                  6810
-Name: Final Category, dtype: int64
+TypeError: LGBMClassifier.fit() got an unexpected keyword argument 'early_stopping_rounds'
