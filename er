@@ -12,6 +12,12 @@ from lightgbm import LGBMClassifier
 from sentence_transformers import SentenceTransformer
 
 # --- ENCODERS ---
+# Confirm GPU status
+print(f"✅ Using device: {device}")
+if torch.cuda.is_available():
+    print(f"🧠 GPU Detected: {torch.cuda.get_device_name(0)}")
+    print(f"🧮 GPU Memory Allocated: {torch.cuda.memory_allocated() / 1e6:.2f} MB")
+    print(f"🧮 GPU Memory Cached: {torch.cuda.memory_reserved() / 1e6:.2f} MB")
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 encoder = SentenceTransformer('pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb', device=device)
 ordinal = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
