@@ -1,7 +1,22 @@
-          category      count
-0                 CHM  294354131
-1                 PKG  244395506
-2                 FNW   47820274
-3             FNW_CHM    8892358
-4  Liquids and Creams    2185074
-5                 API     926530
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+from lightgbm import LGBMClassifier, early_stopping, log_evaluation
+
+# Load sample data
+X, y = load_iris(return_X_y=True)
+X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.3, random_state=42)
+
+# Initialize and fit model with callbacks
+model = LGBMClassifier(n_estimators=100, random_state=42)
+model.fit(
+    X_train,
+    y_train,
+    eval_set=[(X_val, y_val)],
+    callbacks=[early_stopping(5), log_evaluation(10)]
+)
+
+# Evaluate
+y_pred = model.predict(X_val)
+acc = accuracy_score(y_val, y_pred)
+print(f"✅ Accuracy: {acc:.4f}")
