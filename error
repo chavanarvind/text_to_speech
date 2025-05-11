@@ -60,8 +60,7 @@ for file in all_files:
 df_all = pd.concat(sample_list, ignore_index=True)
 
 # Print sample distribution summary
-print("
-📊 Sample distribution by Final Category:")
+print("📊 Sample distribution by Final Category:")
 print(df_all['Final Category'].value_counts())
 
 # --- FIT SCALERS ---
