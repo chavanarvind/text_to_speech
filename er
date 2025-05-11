@@ -1,2 +1,11 @@
-pip uninstall -y numpy pandas pyarrow
-pip install numpy==1.24.4 pandas==1.5.3 pyarrow==12.0.1
+File /anaconda/envs/azureml_py38/lib/python3.10/site-packages/numba/np/ufunc/__init__.py:3
+      1 # -*- coding: utf-8 -*-
+----> 3 from numba.np.ufunc.decorators import Vectorize, GUVectorize, vectorize, guvectorize
+      4 from numba.np.ufunc._internal import PyUFunc_None, PyUFunc_Zero, PyUFunc_One
+      5 from numba.np.ufunc import _internal, array_exprs
+
+File /anaconda/envs/azureml_py38/lib/python3.10/site-packages/numba/np/ufunc/decorators.py:3
+      1 import inspect
+----> 3 from numba.np.ufunc import _internal
+      4 from numba.np.ufunc.parallel import ParallelUFuncBuilder, ParallelGUFuncBuilder
+      6 from numba.core.registry import DelayedRegistry
