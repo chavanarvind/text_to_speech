@@ -1,16 +1,270 @@
-Key Observations from Classification Report
-Category	Precision	Recall	F1-score	Support
-API	0.000	0.000	0.000	14,072 ❌ Severely underperforming
-CHM	0.709	0.888	0.789	122,620 ✅ Strong performance
-FNW	0.983	0.082	0.152	122,620 ⚠️ Precision high, recall very low
-FNW_CHM	0.980	0.280	0.435	13,802 ⚠️ Overconfident but low recall
-Liquids and Creams	0.961	0.022	0.042	16,092 ❌ Very low recall
-PKG	0.497	0.988	0.661	122,620 ✅ High recall, low precision
+import glob
+import os
+import pandas as pd
+import numpy as np
+from sklearn.utils.class_weight import compute_class_weight
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import OrdinalEncoder, StandardScaler
+from sklearn.linear_model import SGDClassifier
+from sklearn.metrics import (
+    log_loss, accuracy_score, classification_report,
+    top_k_accuracy_score, f1_score, confusion_matrix
+)
+from sklearn.model_selection import train_test_split
+from scipy.sparse import hstack
+import joblib
+import warnings
+warnings.filterwarnings("ignore")
 
-📉 Overall
-Macro Avg F1 = 0.347 → Weak performance on minority classes
+# Paths
+input_path = './data/target_map_cleaned_non_null_target'
+all_files = glob.glob(os.path.join(input_path, '*.parquet'))
 
-Weighted Avg F1 = 0.493 → Mostly driven by CHM and PKG
+# Group mapping for layered classification
+coarse_map = {
+    'CHM': 'CHM_GROUP',
+    'Liquids and Creams': 'CHM_GROUP',
+    'PKG': 'PKG',
+    'FNW': 'FNW_GROUP',
+    'FNW_CHM': 'FNW_GROUP',
+    'API': 'RARE'
+}
 
-Model is biased toward majority classes, especially PKG and CHM
+required_cols = [
+    'CMPNT_MATL_DESC', 'CMPNT_MATL_DESC_LEN',
+    'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY', 'Final Category'
+]
 
+# Sample and preprocess
+sample_list = []
+for f in all_files:
+    df = pd.read_parquet(f, columns=required_cols)
+    df = df[df['Final Category'].notna() & df['CMPNT_MATL_DESC'].notna()]
+    df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
+    df['Coarse Category'] = df['Final Category'].map(coarse_map)
+    df = df[df['Coarse Category'].notna()]
+    df.drop_duplicates(inplace=True)
+
+    total_rows = len(df)
+    num_classes = df['Coarse Category'].nunique()
+    sample_size = max(1000, int(0.05 * total_rows))
+    per_class_limit = max(10, sample_size // num_classes)
+
+    df_sampled = df.groupby('Coarse Category', group_keys=False).apply(
+        lambda x: x.sample(min(len(x), per_class_limit), random_state=42)
+    )
+    sample_list.append(df_sampled)
+
+sample_df = pd.concat(sample_list, ignore_index=True)
+print(f"\n✅ Sampled {len(sample_df)} rows from {len(all_files)} files.")
+
+# Split coarse model data
+train_val_df, test_df = train_test_split(
+    sample_df, test_size=0.2, stratify=sample_df['Coarse Category'], random_state=42
+)
+train_df, val_df = train_test_split(
+    train_val_df, test_size=0.25, stratify=train_val_df['Coarse Category'], random_state=42
+)
+classes_coarse = np.unique(train_df['Coarse Category'])
+
+# Fit transformers
+vectorizer = TfidfVectorizer(ngram_range=(1, 2), max_features=2**13, stop_words='english')
+vectorizer.fit(train_df['CMPNT_MATL_DESC'].astype(str))
+
+ordinal_enc = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
+ordinal_enc.fit(train_df[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+
+scaler = StandardScaler()
+scaler.fit(train_df[['CMPNT_MATL_DESC_LEN']])
+
+def transform(df):
+    return hstack([
+        vectorizer.transform(df['CMPNT_MATL_DESC'].astype(str)),
+        scaler.transform(df[['CMPNT_MATL_DESC_LEN']]),
+        ordinal_enc.transform(df[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+    ])
+
+X_val = transform(val_df)
+y_val = val_df['Coarse Category']
+X_test = transform(test_df)
+y_test = test_df['Coarse Category']
+
+# Train coarse classifier
+from sklearn.utils.class_weight import compute_class_weight
+
+classes_coarse = np.unique(train_df['Coarse Category'])
+coarse_weights_arr = compute_class_weight(class_weight='balanced', classes=classes_coarse, y=train_df['Coarse Category'])
+coarse_class_weight_dict = dict(zip(classes_coarse, coarse_weights_arr))
+
+coarse_clf = SGDClassifier(
+    loss='log_loss',
+    max_iter=1,
+    warm_start=True,
+    tol=None,
+    class_weight=coarse_class_weight_dict,
+    random_state=42
+)
+
+best_loss = float('inf')
+no_improve = 0
+patience = 2
+
+for epoch in range(1, 3):
+    print(f"\n🔁 Epoch {epoch}")
+    for file in all_files:
+        df = pd.read_parquet(file, columns=required_cols)
+        df = df[df['Final Category'].notna() & df['CMPNT_MATL_DESC'].notna()]
+        df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
+        df['Coarse Category'] = df['Final Category'].map(coarse_map)
+        df = df[df['Coarse Category'].notna()]
+        df.drop_duplicates(inplace=True)
+
+        if df.empty:
+            continue
+
+        X_batch = transform(df)
+        y_batch = df['Coarse Category']
+        coarse_clf.partial_fit(X_batch, y_batch, classes=classes_coarse)
+
+    y_val_proba = coarse_clf.predict_proba(X_val)
+    val_loss = log_loss(y_val, y_val_proba, labels=classes_coarse)
+    val_acc = accuracy_score(y_val, coarse_clf.predict(X_val))
+    val_top3 = top_k_accuracy_score(y_val, y_val_proba, k=3, labels=classes_coarse)
+    print(f"📘 Val Loss = {val_loss:.4f} | Top-1 Acc = {val_acc:.4f} | Top-3 Acc = {val_top3:.4f}")
+
+    if val_loss < best_loss - 1e-4:
+        best_model = coarse_clf
+        best_loss = val_loss
+        no_improve = 0
+    else:
+        no_improve += 1
+        if no_improve >= patience:
+            print("🛑 Early stopping")
+            break
+
+# Train sub-models to recover original categories
+fine_models = {}
+sub_patience = 2
+sub_epochs = 2
+
+for group in ['CHM_GROUP', 'FNW_GROUP', 'RARE']:
+    best_sub_loss = float('inf')
+    sub_no_improve = 0
+    sub_classes = np.unique(sample_df[sample_df['Coarse Category'] == group]['Final Category'])
+    sub_weights_arr = compute_class_weight(class_weight='balanced', classes=sub_classes, y=sample_df[sample_df['Coarse Category'] == group]['Final Category'])
+    sub_class_weight_dict = dict(zip(sub_classes, sub_weights_arr))
+
+    sub_clf = SGDClassifier(
+            loss='log_loss',
+            max_iter=1,
+            warm_start=True,
+            tol=None,
+            class_weight=sub_class_weight_dict,
+            random_state=42
+        )
+    
+    for epoch in range(1, sub_epochs + 1):
+        print(f"🔁 Training {group} model - Epoch {epoch}")
+        for file in all_files:
+            df = pd.read_parquet(file, columns=required_cols)
+            df = df[df['Final Category'].notna() & df['CMPNT_MATL_DESC'].notna()]
+            df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
+            df['Coarse Category'] = df['Final Category'].map(coarse_map)
+            df = df[df['Coarse Category'] == group]
+            df.drop_duplicates(inplace=True)
+
+            if df.empty:
+                continue
+
+            X_batch = transform(df)
+            y_batch = df['Final Category']
+            sub_clf.partial_fit(X_batch, y_batch, classes=np.unique(sample_df['Final Category']))
+
+        # Evaluate on full group sample
+        eval_df = sample_df[sample_df['Coarse Category'] == group].copy()
+        if eval_df.empty:
+            continue
+        X_eval = transform(eval_df)
+        y_eval = eval_df['Final Category']
+        y_eval_proba = sub_clf.predict_proba(X_eval)
+        eval_loss = log_loss(y_eval, y_eval_proba, labels=np.unique(sample_df['Final Category']))
+
+        print(f"📘 {group} Val Loss = {eval_loss:.4f}")
+
+        if eval_loss < best_sub_loss - 1e-4:
+            best_sub_loss = eval_loss
+            best_model_sub = sub_clf
+            sub_no_improve = 0
+        else:
+            sub_no_improve += 1
+            if sub_no_improve >= sub_patience:
+                print(f"🛑 Early stopping {group} model at epoch {epoch}")
+                break
+
+    joblib.dump(best_model_sub, f"./saved_model/{group.lower()}_classifier.joblib")
+    fine_models[group] = best_model_sub
+    print(f"✅ Trained and saved {group} fine classifier.")
+os.makedirs("./saved_model", exist_ok=True)
+joblib.dump(best_model, "./saved_model/coarse_model.joblib")
+joblib.dump(vectorizer, "./saved_model/tfidf_vectorizer.joblib")
+joblib.dump(ordinal_enc, "./saved_model/ordinal_encoder.joblib")
+joblib.dump(scaler, "./saved_model/standard_scaler.joblib")
+print("\n💾 Saved coarse model and transformers to ./saved_model/")
+
+# Final predictions on test data
+final_preds = []
+true_labels = []
+
+for idx, row in test_df.iterrows():
+    x_row = transform(pd.DataFrame([row]))
+    coarse_pred = best_model.predict(x_row)[0]
+
+    if coarse_pred == 'PKG':
+        final_pred = 'PKG'
+    elif coarse_pred in fine_models:
+        final_pred = fine_models[coarse_pred].predict(x_row)[0]
+    else:
+        final_pred = coarse_pred  # fallback
+
+    final_preds.append(final_pred)
+    true_labels.append(row['Final Category'])
+
+# Save predictions
+result_df = test_df.copy()
+result_df['Predicted Final Category'] = final_preds
+result_df.to_csv("./saved_model/test_predictions.csv", index=False)
+print("\n📁 Saved final predictions to ./saved_model/test_predictions.csv")
+
+# Evaluate final predictions
+print("\n📊 Final Classification Report on Test Data:")
+print(classification_report(true_labels, final_preds, digits=3))
+print("\n✅ Confusion Matrix:")
+print(confusion_matrix(true_labels, final_preds))
+print(f"F1 Weighted: {f1_score(true_labels, final_preds, average='weighted'):.4f}")
+
+
+
+
+📊 Final Classification Report on Test Data:
+                    precision    recall  f1-score   support
+
+               API      1.000     0.007     0.013     14071
+               CHM      0.712     0.888     0.790    181377
+               FNW      0.989     0.060     0.113    175177
+           FNW_CHM      0.000     0.000     0.000      8772
+Liquids and Creams      0.878     0.137     0.237      2572
+               PKG      0.555     0.991     0.711    183949
+
+          accuracy                          0.626    565918
+         macro avg      0.689     0.347     0.311    565918
+      weighted avg      0.743     0.626     0.521    565918
+
+
+✅ Confusion Matrix:
+[[    94  13275      0      0      0    702]
+ [     0 161055     70      0     19  20233]
+ [     0  43209  10517      0      0 121451]
+ [     0   7037      0      0      0   1735]
+ [     0     11      0      0    352   2209]
+ [     0   1584     50      0     30 182285]]
+F1 Weighted: 0.5210
