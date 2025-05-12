@@ -1,36 +1,8 @@
-Category	Precision	Recall	F1-score	Support	Observation
-API	0.89	1.00	0.94	551	✅ Excellent recovery of minority class
-CHM	0.95	1.00	0.97	43,338	✅ High precision and recall
-FNW	0.94	1.00	0.97	11,041	✅ Consistently strong predictions
-FNW_CHM	0.99	1.00	1.00	545	✅ Near-perfect for mixed class
-Liquids and Creams	0.88	1.00	0.94	641	✅ Great performance on rare class
-PKG	1.00	0.99	1.00	532,629	✅ Dominant class with excellent precision
-
-Metric	Value
-Accuracy	0.99
-F1 (Macro)	0.97
-F1 (Weighted)	0.9949
-
-
-Feature Engineering
-Text embeddings using BioBERT (SentenceTransformer)
-
-Numerical feature: Scaled CMPNT_MATL_DESC_LEN
-
-Categorical features: Encoded UNIT_GROUP, CMPNT_MATL_TYPE_CATEGORY
-
-🧠 3. Model Training
-Model: LightGBM Classifier
-
-Input: Combined BERT embeddings + numeric + categorical features
-
-Applied class weighting and early stopping
-
-Trained on 80% data, validated on 10%, tested on 10%
-
-✅ 4. Evaluation
-Achieved F1 Weighted = 0.9949, Accuracy = 99%
-
-Excellent performance across both majority and minority classes
-
-Predictions and embeddings cached and saved for reuse
+Category	Full Count	8% Sample Count
+CHM	294354131 (294.35M)	23548330 (23.55M)
+PKG	244395506 (244.40M)	19551640 (19.55M)
+FNW	47820274 (47.82M)	3825622 (3.83M)
+FNW_CHM	8892358 (8.89M)	711389 (0.71M)
+Liquids and Creams	2185074 (2.19M)	174806 (0.17M)
+API	926530 (0.93M)	74122 (0.07M)
+Total	598573873 (598.57M)	47885909 (47.89M)
