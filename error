@@ -1,8 +1,8 @@
-Category Distribution:
-             category      count
-0                 CHM  294354131
-1                 PKG  244395506
-2                 FNW   47820274
-3             FNW_CHM    8892358
-4  Liquids and Creams    2185074
-5                 API     926530
+Category	Full Count	8% Sample Count
+CHM	294,354,131 (294.35M)	23,548,330 (23.55M)
+PKG	244,395,506 (244.40M)	19,551,640 (19.55M)
+FNW	47,820,274 (47.82M)	3,825,622 (3.83M)
+FNW_CHM	8,892,358 (8.89M)	711,389 (0.71M)
+Liquids and Creams	2,185,074 (2.19M)	174,806 (0.17M)
+API	926,530 (0.93M)	74,122 (0.07M)
+Total	598,573,873 (598.57M)	47,885,909 (47.89M)
