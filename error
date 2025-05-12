@@ -1,7 +1,8 @@
-PKG                   66,578,830
-CHM                    5,417,450
-FNW                    1,380,790
-Liquids and Creams        81,220
-API                       70,510
-FNW_CHM                   68,100
-Approximately 73.6 million records in the full dataset.
+Category Distribution:
+             category      count
+0                 CHM  294354131
+1                 PKG  244395506
+2                 FNW   47820274
+3             FNW_CHM    8892358
+4  Liquids and Creams    2185074
+5                 API     926530
