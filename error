@@ -1,25 +1,137 @@
-Next Step: Business Validation of Model Predictions
+# Single-Stage Classification Pipeline using BioBERT Embeddings (Optimized)
+import os
+import glob
+import joblib
+import torch
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import OrdinalEncoder, StandardScaler
+from sklearn.metrics import classification_report, confusion_matrix, f1_score
+from lightgbm import LGBMClassifier
+from sentence_transformers import SentenceTransformer
 
-What We Need from Business
-Please provide a sample dataset that includes:
+# --- ENCODERS ---
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+# Confirm GPU status
+from transformers import AutoModel
 
-✅ Component/Product Descriptions (same as used in BOM or ERP)
+# Check if model actually moves to GPU
+try:
+    test_model = AutoModel.from_pretrained('bert-base-uncased')
+    test_model = test_model.to(device)
+    print(f"✅ Transformers model loaded on {device} successfully")
+    if device == 'cuda':
+        print(f"🧮 GPU Memory Allocated: {torch.cuda.memory_allocated() / 1e6:.2f} MB")
+        print(f"🧮 GPU Memory Cached: {torch.cuda.memory_reserved() / 1e6:.2f} MB")
+except Exception as e:
+    print(f"⚠️ Transformer model device test failed: {e}")
+print(f"✅ Using device: {device}")
+if torch.cuda.is_available():
+    print(f"🧠 GPU Detected: {torch.cuda.get_device_name(0)}")
+    print(f"🧮 GPU Memory Allocated: {torch.cuda.memory_allocated() / 1e6:.2f} MB")
+    print(f"🧮 GPU Memory Cached: {torch.cuda.memory_reserved() / 1e6:.2f} MB")
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+encoder = SentenceTransformer('pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb', device=device)
+ordinal = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
+scaler = StandardScaler()
 
-✅ Human-assigned Final Categories (ground truth)
+# --- CONFIGURATION ---
+input_path = './data/target_map_cleaned_non_null_target'
+all_files = glob.glob(os.path.join(input_path, '*.parquet'))
+required_cols = [
+    'CMPNT_MATL_DESC', 'CMPNT_MATL_DESC_LEN', 'UNIT_GROUP',
+    'CMPNT_MATL_TYPE_CATEGORY', 'Final Category'
+]
+os.makedirs("./saved_model", exist_ok=True)
 
-⚠️ Ideally include edge cases or previously misclassified examples
+# --- LOAD DATA ---
+sample_list = []
+for file in all_files:
+    df = pd.read_parquet(file, columns=required_cols)
+    df = df[df['Final Category'].notna() & df['CMPNT_MATL_DESC'].notna()].copy()
+    df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
+    df.drop_duplicates(inplace=True)
 
-Recommended Volume:
+    # Take 20% stratified sample from each Final Category per file
+    sampled = df.groupby('Final Category', group_keys=False).apply(lambda x: x.sample(frac=0.1, random_state=42))
+    sample_list.append(sampled)
 
-~2,000 to 5,000 samples
+df_all = pd.concat(sample_list, ignore_index=True)
 
-Mixed distribution across all known categories
+# Print sample distribution summary
+print("📊 Sample distribution by Final Category:")
+print(df_all['Final Category'].value_counts())
 
-Estimated Timeline (for 20% data)
-Task	Estimated Time
-Data preprocessing & loading	1–2 hours
-BioBERT embedding generation	6–8 hours (GPU)
-Model inference & saving results	1–2 hours
-Evaluation & summary report	1 hour
+# --- FIT SCALERS ---
+ordinal.fit(df_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+scaler.fit(df_all[['CMPNT_MATL_DESC_LEN']])
 
-🕒 Total: ~9–13 hours, preferably overnight on GPU infrastructure.
+# Save sentence embeddings for reuse
+embedding_cache_dir = './saved_model/embeddings'
+os.makedirs(embedding_cache_dir, exist_ok=True)
+
+
+def transform(df):
+    split_hash = hash(f"{df.index[0]}_{df.index[-1]}_{len(df)}")
+    desc_texts = df['CMPNT_MATL_DESC'].astype(str).tolist()
+    cache_file = os.path.join(embedding_cache_dir, f"bert_emb_{split_hash}.npy")
+
+    if os.path.exists(cache_file):
+        print(f"🔁 Loading cached embeddings from: {cache_file}")
+        desc_emb = np.load(cache_file)
+    else:
+        desc_emb = encoder.encode(
+            desc_texts,
+            batch_size=256,
+            show_progress_bar=True,
+            convert_to_numpy=True
+        )
+        np.save(cache_file, desc_emb)
+
+    length_scaled = scaler.transform(df[['CMPNT_MATL_DESC_LEN']])
+    cat_encoded = ordinal.transform(df[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+    return np.hstack([desc_emb, length_scaled, cat_encoded])
+
+# --- SPLIT ---
+train_df, temp_df = train_test_split(df_all, test_size=0.2, stratify=df_all['Final Category'], random_state=42)
+val_df, test_df = train_test_split(temp_df, test_size=0.5, stratify=temp_df['Final Category'], random_state=42)
+
+# --- TRAIN FINAL CATEGORY MODEL ---
+X_train = transform(train_df)
+y_train = train_df['Final Category']
+X_val = transform(val_df)
+y_val = val_df['Final Category']
+
+final_model = LGBMClassifier(class_weight='balanced', random_state=42)
+from lightgbm import early_stopping, log_evaluation
+
+final_model.fit(
+    X_train,
+    y_train,
+    eval_set=[(X_val, y_val)],
+    callbacks=[early_stopping(5), log_evaluation(10)]
+)
+joblib.dump(final_model, './saved_model/final_biobert_model.joblib')
+
+# --- INFERENCE ---
+X_test = transform(test_df)
+predicted = final_model.predict(X_test)
+test_df['Predicted'] = predicted
+test_df.to_csv('./saved_model/final_biobert_predictions.csv', index=False)
+
+# --- EVALUATION ---
+print("\nClassification Report:")
+report = classification_report(test_df['Final Category'], test_df['Predicted'])
+print(report)
+
+print("\nConfusion Matrix:")
+print(confusion_matrix(test_df['Final Category'], test_df['Predicted']))
+
+f1 = f1_score(test_df['Final Category'], test_df['Predicted'], average='weighted')
+print(f"\nF1 Score (weighted): {f1:.4f}")
+
+# --- SAVE REPORT ---
+with open('./saved_model/classification_report.txt', 'w') as f:
+    f.write(report)
+    f.write(f"\nF1 Score (weighted): {f1:.4f}\n")
