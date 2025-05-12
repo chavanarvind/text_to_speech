@@ -1,8 +1,190 @@
-Category	Full Count	8% Sample Count
-CHM	294,354,131 (294.35M)	23,548,330 (23.55M)
-PKG	244,395,506 (244.40M)	19,551,640 (19.55M)
-FNW	47,820,274 (47.82M)	3,825,622 (3.83M)
-FNW_CHM	8,892,358 (8.89M)	711,389 (0.71M)
-Liquids and Creams	2,185,074 (2.19M)	174,806 (0.17M)
-API	926,530 (0.93M)	74,122 (0.07M)
-Total	598,573,873 (598.57M)	47,885,909 (47.89M)
+DATA CLEANING:
+
+
+# Flat unit group dictionary for fast mapping
+unit_group_map = {
+    'KG': 'CHM', 'KGS': 'CHM', 'KGA': 'CHM', 'KGW': 'CHM', 'G': 'CHM', 'GR': 'CHM', 'GM': 'CHM', 'MG': 'CHM',
+    'LB': 'CHM', 'LBS': 'CHM', 'OZ': 'CHM', 'OZA': 'CHM', 'GW': 'CHM', 'TON': 'CHM', 'DR': 'CHM',
+    'L': 'Liquid', 'LT': 'Liquid', 'ML': 'Liquid', 'CC': 'Liquid', 'CL': 'Liquid', 'CCM': 'Liquid', 'GLL': 'Liquid',
+    'EA': 'Discrete', 'PC': 'Discrete', 'PCS': 'Discrete', 'Pcs': 'Discrete', 'PKT': 'Discrete', 'PK': 'Discrete',
+    'PAK': 'Discrete', 'PCK': 'Discrete', 'CS': 'Discrete', 'CSE': 'Discrete', 'CT': 'Discrete', 'CA': 'Discrete',
+    'ST': 'Discrete', 'GRO': 'Discrete', 'BX': 'Discrete',
+    'BOT': 'Containers', 'BOTTLE': 'Containers', 'ROLL': 'Containers', 'ROL': 'Containers', 'REEL': 'Containers',
+    'KAR': 'Containers',
+    'FT': 'Dimensional', 'YD': 'Dimensional', 'KM': 'Dimensional', 'DM': 'Dimensional', 'M': 'Dimensional',
+    'M1': 'Dimensional', 'M2': 'Dimensional', 'KM2': 'Dimensional', 'YD2': 'Dimensional', 'FT3': 'Dimensional',
+    'SQM': 'Dimensional', 'sqm': 'Dimensional', 'MYD': 'Dimensional', 'MI': 'Dimensional', 'SM': 'Dimensional',
+    'LM': 'Dimensional', 'LF': 'Dimensional', 'MH': 'Dimensional', 'KN': 'Dimensional', 'CH': 'Dimensional',
+    'TH': 'Unclassified', 'THU': 'Unclassified', 'IM': 'Unclassified', 'NOS': 'Unclassified', 'NO': 'Unclassified',
+    'TS': 'Unclassified', 'KA': 'Unclassified', 'ZPC': 'Unclassified', 'ZCT': 'Unclassified', '0%': 'Unclassified',
+    'KP': 'Unclassified', 'GP': 'Unclassified', 'KAI': 'Unclassified', 'SY': 'Unclassified', 'UN': 'Unclassified',
+    'MU': 'Unclassified', 'UM': 'Unclassified', 'HU': 'Unclassified'
+}
+
+# --- Load abbreviation mapping ---
+abbrev_csv_path = './data/abbreviation_expension_updated.csv'
+abbrev_df = pd.read_csv(abbrev_csv_path)
+abbrev_map = {k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])}
+
+
+patterns = {
+    'non_alphanumeric': re.compile(r'[^A-Za-z0-9&% ]+'),
+    'percent_space': re.compile(r"\s*%\s*"),
+    'canada_variants': re.compile(r'(canada|can|(ca\d+)$|ca)'),
+    'remove_canada': re.compile(r'canada\s*(\d{2,})|(canada\d+)|canada|can\s*(\d{2,})|(can\d+)|can|(ca\d+)|ca\s(\d{2,})|ca$|(ca\s)'),
+    'units': re.compile(r"(\D)(\d+)(\s*)(ml|l|gr|gm|g|ct)"),
+    'spf_space': re.compile(r"(\s)(spf)\s*([\d+])"),
+    'units_no_space': re.compile(r'([\d+])\s*(?:ml|l|gr|gm|g|ct)(?: |$)'),
+    'spf_number': re.compile(r"(\D)(spf\d+)")
+}
+
+
+CMPNT_MATL_TYPE_CD
+FERT
+G
+73
+N
+B
+62
+32AC
+I
+91
+0
+30AC
+6
+HALB
+D
+02PF
+Z
+61
+7
+PROM
+71
+40MP
+H
+M
+ROH
+SAPR
+UNBW
+41
+JM01
+VERP
+20SF
+95
+X
+A
+3
+8
+P
+F
+V
+U
+2
+50PM
+TRAD
+42
+R
+5
+92
+79
+W
+72
+41MP
+Z001
+Y
+EDUC
+PACK
+93
+ZEXR
+DISP
+Fiber (excluding Pulp & Rayon)
+Chemicals-Alcohol/Solvent
+Chemicals-Actives/Naturals
+Corrugated
+Packaging
+Fatty Acids/Fatty Alcohols
+Dyes/Colorants
+Films (PVC)
+Chemicals-Corn Derivatives/Sweeteners
+Other
+Bottles (PP)
+Labels/Inserts/Leaflets
+Foils
+Chemicals-Surfactant
+Bottles (HDPE)
+Packaging-Others
+Films (Polybags)
+Sleeves
+Thermoformed Packaging
+Packaging-Sleeves
+Sweeteners
+Chemicals-Preservatives
+WIP
+Flavors/Fragrances
+Conversion
+Films (Plastic)
+Caps/Closures/Lids DM
+Packaging-Caps/Closures/Li
+Chemicals-Dyes/Colorants
+Preservatives
+null
+Soap Chips
+Actives
+Actives/Naturals
+Films (Other)
+Conditioners/Emollients
+Films (Laminates)
+Pumps
+Sunscreens
+Ancillary & NonDirected
+FNW
+Naturals
+Glass bottle
+Chemicals-Surfactants
+Acids/Buffers/Salts
+Chemicals
+Corn Derivatives
+Vitamin
+Other Chemicals (waxes & new items)
+Barrier & Pouch Films
+Adhesives
+Surfactants (Commodity)
+Acids/Buffer/Salts
+Labels
+Alcohols/Solvents
+Mineral Oil/Petrolatum
+Silicones
+Films(Secondary)
+Bottles (PET)
+Caps/Closures/Lids
+Cartons
+Vitamins
+Other Nonwovens
+Films (Primary)
+Packaging-Bottles (PET)
+Glycerin
+Tubes
+Alcohol/Solvent
+Jars
+API
+Injection Molded Components
+Puff
+Naturals/Actives
+Exfolients
+Packaging-Corrugated
+Thickeners
+Other Packaging
+Emulsifiers
+Talc
+Packaging-Labels
+Chemicals-Flavors/Fragrances
+EPF
+ZHBG
+HAWA
+IM
+EPC
+IG
+ZEXI
+ZROH
+ERSA
+TPF
