@@ -1,6 +1,5 @@
-Estimated Processing Time by Sample Size
-Sample %	Sample Count	Estimated Time
-8%	47.89M	6 hours (baseline)
-20%	119.71M	~15 hours
-50%	299.29M	~37–38 hours
-80%	478.86M	~60 hours (2.5 days)
+ontext	Frequency	Rationale
+Stable formulations (e.g., legacy drugs)	Quarterly	Low change, fewer new components
+High R&D activity (e.g., clinical pipeline, new SKUs)	Monthly	Frequent additions of new materials/descriptions
+Regulatory Label or Compliance Updates	As needed	Triggered by external events (e.g., FDA changes)
+Drift Detection (if misclassification rises > 2–3%)	On demand	Use accuracy monitoring to trigger retraining
