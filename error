@@ -1,1 +1,12 @@
-🔁 Loading cached embeddings from: ./saved_model/embeddings/bert_emb_train.npy
+---> 93 return np.hstack([desc_emb, length_scaled, cat_encoded])
+
+File <__array_function__ internals>:200, in hstack(*args, **kwargs)
+
+File /anaconda/envs/azureml_py38/lib/python3.10/site-packages/numpy/core/shape_base.py:370, in hstack(tup, dtype, casting)
+    368     return _nx.concatenate(arrs, 0, dtype=dtype, casting=casting)
+    369 else:
+--> 370     return _nx.concatenate(arrs, 1, dtype=dtype, casting=casting)
+
+File <__array_function__ internals>:200, in concatenate(*args, **kwargs)
+
+ValueError: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 0, the array at index 0 has size 4709958 and the array at index 1 has size 11775292
