@@ -1,5 +1,25 @@
-ontext	Frequency	Rationale
-Stable formulations (e.g., legacy drugs)	Quarterly	Low change, fewer new components
-High R&D activity (e.g., clinical pipeline, new SKUs)	Monthly	Frequent additions of new materials/descriptions
-Regulatory Label or Compliance Updates	As needed	Triggered by external events (e.g., FDA changes)
-Drift Detection (if misclassification rises > 2–3%)	On demand	Use accuracy monitoring to trigger retraining
+Next Step: Business Validation of Model Predictions
+
+What We Need from Business
+Please provide a sample dataset that includes:
+
+✅ Component/Product Descriptions (same as used in BOM or ERP)
+
+✅ Human-assigned Final Categories (ground truth)
+
+⚠️ Ideally include edge cases or previously misclassified examples
+
+Recommended Volume:
+
+~2,000 to 5,000 samples
+
+Mixed distribution across all known categories
+
+Estimated Timeline (for 20% data)
+Task	Estimated Time
+Data preprocessing & loading	1–2 hours
+BioBERT embedding generation	6–8 hours (GPU)
+Model inference & saving results	1–2 hours
+Evaluation & summary report	1 hour
+
+🕒 Total: ~9–13 hours, preferably overnight on GPU infrastructure.
