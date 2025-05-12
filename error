@@ -1,8 +1,6 @@
-Category	Full Count	8% Sample Count
-CHM	294354131 (294.35M)	23548330 (23.55M)
-PKG	244395506 (244.40M)	19551640 (19.55M)
-FNW	47820274 (47.82M)	3825622 (3.83M)
-FNW_CHM	8892358 (8.89M)	711389 (0.71M)
-Liquids and Creams	2185074 (2.19M)	174806 (0.17M)
-API	926530 (0.93M)	74122 (0.07M)
-Total	598573873 (598.57M)	47885909 (47.89M)
+Estimated Processing Time by Sample Size
+Sample %	Sample Count	Estimated Time
+8%	47.89M	6 hours (baseline)
+20%	119.71M	~15 hours
+50%	299.29M	~37–38 hours
+80%	478.86M	~60 hours (2.5 days)
