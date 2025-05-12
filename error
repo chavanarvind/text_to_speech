@@ -1,32 +1,16 @@
-1. Data Sampling
-Read all cleaned .parquet files containing labeled component data.
+Key Observations from Classification Report
+Category	Precision	Recall	F1-score	Support
+API	0.000	0.000	0.000	14,072 ❌ Severely underperforming
+CHM	0.709	0.888	0.789	122,620 ✅ Strong performance
+FNW	0.983	0.082	0.152	122,620 ⚠️ Precision high, recall very low
+FNW_CHM	0.980	0.280	0.435	13,802 ⚠️ Overconfident but low recall
+Liquids and Creams	0.961	0.022	0.042	16,092 ❌ Very low recall
+PKG	0.497	0.988	0.661	122,620 ✅ High recall, low precision
 
-Apply stratified sampling per category from each file (5% or min 1000 rows).
+📉 Overall
+Macro Avg F1 = 0.347 → Weak performance on minority classes
 
-Concatenate sampled data into a training dataset.
+Weighted Avg F1 = 0.493 → Mostly driven by CHM and PKG
 
-2. Preprocessing & Feature Engineering
-Text Features: TF-IDF vectorization on CMPNT_MATL_DESC using unigrams and bigrams.
-
-Numeric Feature: Description length (CMPNT_MATL_DESC_LEN), standardized.
-
-Categorical Features: Encoded UNIT_GROUP and CMPNT_MATL_TYPE_CATEGORY using OrdinalEncoder.
-
-3. Model Training
-Used SGDClassifier with log_loss (logistic regression with SGD).
-
-Applied online learning (batch-wise training via partial_fit) over all files.
-
-Used class weights to handle imbalance.
-
-Monitored validation loss with early stopping (patience = 2).
-
-4. Evaluation
-Final performance assessed on hold-out test set:
-
-Top-1 & Top-3 Accuracy
-
-Log Loss, F1 Score (Macro, Micro, Weighted)
-
-Detailed Classification Report per category
+Model is biased toward majority classes, especially PKG and CHM
 
