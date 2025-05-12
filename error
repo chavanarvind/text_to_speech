@@ -1,61 +1,7 @@
-# LightGBM Reproducible Training Script Using Saved BERT Embeddings and Data Splits
-import os
-import joblib
-import numpy as np
-import pandas as pd
-from sklearn.preprocessing import OrdinalEncoder, StandardScaler
-from sklearn.metrics import classification_report, confusion_matrix, f1_score
-from lightgbm import LGBMClassifier, early_stopping, log_evaluation
-
-# --- Load Pre-saved Splits ---
-train_df = pd.read_parquet('./saved_model/train_df.parquet')
-val_df = pd.read_parquet('./saved_model/val_df.parquet')
-test_df = pd.read_parquet('./saved_model/test_df.parquet')
-
-# --- Load Scalers (re-fit here for consistency) ---
-ordinal = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
-scaler = StandardScaler()
-ordinal.fit(pd.concat([train_df, val_df, test_df])[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
-scaler.fit(pd.concat([train_df, val_df, test_df])[['CMPNT_MATL_DESC_LEN']])
-
-# --- Load Cached BERT Embeddings ---
-def load_features(split_name, df):
-    emb = np.load(f'./saved_model/embeddings/bert_emb_{split_name}.npy')
-    scaled = scaler.transform(df[['CMPNT_MATL_DESC_LEN']])
-    encoded = ordinal.transform(df[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
-    return np.hstack([emb, scaled, encoded])
-
-X_train = load_features('train', train_df)
-y_train = train_df['Final Category']
-X_val = load_features('val', val_df)
-y_val = val_df['Final Category']
-X_test = load_features('test', test_df)
-y_test = test_df['Final Category']
-
-# --- Train LightGBM ---
-model = LGBMClassifier(class_weight='balanced', random_state=42)
-model.fit(
-    X_train,
-    y_train,
-    eval_set=[(X_val, y_val)],
-    callbacks=[early_stopping(5), log_evaluation(10)]
-)
-
-joblib.dump(model, './saved_model/final_biobert_model.joblib')
-
-# --- Inference and Evaluation ---
-predicted = model.predict(X_test)
-test_df['Predicted'] = predicted
-test_df.to_csv('./saved_model/final_biobert_predictions.csv', index=False)
-
-report = classification_report(y_test, predicted)
-print("\nClassification Report:")
-print(report)
-print("\nConfusion Matrix:")
-print(confusion_matrix(y_test, predicted))
-f1 = f1_score(y_test, predicted, average='weighted')
-print(f"\nF1 Score (weighted): {f1:.4f}")
-
-with open('./saved_model/classification_report.txt', 'w') as f:
-    f.write(report)
-    f.write(f"\nF1 Score (weighted): {f1:.4f}\n")
+📊 Sample distribution by Final Category:
+PKG                   6657883
+CHM                    541745
+FNW                    138079
+Liquids and Creams       8122
+API                      7051
+FNW_CHM                  6810
