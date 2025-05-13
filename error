@@ -1,102 +1,51 @@
-import os
-import glob
-import joblib
-import torch
-import pandas as pd
 import numpy as np
-from sentence_transformers import SentenceTransformer
-from sklearn.preprocessing import OrdinalEncoder, StandardScaler
+import joblib
+from lightgbm import LGBMClassifier, early_stopping, log_evaluation
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, confusion_matrix, f1_score
 
-# --- DEVICE + MODEL SETUP ---
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-encoder = SentenceTransformer(
-    'pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb',
-    device=device
+# --- LOAD FEATURES AND LABELS ---
+X = np.load('./data/validation_step/model_artifects/X_full.npy')
+y = np.load('./data/validation_step/model_artifects/y_full.npy')
+
+# --- SPLIT INTO TRAIN/VALIDATION ---
+X_train, X_val, y_train, y_val = train_test_split(
+    X, y, test_size=0.2, stratify=y, random_state=42
 )
-ordinal = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
-scaler = StandardScaler()
 
-# --- PATHS ---
-input_path = './data/target_map_cleaned_non_null_target'
-embedding_cache_dir = './data/validation_step/model_artifects/bert_embedding'
-os.makedirs(embedding_cache_dir, exist_ok=True)
+# --- TRAIN LIGHTGBM MODEL ---
+model = LGBMClassifier(class_weight='balanced', random_state=42)
 
-output_X = []
-output_y = []
-required_cols = [
-    'CMPNT_MATL_DESC', 'CMPNT_MATL_DESC_LEN',
-    'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY',
-    'Final Category'
-]
+# Train with early stopping and logging
+model.fit(
+    X_train,
+    y_train,
+    eval_set=[(X_val, y_val)],
+    eval_metric='logloss',
+    callbacks=[
+        early_stopping(10),
+        log_evaluation(10)
+    ]
+)
 
-# --- PROCESS FILES INDIVIDUALLY WITH CACHING + STRATIFIED SAMPLE ---
-all_files = glob.glob(os.path.join(input_path, '*.parquet'))
-print(f"Found {len(all_files)} parquet files to process.\n")
+# --- SAVE MODEL ---
+joblib.dump(model, './data/validation_step/model_artifects/final_model.joblib')
+print("✅ LightGBM model saved: final_model.joblib")
 
-for file in all_files:
-    file_name = os.path.splitext(os.path.basename(file))[0]
-    bert_cache_file = os.path.join(embedding_cache_dir, f"{file_name}_bert.npy")
+# --- EVALUATION ---
+y_pred = model.predict(X_val)
 
-    try:
-        # Load and clean
-        df = pd.read_parquet(file, columns=required_cols)
-        df.drop_duplicates(subset=required_cols, inplace=True)
-        df = df[df['CMPNT_MATL_DESC'].notna()].copy()
-        df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
-        df.drop_duplicates(inplace=True)
+print("\n📊 Classification Report:")
+report = classification_report(y_val, y_pred)
+print(report)
 
-        # Take 60% stratified sample from each category
-        df = df.groupby('Final Category', group_keys=False).apply(
-            lambda x: x.sample(frac=0.6, random_state=42)
-        ).reset_index(drop=True)
+print("🔢 Confusion Matrix:")
+print(confusion_matrix(y_val, y_pred))
 
-        if df.empty:
-            print(f"⚠️ Skipping {file_name}: No valid rows after sampling")
-            continue
+f1 = f1_score(y_val, y_pred, average='weighted')
+print(f"\n✅ Weighted F1 Score: {f1:.4f}")
 
-        # --- EMBEDDINGS ---
-        if os.path.exists(bert_cache_file):
-            print(f"🔁 Skipping {file_name}: already embedded.")
-            desc_emb = np.load(bert_cache_file)
-        else:
-            print(f"🔄 Generating embeddings for: {file_name} ({len(df)} rows)")
-            desc_texts = df['CMPNT_MATL_DESC'].astype(str).tolist()
-            desc_emb = encoder.encode(
-                desc_texts,
-                batch_size=256,
-                show_progress_bar=True,
-                convert_to_numpy=True,
-                num_workers=4  # Parallel preprocessing
-            )
-            np.save(bert_cache_file, desc_emb)
-
-        # Store for merge
-        df['__bert_emb'] = list(desc_emb)
-        output_X.append(df)
-        output_y.append(df['Final Category'])
-
-    except Exception as e:
-        print(f"❌ Error processing {file_name}: {e}")
-
-# --- COMBINE ALL DATA ---
-df_all = pd.concat(output_X, ignore_index=True)
-print(f"\n✅ Total records after merge: {len(df_all)}")
-
-# --- FIT AND SAVE ENCODERS ---
-ordinal.fit(df_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
-scaler.fit(df_all[['CMPNT_MATL_DESC_LEN']])
-joblib.dump(ordinal, './data/validation_step/model_artifects/ordinal_encoder.pkl')
-joblib.dump(scaler, './data/validation_step/model_artifects/scaler.pkl')
-print("✅ OrdinalEncoder and Scaler saved.")
-
-# --- FINAL FEATURE MATRIX ---
-meta_scaled = scaler.transform(df_all[['CMPNT_MATL_DESC_LEN']])
-cat_encoded = ordinal.transform(df_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
-bert_array = np.vstack(df_all['__bert_emb'].values)
-
-X_full = np.hstack([bert_array, meta_scaled, cat_encoded])
-y_full = df_all['Final Category'].values
-
-np.save('./data/validation_step/model_artifects/X_full.npy', X_full)
-np.save('./data/validation_step/model_artifects/y_full.npy', y_full)
-print("✅ Final BERT+Meta feature matrix saved.")
+# --- SAVE REPORT ---
+with open('./data/validation_step/model_artifects/classification_report.txt', 'w') as f:
+    f.write(report)
+    f.write(f"\nF1 Score (weighted): {f1:.4f}\n")
