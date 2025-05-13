@@ -1,44 +1,65 @@
-#abbreviation step
 import os
-import re
 import glob
 import pandas as pd
 from multiprocessing import Pool, cpu_count
 
-# --- Load abbreviation mapping ---
-abbrev_csv_path = './data/abbreviation_expension_updated.csv'
-abbrev_df = pd.read_csv(abbrev_csv_path)
-abbrev_map = {k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])}
+# UNIT_GROUP mapping
+unit_group_map = {
+    'KG': 'CHM', 'KGS': 'CHM', 'KGA': 'CHM', 'KGW': 'CHM', 'G': 'CHM', 'GR': 'CHM', 'GM': 'CHM', 'MG': 'CHM',
+    'LB': 'CHM', 'LBS': 'CHM', 'OZ': 'CHM', 'OZA': 'CHM', 'GW': 'CHM', 'TON': 'CHM', 'DR': 'CHM',
+    'L': 'Liquid', 'LT': 'Liquid', 'ML': 'Liquid', 'CC': 'Liquid', 'CL': 'Liquid', 'CCM': 'Liquid', 'GLL': 'Liquid',
+    'EA': 'Discrete', 'PC': 'Discrete', 'PCS': 'Discrete', 'Pcs': 'Discrete', 'PKT': 'Discrete', 'PK': 'Discrete',
+    'PAK': 'Discrete', 'PCK': 'Discrete', 'CS': 'Discrete', 'CSE': 'Discrete', 'CT': 'Discrete', 'CA': 'Discrete',
+    'ST': 'Discrete', 'GRO': 'Discrete', 'BX': 'Discrete',
+    'BOT': 'Containers', 'BOTTLE': 'Containers', 'ROLL': 'Containers', 'ROL': 'Containers', 'REEL': 'Containers', 'KAR': 'Containers',
+    'FT': 'Dimensional', 'YD': 'Dimensional', 'KM': 'Dimensional', 'DM': 'Dimensional', 'M': 'Dimensional',
+    'M1': 'Dimensional', 'M2': 'Dimensional', 'KM2': 'Dimensional', 'YD2': 'Dimensional', 'FT3': 'Dimensional',
+    'SQM': 'Dimensional', 'sqm': 'Dimensional', 'MYD': 'Dimensional', 'MI': 'Dimensional', 'SM': 'Dimensional',
+    'LM': 'Dimensional', 'LF': 'Dimensional', 'MH': 'Dimensional', 'KN': 'Dimensional', 'CH': 'Dimensional',
+    'TH': 'Unclassified', 'THU': 'Unclassified', 'IM': 'Unclassified', 'NOS': 'Unclassified', 'NO': 'Unclassified',
+    'TS': 'Unclassified', 'KA': 'Unclassified', 'ZPC': 'Unclassified', 'ZCT': 'Unclassified', '0%': 'Unclassified',
+    'KP': 'Unclassified', 'GP': 'Unclassified', 'KAI': 'Unclassified', 'SY': 'Unclassified', 'UN': 'Unclassified',
+    'MU': 'Unclassified', 'UM': 'Unclassified', 'HU': 'Unclassified'
+}
 
-# --- Compile regex for full-word, case-insensitive matching ---
-abbrev_pattern = re.compile(
-    r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b',
-    flags=re.IGNORECASE
-)
-
-# --- Function for match replacement using the map ---
-def replace_match(m):
-    return abbrev_map.get(m.group(0).lower(), m.group(0))
-
-# --- Worker function for one file ---
-def process_file(file):
+# Function to process a single file
+def process_file(file_path):
     try:
-        df = pd.read_parquet(file)
+        df = pd.read_parquet(file_path)
 
-        # Expand abbreviations in the combined text column
-        df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'] = df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'].str.replace(
-            abbrev_pattern, replace_match, regex=True
+        # Filter rows where 'Final Category' is not null
+        df = df[df['Final Category'].notna()]
+        if df.empty:
+            print(f"⚠️ Skipped (no valid rows): {os.path.basename(file_path)}")
+            return
+
+        # Compute length of material descriptions
+        df['MATL_SHRT_DESC_LEN'] = df['MATL_SHRT_DESC'].astype(str).str.len()
+        df['CMPNT_MATL_DESC_LEN'] = df['CMPNT_MATL_DESC'].astype(str).str.len()
+
+        # Map unit to group
+        df['UNIT_GROUP'] = (
+            df['CMPNT_UOM_CD']
+            .fillna('')
+            .str.upper()
+            .map(unit_group_map)
+            .fillna('Unclassified')
         )
 
-        df.to_parquet(file, index=False)
-        print(f"Done: {os.path.basename(file)}")
-    except Exception as e:
-        print(f"Failed: {os.path.basename(file)} -> {e}")
+        # Save to new folder (target_map_with_rules)
+        output_file = file_path.replace("train_test_data", "target_map_with_rules")
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        df.to_parquet(output_file, index=False)
 
-# --- Run multiprocessing pool ---
+        print(f"✅ Done: {os.path.basename(file_path)}")
+
+    except Exception as e:
+        print(f"❌ Failed: {os.path.basename(file_path)} -> {e}")
+
+# Main parallel execution
 if __name__ == '__main__':
     input_path = './data/validation_step'
-    files = glob.glob(os.path.join(input_path, '*.parquet'))
+    all_files = glob.glob(os.path.join(input_path, '*.parquet'))
 
-    with Pool(processes=cpu_count()) as pool:
-        pool.map(process_file, files)
+    with Pool(cpu_count()) as pool:
+        pool.map(process_file, all_files)
