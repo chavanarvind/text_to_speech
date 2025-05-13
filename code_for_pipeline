@@ -1,51 +1,56 @@
-import numpy as np
-import joblib
-from lightgbm import LGBMClassifier, early_stopping, log_evaluation
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, confusion_matrix, f1_score
 
-# --- LOAD FEATURES AND LABELS ---
-X = np.load('./data/validation_step/model_artifects/X_full.npy')
-y = np.load('./data/validation_step/model_artifects/y_full.npy')
-
-# --- SPLIT INTO TRAIN/VALIDATION ---
-X_train, X_val, y_train, y_val = train_test_split(
-    X, y, test_size=0.2, stratify=y, random_state=42
-)
-
-# --- TRAIN LIGHTGBM MODEL ---
-model = LGBMClassifier(class_weight='balanced', random_state=42)
-
-# Train with early stopping and logging
-model.fit(
-    X_train,
-    y_train,
-    eval_set=[(X_val, y_val)],
-    eval_metric='logloss',
-    callbacks=[
-        early_stopping(10),
-        log_evaluation(10)
-    ]
-)
-
-# --- SAVE MODEL ---
-joblib.dump(model, './data/validation_step/model_artifects/final_model.joblib')
-print("✅ LightGBM model saved: final_model.joblib")
-
-# --- EVALUATION ---
-y_pred = model.predict(X_val)
-
-print("\n📊 Classification Report:")
-report = classification_report(y_val, y_pred)
-print(report)
-
-print("🔢 Confusion Matrix:")
-print(confusion_matrix(y_val, y_pred))
-
-f1 = f1_score(y_val, y_pred, average='weighted')
-print(f"\n✅ Weighted F1 Score: {f1:.4f}")
-
-# --- SAVE REPORT ---
-with open('./data/validation_step/model_artifects/classification_report.txt', 'w') as f:
-    f.write(report)
-    f.write(f"\nF1 Score (weighted): {f1:.4f}\n")
+  from .autonotebook import tqdm as notebook_tqdm
+2025-05-13 11:07:10.672513: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:467] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+E0000 00:00:1747134430.692807   14252 cuda_dnn.cc:8579] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+E0000 00:00:1747134430.699001   14252 cuda_blas.cc:1407] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+W0000 00:00:1747134430.715166   14252 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
+W0000 00:00:1747134430.715182   14252 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
+W0000 00:00:1747134430.715184   14252 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
+W0000 00:00:1747134430.715187   14252 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
+2025-05-13 11:07:10.720060: I tensorflow/core/platform/cpu_feature_guard.cc:210] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+Batches: 100%|██████████| 387/387 [01:45<00:00,  3.68it/s]
+Batches: 100%|██████████| 385/385 [01:47<00:00,  3.59it/s]
+Batches: 100%|██████████| 389/389 [01:49<00:00,  3.54it/s]
+Batches: 100%|██████████| 371/371 [01:46<00:00,  3.48it/s]
+Batches: 100%|██████████| 390/390 [01:50<00:00,  3.52it/s]
+Batches: 100%|██████████| 385/385 [01:49<00:00,  3.51it/s]
+Batches: 100%|██████████| 375/375 [01:46<00:00,  3.51it/s]
+Batches: 100%|██████████| 386/386 [01:49<00:00,  3.52it/s]
+Batches: 100%|██████████| 385/385 [01:50<00:00,  3.49it/s]
+Batches: 100%|██████████| 390/390 [01:51<00:00,  3.50it/s]
+Batches: 100%|██████████| 387/387 [01:50<00:00,  3.50it/s]
+Batches: 100%|██████████| 374/374 [01:47<00:00,  3.49it/s]
+Batches: 100%|██████████| 385/385 [01:49<00:00,  3.52it/s]
+Batches: 100%|██████████| 373/373 [01:46<00:00,  3.50it/s]
+Batches: 100%|██████████| 388/388 [01:49<00:00,  3.53it/s]
+Batches: 100%|██████████| 388/388 [01:49<00:00,  3.53it/s]
+Batches: 100%|██████████| 390/390 [01:50<00:00,  3.53it/s]
+Batches: 100%|██████████| 385/385 [01:49<00:00,  3.53it/s]
+Batches: 100%|██████████| 371/371 [01:45<00:00,  3.51it/s]
+Batches: 100%|██████████| 385/385 [01:49<00:00,  3.52it/s]
+Batches: 100%|██████████| 375/375 [01:46<00:00,  3.51it/s]
+Batches: 100%|██████████| 387/387 [01:49<00:00,  3.54it/s]
+Batches: 100%|██████████| 385/385 [01:49<00:00,  3.52it/s]
+Batches: 100%|██████████| 386/386 [01:49<00:00,  3.52it/s]
+Batches: 100%|██████████| 374/374 [01:46<00:00,  3.50it/s]
+Batches: 100%|██████████| 385/385 [01:48<00:00,  3.54it/s]
+Batches: 100%|██████████| 387/387 [01:50<00:00,  3.51it/s]
+Batches: 100%|██████████| 373/373 [01:46<00:00,  3.51it/s]
+Batches: 100%|██████████| 374/374 [01:46<00:00,  3.51it/s]
+Batches: 100%|██████████| 374/374 [01:46<00:00,  3.51it/s]
+Batches: 100%|██████████| 373/373 [01:46<00:00,  3.52it/s]
+Batches: 100%|██████████| 372/372 [01:45<00:00,  3.52it/s]
+Batches: 100%|██████████| 385/385 [01:49<00:00,  3.53it/s]
+Batches: 100%|██████████| 373/373 [01:46<00:00,  3.51it/s]
+Batches: 100%|██████████| 385/385 [01:49<00:00,  3.52it/s]
+Batches: 100%|██████████| 390/390 [01:50<00:00,  3.53it/s]
+Batches: 100%|██████████| 388/388 [01:50<00:00,  3.52it/s]
+Batches: 100%|██████████| 385/385 [01:48<00:00,  3.54it/s]
+Batches: 100%|██████████| 374/374 [01:46<00:00,  3.52it/s]
+Batches: 100%|██████████| 373/373 [01:46<00:00,  3.51it/s]
+Batches: 100%|██████████| 387/387 [01:49<00:00,  3.52it/s]
+Batches: 100%|██████████| 373/373 [01:45<00:00,  3.52it/s]
+Batches: 100%|██████████| 385/385 [01:48<00:00,  3.54it/s]
+Batches:  31%|███▏      | 121/386 [00:39<01:23,  3.17it/s]Found 454 parquet files to process.
