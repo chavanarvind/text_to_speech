@@ -13,10 +13,11 @@ encoder = SentenceTransformer('pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednl
 ordinal = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
 scaler = StandardScaler()
 
-# --- CONFIG ---model_artifects
+# --- CONFIG ---
 input_path = './data/target_map_cleaned_non_null_target'
 embedding_cache_dir = './data/validation_step/model_artifects/bert_embedding'
 os.makedirs(embedding_cache_dir, exist_ok=True)
+
 required_cols = [
     'CMPNT_MATL_DESC', 'CMPNT_MATL_DESC_LEN', 'UNIT_GROUP',
     'CMPNT_MATL_TYPE_CATEGORY', 'Final Category'
