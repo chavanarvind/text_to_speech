@@ -1,57 +1,141 @@
+# Single-Stage Classification Pipeline using BioBERT Embeddings (Optimized)
 import os
 import glob
+import joblib
+import torch
 import pandas as pd
-from multiprocessing import Pool, cpu_count
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import OrdinalEncoder, StandardScaler
+from sklearn.metrics import classification_report, confusion_matrix, f1_score
+from lightgbm import LGBMClassifier
+from sentence_transformers import SentenceTransformer
 
-# UNIT_GROUP mapping
-unit_group_map = {
-    'KG': 'CHM', 'KGS': 'CHM', 'KGA': 'CHM', 'KGW': 'CHM', 'G': 'CHM', 'GR': 'CHM', 'GM': 'CHM', 'MG': 'CHM',
-    'LB': 'CHM', 'LBS': 'CHM', 'OZ': 'CHM', 'OZA': 'CHM', 'GW': 'CHM', 'TON': 'CHM', 'DR': 'CHM',
-    'L': 'Liquid', 'LT': 'Liquid', 'ML': 'Liquid', 'CC': 'Liquid', 'CL': 'Liquid', 'CCM': 'Liquid', 'GLL': 'Liquid',
-    'EA': 'Discrete', 'PC': 'Discrete', 'PCS': 'Discrete', 'Pcs': 'Discrete', 'PKT': 'Discrete', 'PK': 'Discrete',
-    'PAK': 'Discrete', 'PCK': 'Discrete', 'CS': 'Discrete', 'CSE': 'Discrete', 'CT': 'Discrete', 'CA': 'Discrete',
-    'ST': 'Discrete', 'GRO': 'Discrete', 'BX': 'Discrete',
-    'BOT': 'Containers', 'BOTTLE': 'Containers', 'ROLL': 'Containers', 'ROL': 'Containers', 'REEL': 'Containers', 'KAR': 'Containers',
-    'FT': 'Dimensional', 'YD': 'Dimensional', 'KM': 'Dimensional', 'DM': 'Dimensional', 'M': 'Dimensional',
-    'M1': 'Dimensional', 'M2': 'Dimensional', 'KM2': 'Dimensional', 'YD2': 'Dimensional', 'FT3': 'Dimensional',
-    'SQM': 'Dimensional', 'sqm': 'Dimensional', 'MYD': 'Dimensional', 'MI': 'Dimensional', 'SM': 'Dimensional',
-    'LM': 'Dimensional', 'LF': 'Dimensional', 'MH': 'Dimensional', 'KN': 'Dimensional', 'CH': 'Dimensional',
-    'TH': 'Unclassified', 'THU': 'Unclassified', 'IM': 'Unclassified', 'NOS': 'Unclassified', 'NO': 'Unclassified',
-    'TS': 'Unclassified', 'KA': 'Unclassified', 'ZPC': 'Unclassified', 'ZCT': 'Unclassified', '0%': 'Unclassified',
-    'KP': 'Unclassified', 'GP': 'Unclassified', 'KAI': 'Unclassified', 'SY': 'Unclassified', 'UN': 'Unclassified',
-    'MU': 'Unclassified', 'UM': 'Unclassified', 'HU': 'Unclassified'
-}
+# --- ENCODERS ---
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+# Confirm GPU status
+from transformers import AutoModel
 
-# Function to process a single file
-def process_file(file_path):
-    try:
-        df = pd.read_parquet(file_path)
+# Check if model actually moves to GPU
+try:
+    test_model = AutoModel.from_pretrained('bert-base-uncased')
+    test_model = test_model.to(device)
+    print(f"✅ Transformers model loaded on {device} successfully")
+    if device == 'cuda':
+        print(f"🧮 GPU Memory Allocated: {torch.cuda.memory_allocated() / 1e6:.2f} MB")
+        print(f"🧮 GPU Memory Cached: {torch.cuda.memory_reserved() / 1e6:.2f} MB")
+except Exception as e:
+    print(f"⚠️ Transformer model device test failed: {e}")
+print(f"✅ Using device: {device}")
+if torch.cuda.is_available():
+    print(f"🧠 GPU Detected: {torch.cuda.get_device_name(0)}")
+    print(f"🧮 GPU Memory Allocated: {torch.cuda.memory_allocated() / 1e6:.2f} MB")
+    print(f"🧮 GPU Memory Cached: {torch.cuda.memory_reserved() / 1e6:.2f} MB")
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+encoder = SentenceTransformer('pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb', device=device)
+ordinal = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
+scaler = StandardScaler()
 
-        df['MATL_SHRT_DESC_LEN'] = df['MATL_SHRT_DESC'].astype(str).str.len()
-        df['CMPNT_MATL_DESC_LEN'] = df['CMPNT_MATL_DESC'].astype(str).str.len()
+# --- CONFIGURATION ---
+input_path = './data/target_map_cleaned_non_null_target'
+all_files = glob.glob(os.path.join(input_path, '*.parquet'))
+required_cols = [
+    'CMPNT_MATL_DESC', 'CMPNT_MATL_DESC_LEN', 'UNIT_GROUP',
+    'CMPNT_MATL_TYPE_CATEGORY', 'Final Category'
+]
+os.makedirs("./saved_model", exist_ok=True)
 
-        # Map unit to group
-        df['UNIT_GROUP'] = (
-            df['CMPNT_UOM_CD']
-            .fillna('')
-            .str.upper()
-            .map(unit_group_map)
-            .fillna('Unclassified')
+# --- LOAD DATA ---
+sample_list = []
+for file in all_files:
+    df = pd.read_parquet(file, columns=required_cols)
+    df = df[df['Final Category'].notna() & df['CMPNT_MATL_DESC'].notna()].copy()
+    df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
+    df.drop_duplicates(inplace=True)
+
+    # Take stratified sample from each Final Category per file
+    sampled = df.groupby('Final Category', group_keys=False).apply(lambda x: x.sample(frac=0.30, random_state=42))
+    sample_list.append(sampled)
+
+df_all = pd.concat(sample_list, ignore_index=True)
+
+# Print sample distribution summary
+print("📊 Sample distribution by Final Category:")
+print(df_all['Final Category'].value_counts())
+
+# --- FIT SCALERS ---
+ordinal.fit(df_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+scaler.fit(df_all[['CMPNT_MATL_DESC_LEN']])
+
+# Save sentence embeddings for reuse
+embedding_cache_dir = './saved_model/embeddings'
+os.makedirs(embedding_cache_dir, exist_ok=True)
+
+
+def transform(df, split_name):
+    cache_file = os.path.join(embedding_cache_dir, f"bert_emb_{split_name}.npy")
+    desc_texts = df['CMPNT_MATL_DESC'].astype(str).tolist()
+
+    if os.path.exists(cache_file):
+        print(f"🔁 Loading cached embeddings from: {cache_file}")
+        desc_emb = np.load(cache_file)
+    else:
+        desc_emb = encoder.encode(
+            desc_texts,
+            batch_size=256,
+            show_progress_bar=True,
+            convert_to_numpy=True
         )
+        np.save(cache_file, desc_emb)
 
-        # Save to new folder (target_map_with_rules)
-        output_file = file_path.replace("train_test_data", "target_map_with_rules")
-        os.makedirs(os.path.dirname(output_file), exist_ok=True)
-        df.to_parquet(output_file, index=False)
+    length_scaled = scaler.transform(df[['CMPNT_MATL_DESC_LEN']])
+    cat_encoded = ordinal.transform(df[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+    return np.hstack([desc_emb, length_scaled, cat_encoded])
 
-        print(f"✅ Done: {os.path.basename(file_path)}")
-    except Exception as e:
-        print(f"❌ Failed: {os.path.basename(file_path)} -> {e}")
+# --- SPLIT ---
+train_df, temp_df = train_test_split(df_all, test_size=0.2, stratify=df_all['Final Category'], random_state=42)
+val_df, test_df = train_test_split(temp_df, test_size=0.5, stratify=temp_df['Final Category'], random_state=42)
 
-# Main parallel execution
-if __name__ == '__main__':
-    input_path = './data/validation_step'
-    all_files = glob.glob(os.path.join(input_path, '*.parquet'))
+# Save data splits
+train_df.to_parquet('./saved_model/train_df.parquet', index=False)
+val_df.to_parquet('./saved_model/val_df.parquet', index=False)
+test_df.to_parquet('./saved_model/test_df.parquet', index=False)
 
-    with Pool(cpu_count()) as pool:
-        pool.map(process_file, all_files)
+# --- TRAIN FINAL CATEGORY MODEL ---
+X_train = transform(train_df, split_name='train')
+y_train = train_df['Final Category']
+X_val = transform(val_df, split_name='val')
+y_val = val_df['Final Category']
+
+final_model = LGBMClassifier(class_weight='balanced', random_state=42)
+from lightgbm import early_stopping, log_evaluation
+
+final_model.fit(
+    X_train,
+    y_train,
+    eval_set=[(X_val, y_val)],
+    callbacks=[early_stopping(5), log_evaluation(10)]
+)
+joblib.dump(final_model, './saved_model/final_biobert_model.joblib')
+
+# --- INFERENCE ---
+X_test = transform(test_df, split_name='test')
+predicted = final_model.predict(X_test)
+test_df['Predicted'] = predicted
+test_df.to_csv('./saved_model/final_biobert_predictions.csv', index=False)
+
+# --- EVALUATION ---
+print("\nClassification Report:")
+report = classification_report(test_df['Final Category'], test_df['Predicted'])
+print(report)
+
+print("\nConfusion Matrix:")
+print(confusion_matrix(test_df['Final Category'], test_df['Predicted']))
+
+f1 = f1_score(test_df['Final Category'], test_df['Predicted'], average='weighted')
+print(f"\nF1 Score (weighted): {f1:.4f}")
+
+# --- SAVE REPORT ---
+with open('./saved_model/classification_report.txt', 'w') as f:
+    f.write(report)
+    f.write(f"\nF1 Score (weighted): {f1:.4f}\n")
