@@ -24,13 +24,14 @@ unit_group_map = {
 
 # Function to process a single file
 def process_file(file_path):
-    df = pd.read_parquet(file_path)
+    try:
+        df = pd.read_parquet(file_path)
 
-    df['MATL_SHRT_DESC_LEN'] = df['MATL_SHRT_DESC'].astype(str).str.len()
-    df['CMPNT_MATL_DESC_LEN'] = df['CMPNT_MATL_DESC'].astype(str).str.len()
+        df['MATL_SHRT_DESC_LEN'] = df['MATL_SHRT_DESC'].astype(str).str.len()
+        df['CMPNT_MATL_DESC_LEN'] = df['CMPNT_MATL_DESC'].astype(str).str.len()
 
         # Map unit to group
-    df['UNIT_GROUP'] = (
+        df['UNIT_GROUP'] = (
             df['CMPNT_UOM_CD']
             .fillna('')
             .str.upper()
@@ -39,11 +40,11 @@ def process_file(file_path):
         )
 
         # Save to new folder (target_map_with_rules)
-    output_file = file_path.replace("train_test_data", "target_map_with_rules")
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
-    df.to_parquet(output_file, index=False)
+        output_file = file_path.replace("train_test_data", "target_map_with_rules")
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        df.to_parquet(output_file, index=False)
 
-    print(f"✅ Done: {os.path.basename(file_path)}")
+        print(f"✅ Done: {os.path.basename(file_path)}")
     except Exception as e:
         print(f"❌ Failed: {os.path.basename(file_path)} -> {e}")
 
