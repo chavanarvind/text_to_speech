@@ -13,9 +13,9 @@ encoder = SentenceTransformer('pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednl
 ordinal = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
 scaler = StandardScaler()
 
-# --- CONFIG ---
+# --- CONFIG ---model_artifects
 input_path = './data/target_map_cleaned_non_null_target'
-embedding_cache_dir = './saved_model/embeddings'
+embedding_cache_dir = './data/validation_step/model_artifects/bert_embedding'
 os.makedirs(embedding_cache_dir, exist_ok=True)
 required_cols = [
     'CMPNT_MATL_DESC', 'CMPNT_MATL_DESC_LEN', 'UNIT_GROUP',
@@ -38,8 +38,8 @@ print(f"✅ Loaded {len(df_all)} records for BERT feature generation")
 # --- FIT ENCODERS ---
 ordinal.fit(df_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
 scaler.fit(df_all[['CMPNT_MATL_DESC_LEN']])
-joblib.dump(ordinal, './saved_model/ordinal_encoder.pkl')
-joblib.dump(scaler, './saved_model/scaler.pkl')
+joblib.dump(ordinal, './data/validation_step/model_artifects/ordinal_encoder.pkl')
+joblib.dump(scaler, './data/validation_step/model_artifects/scaler.pkl')
 print("✅ OrdinalEncoder and Scaler saved")
 
 # --- GENERATE BERT EMBEDDINGS ---
@@ -65,6 +65,6 @@ cat_encoded = ordinal.transform(df_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY'
 X_full = np.hstack([desc_emb, length_scaled, cat_encoded])
 y_full = df_all['Final Category'].values
 
-np.save('./saved_model/X_full.npy', X_full)
-np.save('./saved_model/y_full.npy', y_full)
+np.save('./data/validation_step/model_artifects/X_full.npy', X_full)
+np.save('./data/validation_step/model_artifects/y_full.npy', y_full)
 print("✅ Final BERT+Meta feature matrix saved: X_full.npy, y_full.npy")
