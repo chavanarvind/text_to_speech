@@ -1,36 +1,7 @@
-import pandas as pd
-import os
-import glob
-
-# Input and output paths
-input_path = './data/target_map_cleaned'
-output_path = './data/validation_step'
-os.makedirs(output_path, exist_ok=True)
-
-# List all parquet files
-files = glob.glob(os.path.join(input_path, '*.parquet'))
-
-# To store sampled records
-sampled_records = []
-
-for file_path in files:
-    df = pd.read_parquet(file_path)
-
-    # Filter rows where 'Final Category' is null or blank
-    filtered_df = df[df['Final Category'].isna() | (df['Final Category'].astype(str).str.strip() == '')]
-
-    # Sample up to 200 records
-    sample = filtered_df.sample(n=min(200, len(filtered_df)), random_state=42)
-
-    # (Optional) Add filename info for traceability
-    sample['source_file'] = os.path.basename(file_path)
-
-    sampled_records.append(sample)
-
 # Combine and save
 if sampled_records:
     final_sampled_df = pd.concat(sampled_records, ignore_index=True)
-    final_sampled_df.to_csv(os.path.join(output_path, 'sampled_null_final_category.csv'), index=False)
-    print(f"✅ Saved sampled data to {output_path}/sampled_null_final_category.csv")
+    final_sampled_df.to_parquet(os.path.join(output_path, 'sampled_null_final_category.parquet'), index=False)
+    print(f"✅ Parquet file saved at: {output_path}/sampled_null_final_category.parquet")
 else:
-    print("⚠️ No matching records found across files.")
+    print("⚠️ No matching records found in any file.")
