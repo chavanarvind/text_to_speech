@@ -1,51 +1,54 @@
-import numpy as np
+import os
 import joblib
-from lightgbm import LGBMClassifier, early_stopping, log_evaluation
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, confusion_matrix, f1_score
+import torch
+import pandas as pd
+import numpy as np
+from sentence_transformers import SentenceTransformer
+from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 
-# --- LOAD FEATURES AND LABELS ---
-X = np.load('./data/validation_step/model_artifects/X_full.npy')
-y = np.load('./data/validation_step/model_artifects/y_full.npy')
+# --- CONFIGURATION ---
+client_file = './data/client_input_file.parquet'  # ⬅️ Replace with your file path
+output_file = './data/client_predictions.csv'
+required_cols = ['CMPNT_MATL_DESC', 'CMPNT_MATL_DESC_LEN', 'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']
 
-# --- SPLIT INTO TRAIN/VALIDATION ---
-X_train, X_val, y_train, y_val = train_test_split(
-    X, y, test_size=0.2, stratify=y, random_state=42
+# --- LOAD CLIENT DATA ---
+df = pd.read_parquet(client_file, columns=required_cols)
+df = df[df['CMPNT_MATL_DESC'].notna()].copy()
+print(f"📦 Loaded {len(df)} records from client file.")
+
+# --- LOAD TRAINED ARTIFACTS ---
+model_path = './data/validation_step/model_artifects/final_model.joblib'
+ordinal_path = './data/validation_step/model_artifects/ordinal_encoder.pkl'
+scaler_path = './data/validation_step/model_artifects/scaler.pkl'
+
+model = joblib.load(model_path)
+ordinal = joblib.load(ordinal_path)
+scaler = joblib.load(scaler_path)
+
+# --- LOAD BERT MODEL ---
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+encoder = SentenceTransformer('pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb', device=device)
+encoder.max_seq_length = 128  # Optional: cap token length
+
+# --- TRANSFORM FEATURES ---
+print("🔄 Generating BERT embeddings...")
+desc_texts = df['CMPNT_MATL_DESC'].astype(str).tolist()
+desc_emb = encoder.encode(
+    desc_texts,
+    batch_size=256,
+    show_progress_bar=True,
+    convert_to_numpy=True,
+    num_workers=4
 )
 
-# --- TRAIN LIGHTGBM MODEL ---
-model = LGBMClassifier(class_weight='balanced', random_state=42)
+length_scaled = scaler.transform(df[['CMPNT_MATL_DESC_LEN']])
+cat_encoded = ordinal.transform(df[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+X_pred = np.hstack([desc_emb, length_scaled, cat_encoded])
 
-# Train with early stopping and logging
-model.fit(
-    X_train,
-    y_train,
-    eval_set=[(X_val, y_val)],
-    eval_metric='logloss',
-    callbacks=[
-        early_stopping(10),
-        log_evaluation(10)
-    ]
-)
+# --- PREDICT ---
+print("🤖 Predicting with LightGBM model...")
+df['Predicted'] = model.predict(X_pred)
 
-# --- SAVE MODEL ---
-joblib.dump(model, './data/validation_step/model_artifects/final_model.joblib')
-print("✅ LightGBM model saved: final_model.joblib")
-
-# --- EVALUATION ---
-y_pred = model.predict(X_val)
-
-print("\n📊 Classification Report:")
-report = classification_report(y_val, y_pred)
-print(report)
-
-print("🔢 Confusion Matrix:")
-print(confusion_matrix(y_val, y_pred))
-
-f1 = f1_score(y_val, y_pred, average='weighted')
-print(f"\n✅ Weighted F1 Score: {f1:.4f}")
-
-# --- SAVE REPORT ---
-with open('./data/validation_step/model_artifects/classification_report.txt', 'w') as f:
-    f.write(report)
-    f.write(f"\nF1 Score (weighted): {f1:.4f}\n")
+# --- SAVE OUTPUT ---
+df.to_csv(output_file, index=False)
+print(f"✅ Predictions saved to: {output_file}")
