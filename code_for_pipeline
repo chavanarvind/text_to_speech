@@ -34,21 +34,21 @@ for file in all_files:
     df_list.append(df)
 
 df_all = pd.concat(df_list, ignore_index=True)
-print(f"✅ Loaded {len(df_all)} records for BERT feature generation")
+print(f" Loaded {len(df_all)} records for BERT feature generation")
 
 # --- FIT ENCODERS ---
 ordinal.fit(df_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
 scaler.fit(df_all[['CMPNT_MATL_DESC_LEN']])
 joblib.dump(ordinal, './data/validation_step/model_artifects/ordinal_encoder.pkl')
 joblib.dump(scaler, './data/validation_step/model_artifects/scaler.pkl')
-print("✅ OrdinalEncoder and Scaler saved")
+print(" OrdinalEncoder and Scaler saved")
 
 # --- GENERATE BERT EMBEDDINGS ---
 desc_texts = df_all['CMPNT_MATL_DESC'].astype(str).tolist()
 bert_cache_file = os.path.join(embedding_cache_dir, "bert_emb_full.npy")
 
 if os.path.exists(bert_cache_file):
-    print(f"🔁 Loading cached embeddings from: {bert_cache_file}")
+    print(f" Loading cached embeddings from: {bert_cache_file}")
     desc_emb = np.load(bert_cache_file)
 else:
     desc_emb = encoder.encode(
@@ -58,7 +58,7 @@ else:
         convert_to_numpy=True
     )
     np.save(bert_cache_file, desc_emb)
-    print("✅ BERT embeddings generated and saved")
+    print("BERT embeddings generated and saved")
 
 # --- CONCATENATE FINAL FEATURES ---
 length_scaled = scaler.transform(df_all[['CMPNT_MATL_DESC_LEN']])
@@ -68,4 +68,4 @@ y_full = df_all['Final Category'].values
 
 np.save('./data/validation_step/model_artifects/X_full.npy', X_full)
 np.save('./data/validation_step/model_artifects/y_full.npy', y_full)
-print("✅ Final BERT+Meta feature matrix saved: X_full.npy, y_full.npy")
+print(" Final BERT+Meta feature matrix saved: X_full.npy, y_full.npy")
