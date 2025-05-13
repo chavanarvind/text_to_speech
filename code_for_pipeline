@@ -1,10 +1,15 @@
-df = pd.read_parquet(file, columns=required_cols)
 
-# ✅ Remove duplicates on selected columns early
-df.drop_duplicates(subset=required_cols, inplace=True)
-
-# ✅ Filter non-null essential fields
-df = df[df['Final Category'].notna() & df['CMPNT_MATL_DESC'].notna()].copy()
-
-# ✅ Standardize ambiguous labels
-df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
+  from .autonotebook import tqdm as notebook_tqdm
+2025-05-13 11:07:10.672513: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:467] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+E0000 00:00:1747134430.692807   14252 cuda_dnn.cc:8579] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+E0000 00:00:1747134430.699001   14252 cuda_blas.cc:1407] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+W0000 00:00:1747134430.715166   14252 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
+W0000 00:00:1747134430.715182   14252 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
+W0000 00:00:1747134430.715184   14252 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
+W0000 00:00:1747134430.715187   14252 computation_placer.cc:177] computation placer already registered. Please check linkage and avoid linking the same target more than once.
+2025-05-13 11:07:10.720060: I tensorflow/core/platform/cpu_feature_guard.cc:210] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+Batches: 100%|██████████| 387/387 [01:45<00:00,  3.68it/s]
+Batches: 100%|██████████| 385/385 [01:47<00:00,  3.59it/s]
+Batches:  13%|█▎        | 50/389 [00:16<01:47,  3.14it/s]Found 454 parquet files to process.
