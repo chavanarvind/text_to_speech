@@ -10,9 +10,9 @@ import re
 # azureml-core of version 1.0.72 or higher is required
 from azureml.core import Workspace, Dataset
 
-subscription_id = '06eaff3d-17f0-43e5-9619-fb73df4372cb'
-resource_group = 'AZR-WEH-DTO-AML-Production'
-workspace_name = 'AML-DTO-Marmot-prod'
+subscription_id = 
+resource_group = 
+workspace_name = 
 
 workspace = Workspace(subscription_id, resource_group, workspace_name)
 
