@@ -1,95 +1,70 @@
 import os
 import glob
 import joblib
-import torch
-import pandas as pd
 import numpy as np
-from sentence_transformers import SentenceTransformer
+import pandas as pd
 from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 
-# --- DEVICE + MODEL SETUP ---
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-encoder = SentenceTransformer(
-    'pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb',
-    device=device
-)
+# --- Load saved encoders (fit them below) ---
 ordinal = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
 scaler = StandardScaler()
 
-# --- PATHS ---
-input_path = './data/target_map_cleaned_non_null_target'
-embedding_cache_dir = './data/validation_step/model_artifects/bert_embedding'
-os.makedirs(embedding_cache_dir, exist_ok=True)
+# --- Paths ---
+embedding_dir = './data/validation_step/model_artifects/bert_embedding'
+parquet_dir = './data/target_map_cleaned_non_null_target'
+
+# --- Collect all embedded BERT files ---
+bert_files = sorted(glob.glob(os.path.join(embedding_dir, '*_bert.npy')))
 
 output_X = []
 output_y = []
-required_cols = [
-    'CMPNT_MATL_DESC', 'CMPNT_MATL_DESC_LEN',
-    'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY',
-    'Final Category'
-]
 
-# --- PROCESS FILES INDIVIDUALLY WITH CACHING + STRATIFIED SAMPLE ---
-all_files = glob.glob(os.path.join(input_path, '*.parquet'))
-print(f"Found {len(all_files)} parquet files to process.\n")
-
-for file in all_files:
-    file_name = os.path.splitext(os.path.basename(file))[0]
-    bert_cache_file = os.path.join(embedding_cache_dir, f"{file_name}_bert.npy")
-
+for bert_file in bert_files:
     try:
-        # Load and clean
-        df = pd.read_parquet(file, columns=required_cols)
-        df.drop_duplicates(subset=required_cols, inplace=True)
-        df = df[df['CMPNT_MATL_DESC'].notna()].copy()
+        file_name = os.path.basename(bert_file).replace('_bert.npy', '.parquet')
+        parquet_file = os.path.join(parquet_dir, file_name)
+
+        if not os.path.exists(parquet_file):
+            print(f"⚠️ Missing Parquet for: {file_name}")
+            continue
+
+        df = pd.read_parquet(parquet_file, columns=[
+            'CMPNT_MATL_DESC_LEN', 'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY', 'Final Category'
+        ])
+        df = df[df['Final Category'].notna()]
         df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
         df.drop_duplicates(inplace=True)
 
-        # Take 60% stratified sample from each category
+        # Stratified 60% sample (if needed)
         df = df.groupby('Final Category', group_keys=False).apply(
             lambda x: x.sample(frac=0.6, random_state=42)
         ).reset_index(drop=True)
 
-        if df.empty:
-            print(f"⚠️ Skipping {file_name}: No valid rows after sampling")
+        desc_emb = np.load(bert_file)
+        if len(desc_emb) != len(df):
+            print(f"❌ Length mismatch in {file_name}: {len(desc_emb)} vs {len(df)}")
             continue
 
-        # --- EMBEDDINGS ---
-        if os.path.exists(bert_cache_file):
-            print(f"🔁 Skipping {file_name}: already embedded.")
-            desc_emb = np.load(bert_cache_file)
-        else:
-            print(f"🔄 Generating embeddings for: {file_name} ({len(df)} rows)")
-            desc_texts = df['CMPNT_MATL_DESC'].astype(str).tolist()
-            desc_emb = encoder.encode(
-                desc_texts,
-                batch_size=256,
-                show_progress_bar=True,
-                convert_to_numpy=True,
-                num_workers=4  # Parallel preprocessing
-            )
-            np.save(bert_cache_file, desc_emb)
-
-        # Store for merge
         df['__bert_emb'] = list(desc_emb)
         output_X.append(df)
         output_y.append(df['Final Category'])
 
     except Exception as e:
-        print(f"❌ Error processing {file_name}: {e}")
+        print(f"❌ Error with {bert_file}: {e}")
 
-# --- COMBINE ALL DATA ---
+# --- Final merge ---
 df_all = pd.concat(output_X, ignore_index=True)
-print(f"\n✅ Total records after merge: {len(df_all)}")
+print(f"✅ Total samples: {len(df_all)}")
 
-# --- FIT AND SAVE ENCODERS ---
+# --- Fit encoders ---
 ordinal.fit(df_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
 scaler.fit(df_all[['CMPNT_MATL_DESC_LEN']])
+
 joblib.dump(ordinal, './data/validation_step/model_artifects/ordinal_encoder.pkl')
 joblib.dump(scaler, './data/validation_step/model_artifects/scaler.pkl')
-print("✅ OrdinalEncoder and Scaler saved.")
+print("✅ Encoders saved.")
 
-# --- FINAL FEATURE MATRIX ---
+# --- Final matrix ---
 meta_scaled = scaler.transform(df_all[['CMPNT_MATL_DESC_LEN']])
 cat_encoded = ordinal.transform(df_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
 bert_array = np.vstack(df_all['__bert_emb'].values)
@@ -99,4 +74,4 @@ y_full = df_all['Final Category'].values
 
 np.save('./data/validation_step/model_artifects/X_full.npy', X_full)
 np.save('./data/validation_step/model_artifects/y_full.npy', y_full)
-print("✅ Final BERT+Meta feature matrix saved.")
+print("✅ X_full.npy and y_full.npy created.")
