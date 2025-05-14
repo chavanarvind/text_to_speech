@@ -1,15 +1,80 @@
-        # Check required column exists
-        if 'Final Category' not in df.columns:
-            print(f"⚠️ Skipping {file_name}: 'Final Category' column missing.")
-            continue
+import os
+import glob
+import joblib
+import torch
+import pandas as pd
+import numpy as np
+from sentence_transformers import SentenceTransformer
+from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 
-        # Stratified sample with category-specific fraction
+# --- DEVICE + MODEL SETUP ---
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+print(f"🖥️ Using device: {device}")
+if device == 'cuda':
+    print(f"🚀 GPU available: {torch.cuda.get_device_name(0)}")
+else:
+    print("⚠️ GPU not available. Running on CPU.")
+
+encoder = SentenceTransformer(
+    'pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb',
+    device=device
+)
+
+ordinal = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
+scaler = StandardScaler()
+
+# --- PATHS ---
+input_path = './data/target_map_cleaned_non_null_target'
+embedding_cache_dir = './data/validation_step/model_artifects/bert_embedding'
+sample_cache_dir = './data/validation_step/model_artifects/sampled_rows'
+output_dir = './data/validation_step/model_artifects'
+os.makedirs(embedding_cache_dir, exist_ok=True)
+os.makedirs(sample_cache_dir, exist_ok=True)
+os.makedirs(output_dir, exist_ok=True)
+
+output_X = []
+output_y = []
+
+required_cols = [
+    'CMPNT_MATL_DESC', 'CMPNT_MATL_DESC_LEN',
+    'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY',
+    'Final Category'
+]
+
+# --- Adaptive sampling fractions per category ---
+category_frac_map = {
+    'CHM': 0.05,
+    'PKG': 0.05,
+    'FNW': 0.1,
+    'FNW_CHM': 0.3,
+    'Liquids and Creams': 0.5,
+    'API': 1.0
+}
+
+# --- PROCESS FILES ---
+all_files = glob.glob(os.path.join(input_path, '*.parquet'))
+print(f"📁 Found {len(all_files)} parquet files to process.\n")
+
+for file in all_files:
+    file_name = os.path.splitext(os.path.basename(file))[0]
+    bert_cache_file = os.path.join(embedding_cache_dir, f"{file_name}_bert.npy")
+    sample_cache_file = os.path.join(sample_cache_dir, f"{file_name}_sampled.parquet")
+
+    try:
+        # Load and clean
+        df = pd.read_parquet(file, columns=required_cols)
+        df.drop_duplicates(subset=required_cols, inplace=True)
+        df = df[df['CMPNT_MATL_DESC'].notna()].copy()
+        df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
+        df.drop_duplicates(inplace=True)
+
+        # --- Category-specific stratified sampling ---
         df_sampled = (
             df.groupby('Final Category', group_keys=False)
             .apply(lambda g: g.sample(
                 frac=category_frac_map.get(g.name, 0.1),
                 random_state=42
-            ), include_groups=False)
+            ))
             .reset_index(drop=True)
         )
 
@@ -17,8 +82,10 @@
             print(f"⚠️ Skipping {file_name}: No valid rows after sampling")
             continue
 
+        # --- Save sampled rows ---
         df_sampled.to_parquet(sample_cache_file, index=False)
 
+        # --- BERT Embeddings ---
         if os.path.exists(bert_cache_file):
             print(f"🔁 Skipping {file_name}: already embedded.")
             desc_emb = np.load(bert_cache_file)
@@ -27,7 +94,7 @@
             desc_texts = df_sampled['CMPNT_MATL_DESC'].astype(str).tolist()
             desc_emb = encoder.encode(
                 desc_texts,
-                batch_size=128,
+                batch_size=256,
                 show_progress_bar=True,
                 convert_to_numpy=True,
                 num_workers=4
