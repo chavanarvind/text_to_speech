@@ -1,3 +1,8 @@
-/tmp/ipykernel_12600/2357046793.py:72: DeprecationWarning: DataFrameGroupBy.apply operated on the grouping columns. This behavior is deprecated, and in a future version of pandas the grouping columns will be excluded from the operation. Either pass `include_groups=False` to exclude the groupings or explicitly select the grouping columns after groupby to silence this warning.
-  .apply(lambda g: g.sample(
-Batches:  21%|██        | 208/997 [01:21<05:10,  2.54it/s]
+df_sampled = (
+    df.groupby('Final Category', group_keys=False)
+    .apply(lambda g: g.sample(
+        frac=category_frac_map.get(g.name, 0.1),
+        random_state=42
+    ), include_groups=False)
+    .reset_index(drop=True)
+)
