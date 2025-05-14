@@ -1,117 +1,28 @@
-#new code to use embeddings and sample related to embeddings
 import os
 import glob
-import joblib
-import numpy as np
-import pandas as pd
-from sklearn.preprocessing import OrdinalEncoder, StandardScaler
-from lightgbm import LGBMClassifier
-from concurrent.futures import ProcessPoolExecutor
 
-# --- Define Paths ---
+# Paths
 embedding_dir = './data/validation_step/model_artifects/bert_embedding'
 sampled_dir = './data/validation_step/model_artifects/sampled_rows'
 output_dir = './data/validation_step/model_artifects'
-os.makedirs(output_dir, exist_ok=True)
 
-# --- Collect Files ---
-bert_files = sorted(glob.glob(os.path.join(embedding_dir, '*_bert.npy')))
+# File patterns to clean
+patterns = [
+    os.path.join(embedding_dir, '*.npy'),
+    os.path.join(sampled_dir, '*.parquet'),
+    os.path.join(output_dir, 'X_full.npy'),
+    os.path.join(output_dir, 'y_full.npy'),
+    os.path.join(output_dir, 'final_model.joblib'),
+    os.path.join(output_dir, 'ordinal_encoder.pkl'),
+    os.path.join(output_dir, 'scaler.pkl'),
+    os.path.join(output_dir, 'prediction_scores.csv'),
+]
 
-# --- Processing function ---
-def process_pair(bert_file):
-    try:
-        file_name = os.path.basename(bert_file).replace('_bert.npy', '_sampled.parquet')
-        parquet_file = os.path.join(sampled_dir, file_name)
-
-        if not os.path.exists(parquet_file):
-            return None, None
-
-        df = pd.read_parquet(parquet_file, columns=[
-            'CMPNT_MATL_DESC_LEN', 'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY', 'Final Category'
-        ])
-        df = df[df['Final Category'].notna()]
-        df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
-        df.drop_duplicates(inplace=True)
-
-        desc_emb = np.load(bert_file)
-        if len(desc_emb) != len(df):
-            return None, None
-
-        df['__bert_emb'] = list(desc_emb)
-        return df, df['Final Category']
-
-    except Exception as e:
-        return None, None
-
-# --- Parallel Execution ---
-output_X, output_y = [], []
-with ProcessPoolExecutor() as executor:
-    for df_part, y_part in executor.map(process_pair, bert_files):
-        if df_part is not None:
-            output_X.append(df_part)
-            output_y.append(y_part)
-
-# --- Combine Results ---
-df_all = pd.concat(output_X, ignore_index=True)
-print(f" Total samples: {len(df_all)}")
-
-# --- Fit and Save Encoders ---
-ordinal = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
-scaler = StandardScaler()
-
-ordinal.fit(df_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
-scaler.fit(df_all[['CMPNT_MATL_DESC_LEN']])
-joblib.dump(ordinal, os.path.join(output_dir, 'ordinal_encoder.pkl'))
-joblib.dump(scaler, os.path.join(output_dir, 'scaler.pkl'))
-print("✅ Encoders saved.")
-
-# --- Final Matrix Creation ---
-meta_scaled = scaler.transform(df_all[['CMPNT_MATL_DESC_LEN']])
-cat_encoded = ordinal.transform(df_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
-bert_array = np.vstack(df_all['__bert_emb'].values)
-
-X_full = np.hstack([bert_array, meta_scaled, cat_encoded])
-y_full = df_all['Final Category'].values
-
-np.save(os.path.join(output_dir, 'X_full.npy'), X_full)
-np.save(os.path.join(output_dir, 'y_full.npy'), y_full)
-print("✅ X_full.npy and y_full.npy created.")
-
-# --- Train LightGBM Model ---
-model = LGBMClassifier(class_weight='balanced', random_state=42)
-model.fit(X_full, y_full)
-joblib.dump(model, os.path.join(output_dir, 'final_model.joblib'))
-print("✅ LightGBM model trained and saved.")
-
-# --- Predict with Probabilities ---
-y_proba = model.predict_proba(X_full)
-y_pred = model.classes_[np.argmax(y_proba, axis=1)]
-y_score = np.max(y_proba, axis=1)
-
-# --- Replace low-confidence predictions ---
-final_pred = np.where(y_score < 0.6, 'Other', y_pred)
-
-# --- Create summary DataFrame ---
-pred_df = pd.DataFrame({
-    'Original': y_full,
-    'Predicted': y_pred,
-    'Score': y_score,
-    'Final_Prediction': final_pred
-})
-
-pred_df.to_csv(os.path.join(output_dir, 'prediction_scores.csv'), index=False)
-print("✅ Prediction scores saved to prediction_scores.csv")
-
-error part:   443 self.copy = copy
---> 445 objs, keys = self._clean_keys_and_objs(objs, keys)
-    447 # figure out what our result ndim is going to be
-    448 ndims = self._get_ndims(objs)
-
-File /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages/pandas/core/reshape/concat.py:507, in _Concatenator._clean_keys_and_objs(self, objs, keys)
-    504     objs_list = list(objs)
-    506 if len(objs_list) == 0:
---> 507     raise ValueError("No objects to concatenate")
-    509 if keys is None:
-    510     objs_list = list(com.not_none(*objs_list))
-
-ValueError: No objects to concatenate
+# Deletion
+for pattern in patterns:
+    for file in glob.glob(pattern):
+        try:
+            os.remove(file)
+            print(f"🗑️ Removed: {file}")
+        except Exception as e:
+            print(f"❌ Failed to remove {file}: {e}")
