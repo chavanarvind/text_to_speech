@@ -1,8 +1,354 @@
-df_sampled = (
-    df.groupby('Final Category', group_keys=False)
-    .apply(lambda g: g.sample(
-        frac=category_frac_map.get(g.name, 0.1),
-        random_state=42
-    ), include_groups=False)
-    .reset_index(drop=True)
-)
+Parquet file saved at: ./data/validation_step/sampled_null_final_category.parquet
+                                  MATL_SHRT_DESC  \
+0           ng nf hnd cr unsc   75ml cs hu pl sk   
+1                     tylenol 325mg tablet fibre   
+2           curativo baid club pack asst 18x250s   
+3               curativo baid hello kitty 24x20s   
+4                  nicorette ons 1mg cb 1st aunz   
+...                                          ...   
+155595  CURATIVO B-AID ANTIBIOT ASST 24X20'S CAN   
+155596            PENS ASSORT + BIB PROM MDP X90   
+155597              NTG Double Cleanse Holiday_S   
+155598         JBABY BAÑO LIQ HIDRA INTEN 12X200   
+155599  NTG HYDRO BOOST GEL/SERUM/CRM PDQ NAT P1   
+
+                                 CMPNT_MATL_DESC CMPNT_MATL_TYPE_CD  \
+0                   0231 glycerine 4811 bulk upp               40MP   
+1                           tylenol 325mg tablet               HALB   
+2             babab foundation sheer 34 drum wip               HALB   
+3           lam pehm perf hello kitty 13 34 82mm               HALB   
+4                     bb2 nico ons 1mg cb 1 aunz                 71   
+...                                          ...                ...   
+155595  ALMOFADA MERIDIAN P/ BAND-AID ANTIBIOTIC               HALB   
+155596            PENA POWDER 100           L164               FERT   
+155597   NTG All in One Make-up Clnsg Wipes 25's               FERT   
+155598              JBABY BANO LIQ HIDRA INTENSA               HALB   
+155599       NTG Hydroboost Extra Dry Cream 50ml               FERT   
+
+         CMPNT_CAT_CD_DESC CMPNT_UOM_CD Final Category  \
+0                     None         None           None   
+1       NONMAPPEDCOMMODITY           TH           None   
+2            Semi Acabados           TH           None   
+3            Semi Acabados           M2           None   
+4             Back Board 2           ST           None   
+...                    ...          ...            ...   
+155595       Semi Acabados            M           None   
+155596  SKIN DRYING POWDER           EA           None   
+155597      Finished goods           EA           None   
+155598       Personal care            L           None   
+155599      Finished goods           EA           None   
+
+                       MATL_SHRT_DESC_AND_CMPNT_MATL_DESC  
+0       ng nf hnd cr unsc   75ml cs hu pl sk 0231 glyc...  
+1         tylenol 325mg tablet fibre tylenol 325mg tablet  
+2       curativo baid club pack asst 18x250s babab fou...  
+3       curativo baid hello kitty 24x20s lam pehm perf...  
+4       nicorette ons 1mg cb 1st aunz bb2 nico ons 1mg...  
+...                                                   ...  
+155595                                               None  
+155596                                               None  
+155597                                               None  
+155598                                               None  
+155599                                               None  
+
+[155600 rows x 7 columns]
+Done: sampled_null_final_category.parquet
+Empty DataFrame
+Columns: [MATL_SHRT_DESC, CMPNT_MATL_DESC, CMPNT_MATL_TYPE_CD, CMPNT_CAT_CD_DESC, CMPNT_UOM_CD, Final Category, MATL_SHRT_DESC_AND_CMPNT_MATL_DESC, MATL_SHRT_DESC_LEN, CMPNT_MATL_DESC_LEN, UNIT_GROUP, CMPNT_MATL_TYPE_CATEGORY]
+Index: []
+Done: sampled_null_final_category.parquet
+✅ Done: sampled_null_final_category.parquet
+✅ Updated: sampled_null_final_category.parquet
+Collecting sentence_transformers
+  Downloading sentence_transformers-4.1.0-py3-none-any.whl.metadata (13 kB)
+Collecting transformers<5.0.0,>=4.41.0 (from sentence_transformers)
+  Downloading transformers-4.51.3-py3-none-any.whl.metadata (38 kB)
+Requirement already satisfied: tqdm in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from sentence_transformers) (4.67.1)
+Requirement already satisfied: torch>=1.11.0 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from sentence_transformers) (2.6.0)
+Collecting scikit-learn (from sentence_transformers)
+  Downloading scikit_learn-1.6.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (18 kB)
+Requirement already satisfied: scipy in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from sentence_transformers) (1.15.2)
+Collecting huggingface-hub>=0.20.0 (from sentence_transformers)
+  Downloading huggingface_hub-0.31.2-py3-none-any.whl.metadata (13 kB)
+Requirement already satisfied: Pillow in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from sentence_transformers) (11.2.1)
+Requirement already satisfied: typing_extensions>=4.5.0 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from sentence_transformers) (4.13.2)
+Requirement already satisfied: filelock in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from huggingface-hub>=0.20.0->sentence_transformers) (3.18.0)
+Requirement already satisfied: fsspec>=2023.5.0 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from huggingface-hub>=0.20.0->sentence_transformers) (2025.3.2)
+Requirement already satisfied: packaging>=20.9 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from huggingface-hub>=0.20.0->sentence_transformers) (24.2)
+Requirement already satisfied: pyyaml>=5.1 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from huggingface-hub>=0.20.0->sentence_transformers) (6.0.2)
+Requirement already satisfied: requests in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from huggingface-hub>=0.20.0->sentence_transformers) (2.32.3)
+Requirement already satisfied: networkx in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from torch>=1.11.0->sentence_transformers) (3.4.2)
+Requirement already satisfied: jinja2 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from torch>=1.11.0->sentence_transformers) (3.1.6)
+Collecting nvidia-cuda-nvrtc-cu12==12.4.127 (from torch>=1.11.0->sentence_transformers)
+  Downloading nvidia_cuda_nvrtc_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl.metadata (1.5 kB)
+Collecting nvidia-cuda-runtime-cu12==12.4.127 (from torch>=1.11.0->sentence_transformers)
+  Downloading nvidia_cuda_runtime_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl.metadata (1.5 kB)
+Collecting nvidia-cuda-cupti-cu12==12.4.127 (from torch>=1.11.0->sentence_transformers)
+  Downloading nvidia_cuda_cupti_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl.metadata (1.6 kB)
+Collecting nvidia-cudnn-cu12==9.1.0.70 (from torch>=1.11.0->sentence_transformers)
+  Downloading nvidia_cudnn_cu12-9.1.0.70-py3-none-manylinux2014_x86_64.whl.metadata (1.6 kB)
+Collecting nvidia-cublas-cu12==12.4.5.8 (from torch>=1.11.0->sentence_transformers)
+  Downloading nvidia_cublas_cu12-12.4.5.8-py3-none-manylinux2014_x86_64.whl.metadata (1.5 kB)
+Collecting nvidia-cufft-cu12==11.2.1.3 (from torch>=1.11.0->sentence_transformers)
+  Downloading nvidia_cufft_cu12-11.2.1.3-py3-none-manylinux2014_x86_64.whl.metadata (1.5 kB)
+Collecting nvidia-curand-cu12==10.3.5.147 (from torch>=1.11.0->sentence_transformers)
+  Downloading nvidia_curand_cu12-10.3.5.147-py3-none-manylinux2014_x86_64.whl.metadata (1.5 kB)
+Collecting nvidia-cusolver-cu12==11.6.1.9 (from torch>=1.11.0->sentence_transformers)
+  Downloading nvidia_cusolver_cu12-11.6.1.9-py3-none-manylinux2014_x86_64.whl.metadata (1.6 kB)
+Collecting nvidia-cusparse-cu12==12.3.1.170 (from torch>=1.11.0->sentence_transformers)
+  Downloading nvidia_cusparse_cu12-12.3.1.170-py3-none-manylinux2014_x86_64.whl.metadata (1.6 kB)
+Requirement already satisfied: nvidia-cusparselt-cu12==0.6.2 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from torch>=1.11.0->sentence_transformers) (0.6.2)
+Collecting nvidia-nccl-cu12==2.21.5 (from torch>=1.11.0->sentence_transformers)
+  Downloading nvidia_nccl_cu12-2.21.5-py3-none-manylinux2014_x86_64.whl.metadata (1.8 kB)
+Requirement already satisfied: nvidia-nvtx-cu12==12.4.127 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from torch>=1.11.0->sentence_transformers) (12.4.127)
+Collecting nvidia-nvjitlink-cu12==12.4.127 (from torch>=1.11.0->sentence_transformers)
+  Downloading nvidia_nvjitlink_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl.metadata (1.5 kB)
+Requirement already satisfied: triton==3.2.0 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from torch>=1.11.0->sentence_transformers) (3.2.0)
+Requirement already satisfied: sympy==1.13.1 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from torch>=1.11.0->sentence_transformers) (1.13.1)
+Requirement already satisfied: mpmath<1.4,>=1.1.0 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from sympy==1.13.1->torch>=1.11.0->sentence_transformers) (1.3.0)
+Requirement already satisfied: numpy>=1.17 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from transformers<5.0.0,>=4.41.0->sentence_transformers) (2.1.3)
+Collecting regex!=2019.12.17 (from transformers<5.0.0,>=4.41.0->sentence_transformers)
+  Downloading regex-2024.11.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (40 kB)
+Collecting tokenizers<0.22,>=0.21 (from transformers<5.0.0,>=4.41.0->sentence_transformers)
+  Downloading tokenizers-0.21.1-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.8 kB)
+Collecting safetensors>=0.4.3 (from transformers<5.0.0,>=4.41.0->sentence_transformers)
+  Downloading safetensors-0.5.3-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (3.8 kB)
+Requirement already satisfied: joblib>=1.2.0 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from scikit-learn->sentence_transformers) (1.5.0)
+Collecting threadpoolctl>=3.1.0 (from scikit-learn->sentence_transformers)
+  Downloading threadpoolctl-3.6.0-py3-none-any.whl.metadata (13 kB)
+Requirement already satisfied: MarkupSafe>=2.0 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from jinja2->torch>=1.11.0->sentence_transformers) (3.0.2)
+Requirement already satisfied: charset-normalizer<4,>=2 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from requests->huggingface-hub>=0.20.0->sentence_transformers) (3.4.1)
+Requirement already satisfied: idna<4,>=2.5 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from requests->huggingface-hub>=0.20.0->sentence_transformers) (3.10)
+Requirement already satisfied: urllib3<3,>=1.21.1 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from requests->huggingface-hub>=0.20.0->sentence_transformers) (2.4.0)
+Requirement already satisfied: certifi>=2017.4.17 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from requests->huggingface-hub>=0.20.0->sentence_transformers) (2025.1.31)
+Downloading sentence_transformers-4.1.0-py3-none-any.whl (345 kB)
+Downloading huggingface_hub-0.31.2-py3-none-any.whl (484 kB)
+Downloading nvidia_cublas_cu12-12.4.5.8-py3-none-manylinux2014_x86_64.whl (363.4 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 363.4/363.4 MB 57.9 MB/s eta 0:00:0000:0100:01
+Downloading nvidia_cuda_cupti_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl (13.8 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 13.8/13.8 MB 50.7 MB/s eta 0:00:0000:01
+Downloading nvidia_cuda_nvrtc_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl (24.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 24.6/24.6 MB 55.9 MB/s eta 0:00:00:00:0100:01
+Downloading nvidia_cuda_runtime_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl (883 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 883.7/883.7 kB 26.8 MB/s eta 0:00:00
+Downloading nvidia_cudnn_cu12-9.1.0.70-py3-none-manylinux2014_x86_64.whl (664.8 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 664.8/664.8 MB 27.1 MB/s eta 0:00:0000:0100:01
+Downloading nvidia_cufft_cu12-11.2.1.3-py3-none-manylinux2014_x86_64.whl (211.5 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 211.5/211.5 MB 41.2 MB/s eta 0:00:0000:0100:01
+Downloading nvidia_curand_cu12-10.3.5.147-py3-none-manylinux2014_x86_64.whl (56.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 56.3/56.3 MB 23.0 MB/s eta 0:00:0000:0100:01
+Downloading nvidia_cusolver_cu12-11.6.1.9-py3-none-manylinux2014_x86_64.whl (127.9 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 127.9/127.9 MB 39.1 MB/s eta 0:00:0000:0100:01
+Downloading nvidia_cusparse_cu12-12.3.1.170-py3-none-manylinux2014_x86_64.whl (207.5 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 207.5/207.5 MB 38.6 MB/s eta 0:00:0000:0100:01
+Downloading nvidia_nccl_cu12-2.21.5-py3-none-manylinux2014_x86_64.whl (188.7 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 188.7/188.7 MB 41.0 MB/s eta 0:00:0000:0100:01
+Downloading nvidia_nvjitlink_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl (21.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 21.1/21.1 MB 37.2 MB/s eta 0:00:0000:0100:01
+Downloading transformers-4.51.3-py3-none-any.whl (10.4 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 10.4/10.4 MB 43.3 MB/s eta 0:00:00:00:01
+Downloading scikit_learn-1.6.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (13.5 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 13.5/13.5 MB 43.0 MB/s eta 0:00:0000:01
+Downloading regex-2024.11.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (781 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 781.7/781.7 kB 27.2 MB/s eta 0:00:00
+Downloading safetensors-0.5.3-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (471 kB)
+Downloading threadpoolctl-3.6.0-py3-none-any.whl (18 kB)
+Downloading tokenizers-0.21.1-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.0 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.0/3.0 MB 43.4 MB/s eta 0:00:00
+Installing collected packages: threadpoolctl, safetensors, regex, nvidia-nvjitlink-cu12, nvidia-nccl-cu12, nvidia-curand-cu12, nvidia-cufft-cu12, nvidia-cuda-runtime-cu12, nvidia-cuda-nvrtc-cu12, nvidia-cuda-cupti-cu12, nvidia-cublas-cu12, scikit-learn, nvidia-cusparse-cu12, nvidia-cudnn-cu12, huggingface-hub, tokenizers, nvidia-cusolver-cu12, transformers, sentence_transformers
+  Attempting uninstall: nvidia-nvjitlink-cu12
+    Found existing installation: nvidia-nvjitlink-cu12 12.5.82
+    Uninstalling nvidia-nvjitlink-cu12-12.5.82:
+      Successfully uninstalled nvidia-nvjitlink-cu12-12.5.82
+  Attempting uninstall: nvidia-nccl-cu12
+    Found existing installation: nvidia-nccl-cu12 2.23.4
+    Uninstalling nvidia-nccl-cu12-2.23.4:
+      Successfully uninstalled nvidia-nccl-cu12-2.23.4
+  Attempting uninstall: nvidia-curand-cu12
+    Found existing installation: nvidia-curand-cu12 10.3.6.82
+    Uninstalling nvidia-curand-cu12-10.3.6.82:
+      Successfully uninstalled nvidia-curand-cu12-10.3.6.82
+  Attempting uninstall: nvidia-cufft-cu12
+    Found existing installation: nvidia-cufft-cu12 11.2.3.61
+    Uninstalling nvidia-cufft-cu12-11.2.3.61:
+      Successfully uninstalled nvidia-cufft-cu12-11.2.3.61
+  Attempting uninstall: nvidia-cuda-runtime-cu12
+    Found existing installation: nvidia-cuda-runtime-cu12 12.5.82
+    Uninstalling nvidia-cuda-runtime-cu12-12.5.82:
+      Successfully uninstalled nvidia-cuda-runtime-cu12-12.5.82
+  Attempting uninstall: nvidia-cuda-nvrtc-cu12
+    Found existing installation: nvidia-cuda-nvrtc-cu12 12.5.82
+    Uninstalling nvidia-cuda-nvrtc-cu12-12.5.82:
+      Successfully uninstalled nvidia-cuda-nvrtc-cu12-12.5.82
+  Attempting uninstall: nvidia-cuda-cupti-cu12
+    Found existing installation: nvidia-cuda-cupti-cu12 12.5.82
+    Uninstalling nvidia-cuda-cupti-cu12-12.5.82:
+      Successfully uninstalled nvidia-cuda-cupti-cu12-12.5.82
+  Attempting uninstall: nvidia-cublas-cu12
+    Found existing installation: nvidia-cublas-cu12 12.5.3.2
+    Uninstalling nvidia-cublas-cu12-12.5.3.2:
+      Successfully uninstalled nvidia-cublas-cu12-12.5.3.2
+  Attempting uninstall: nvidia-cusparse-cu12
+    Found existing installation: nvidia-cusparse-cu12 12.5.1.3
+    Uninstalling nvidia-cusparse-cu12-12.5.1.3:
+      Successfully uninstalled nvidia-cusparse-cu12-12.5.1.3
+  Attempting uninstall: nvidia-cudnn-cu12
+    Found existing installation: nvidia-cudnn-cu12 9.3.0.75
+    Uninstalling nvidia-cudnn-cu12-9.3.0.75:
+      Successfully uninstalled nvidia-cudnn-cu12-9.3.0.75
+  Attempting uninstall: nvidia-cusolver-cu12
+    Found existing installation: nvidia-cusolver-cu12 11.6.3.83
+    Uninstalling nvidia-cusolver-cu12-11.6.3.83:
+      Successfully uninstalled nvidia-cusolver-cu12-11.6.3.83
+Successfully installed huggingface-hub-0.31.2 nvidia-cublas-cu12-12.4.5.8 nvidia-cuda-cupti-cu12-12.4.127 nvidia-cuda-nvrtc-cu12-12.4.127 nvidia-cuda-runtime-cu12-12.4.127 nvidia-cudnn-cu12-9.1.0.70 nvidia-cufft-cu12-11.2.1.3 nvidia-curand-cu12-10.3.5.147 nvidia-cusolver-cu12-11.6.1.9 nvidia-cusparse-cu12-12.3.1.170 nvidia-nccl-cu12-2.21.5 nvidia-nvjitlink-cu12-12.4.127 regex-2024.11.6 safetensors-0.5.3 scikit-learn-1.6.1 sentence_transformers-4.1.0 threadpoolctl-3.6.0 tokenizers-0.21.1 transformers-4.51.3
+Note: you may need to restart the kernel to use updated packages.
+Collecting tf-keras
+  Downloading tf_keras-2.19.0-py3-none-any.whl.metadata (1.8 kB)
+Requirement already satisfied: tensorflow<2.20,>=2.19 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tf-keras) (2.19.0)
+Requirement already satisfied: absl-py>=1.0.0 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (2.2.2)
+Requirement already satisfied: astunparse>=1.6.0 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (1.6.3)
+Requirement already satisfied: flatbuffers>=24.3.25 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (25.2.10)
+Requirement already satisfied: gast!=0.5.0,!=0.5.1,!=0.5.2,>=0.2.1 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (0.6.0)
+Requirement already satisfied: google-pasta>=0.1.1 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (0.2.0)
+Requirement already satisfied: libclang>=13.0.0 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (18.1.1)
+Requirement already satisfied: opt-einsum>=2.3.2 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (3.4.0)
+Requirement already satisfied: packaging in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (24.2)
+Requirement already satisfied: protobuf!=4.21.0,!=4.21.1,!=4.21.2,!=4.21.3,!=4.21.4,!=4.21.5,<6.0.0dev,>=3.20.3 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (5.29.4)
+Requirement already satisfied: requests<3,>=2.21.0 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (2.32.3)
+Requirement already satisfied: setuptools in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (75.8.0)
+Requirement already satisfied: six>=1.12.0 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (1.17.0)
+Requirement already satisfied: termcolor>=1.1.0 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (3.0.1)
+Requirement already satisfied: typing-extensions>=3.6.6 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (4.13.2)
+Requirement already satisfied: wrapt>=1.11.0 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (1.16.0)
+Requirement already satisfied: grpcio<2.0,>=1.24.3 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (1.71.0)
+Requirement already satisfied: tensorboard~=2.19.0 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (2.19.0)
+Collecting keras>=3.5.0 (from tensorflow<2.20,>=2.19->tf-keras)
+  Downloading keras-3.9.2-py3-none-any.whl.metadata (6.1 kB)
+Requirement already satisfied: numpy<2.2.0,>=1.26.0 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (2.1.3)
+Requirement already satisfied: h5py>=3.11.0 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (3.13.0)
+Requirement already satisfied: ml-dtypes<1.0.0,>=0.5.1 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (0.5.1)
+Requirement already satisfied: tensorflow-io-gcs-filesystem>=0.23.1 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (0.37.1)
+Requirement already satisfied: wheel<1.0,>=0.23.0 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from astunparse>=1.6.0->tensorflow<2.20,>=2.19->tf-keras) (0.45.1)
+Requirement already satisfied: rich in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from keras>=3.5.0->tensorflow<2.20,>=2.19->tf-keras) (14.0.0)
+Requirement already satisfied: namex in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from keras>=3.5.0->tensorflow<2.20,>=2.19->tf-keras) (0.0.8)
+Requirement already satisfied: optree in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from keras>=3.5.0->tensorflow<2.20,>=2.19->tf-keras) (0.15.0)
+Requirement already satisfied: charset-normalizer<4,>=2 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from requests<3,>=2.21.0->tensorflow<2.20,>=2.19->tf-keras) (3.4.1)
+Requirement already satisfied: idna<4,>=2.5 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from requests<3,>=2.21.0->tensorflow<2.20,>=2.19->tf-keras) (3.10)
+Requirement already satisfied: urllib3<3,>=1.21.1 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from requests<3,>=2.21.0->tensorflow<2.20,>=2.19->tf-keras) (2.4.0)
+Requirement already satisfied: certifi>=2017.4.17 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from requests<3,>=2.21.0->tensorflow<2.20,>=2.19->tf-keras) (2025.1.31)
+Requirement already satisfied: markdown>=2.6.8 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tensorboard~=2.19.0->tensorflow<2.20,>=2.19->tf-keras) (3.8)
+Requirement already satisfied: tensorboard-data-server<0.8.0,>=0.7.0 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tensorboard~=2.19.0->tensorflow<2.20,>=2.19->tf-keras) (0.7.2)
+Requirement already satisfied: werkzeug>=1.0.1 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from tensorboard~=2.19.0->tensorflow<2.20,>=2.19->tf-keras) (3.1.3)
+Requirement already satisfied: MarkupSafe>=2.1.1 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from werkzeug>=1.0.1->tensorboard~=2.19.0->tensorflow<2.20,>=2.19->tf-keras) (3.0.2)
+Requirement already satisfied: markdown-it-py>=2.2.0 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from rich->keras>=3.5.0->tensorflow<2.20,>=2.19->tf-keras) (3.0.0)
+Requirement already satisfied: pygments<3.0.0,>=2.13.0 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from rich->keras>=3.5.0->tensorflow<2.20,>=2.19->tf-keras) (2.19.1)
+Requirement already satisfied: mdurl~=0.1 in /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages (from markdown-it-py>=2.2.0->rich->keras>=3.5.0->tensorflow<2.20,>=2.19->tf-keras) (0.1.2)
+Downloading tf_keras-2.19.0-py3-none-any.whl (1.7 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.7/1.7 MB 27.4 MB/s eta 0:00:00
+Downloading keras-3.9.2-py3-none-any.whl (1.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.3/1.3 MB 30.7 MB/s eta 0:00:00
+Installing collected packages: keras, tf-keras
+Successfully installed keras-3.9.2 tf-keras-2.19.0
+Note: you may need to restart the kernel to use updated packages.
+[LightGBM] [Info] Auto-choosing col-wise multi-threading, the overhead of testing was 0.187901 seconds.
+You can set `force_col_wise=true` to remove the overhead.
+[LightGBM] [Info] Total Bins 195938
+[LightGBM] [Info] Number of data points in the train set: 78962, number of used features: 771
+[LightGBM] [Info] Start training from score -1.791759
+[LightGBM] [Info] Start training from score -1.791759
+[LightGBM] [Info] Start training from score -1.791759
+[LightGBM] [Info] Start training from score -1.791759
+[LightGBM] [Info] Start training from score -1.791759
+[LightGBM] [Info] Start training from score -1.791759
+Training until validation scores don't improve for 10 rounds
+[10]	valid_0's multi_logloss: 0.352089
+[20]	valid_0's multi_logloss: 0.153691
+[30]	valid_0's multi_logloss: 0.0969984
+[40]	valid_0's multi_logloss: 0.0740791
+[50]	valid_0's multi_logloss: 0.0624959
+[60]	valid_0's multi_logloss: 0.0546382
+[70]	valid_0's multi_logloss: 0.0503489
+[80]	valid_0's multi_logloss: 0.0476391
+[90]	valid_0's multi_logloss: 0.0462506
+
+📊 Classification Report:
+                    precision    recall  f1-score   support
+
+               API       1.00      0.26      0.42        19
+               CHM       0.92      0.98      0.94      1451
+               FNW       0.89      0.87      0.88       367
+           FNW_CHM       0.86      0.67      0.75        18
+Liquids and Creams       0.90      0.39      0.55        23
+               PKG       1.00      0.99      1.00     17863
+
+          accuracy                           0.99     19741
+         macro avg       0.93      0.69      0.76     19741
+      weighted avg       0.99      0.99      0.99     19741
+
+🔢 Confusion Matrix:
+[[    5    13     0     0     0     1]
+ [    0  1416     7     0     0    28]
+ [    0    27   321     1     0    18]
+ [    0     2     1    12     0     3]
+ [    0     9     0     0     9     5]
+ [    0    79    30     1     1 17752]]
+
+✅ Weighted F1 Score: 0.9883
+ Loaded 155600 records from client file.
+ Predictions saved to: ./data/client_predictions.csv
+Batches: 100%|██████████| 608/608 [04:32<00:00,  2.23it/s]
+/anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages/sklearn/utils/validation.py:2739: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+  warnings.warn(
+🗑️ Removed: ./data/validation_step/model_artifects/sampled_rows/mapped_file0_sampled.parquet
+🗑️ Removed: ./data/validation_step/model_artifects/sampled_rows/mapped_file100_sampled.parquet
+🗑️ Removed: ./data/validation_step/model_artifects/sampled_rows/mapped_file101_sampled.parquet
+🗑️ Removed: ./data/validation_step/model_artifects/sampled_rows/mapped_file102_sampled.parquet
+🗑️ Removed: ./data/validation_step/model_artifects/sampled_rows/mapped_file103_sampled.parquet
+🗑️ Removed: ./data/validation_step/model_artifects/sampled_rows/mapped_file104_sampled.parquet
+🗑️ Removed: ./data/validation_step/model_artifects/sampled_rows/mapped_file105_sampled.parquet
+🗑️ Removed: ./data/validation_step/model_artifects/sampled_rows/mapped_file106_sampled.parquet
+🗑️ Removed: ./data/validation_step/model_artifects/sampled_rows/mapped_file107_sampled.parquet
+🗑️ Removed: ./data/validation_step/model_artifects/sampled_rows/mapped_file108_sampled.parquet
+🗑️ Removed: ./data/validation_step/model_artifects/sampled_rows/mapped_file109_sampled.parquet
+🗑️ Removed: ./data/validation_step/model_artifects/sampled_rows/mapped_file10_sampled.parquet
+🗑️ Removed: ./data/validation_step/model_artifects/sampled_rows/mapped_file110_sampled.parquet
+🗑️ Removed: ./data/validation_step/model_artifects/sampled_rows/mapped_file111_sampled.parquet
+🗑️ Removed: ./data/validation_step/model_artifects/sampled_rows/mapped_file112_sampled.parquet
+🗑️ Removed: ./data/validation_step/model_artifects/sampled_rows/mapped_file113_sampled.parquet
+🗑️ Removed: ./data/validation_step/model_artifects/sampled_rows/mapped_file114_sampled.parquet
+🗑️ Removed: ./data/validation_step/model_artifects/sampled_rows/mapped_file115_sampled.parquet
+🗑️ Removed: ./data/validation_step/model_artifects/sampled_rows/mapped_file116_sampled.parquet
+🗑️ Removed: ./data/validation_step/model_artifects/sampled_rows/mapped_file117_sampled.parquet
+🗑️ Removed: ./data/validation_step/model_artifects/sampled_rows/mapped_file11_sampled.parquet
+🗑️ Removed: ./data/validation_step/model_artifects/sampled_rows/mapped_file1_sampled.parquet
+🖥️ Using device: cuda
+🚀 GPU available: Tesla M60
+📁 Found 454 parquet files to process.
+
+❌ Error processing mapped_file0: 'Final Category'
+❌ Error processing mapped_file1: 'Final Category'
+Batches: 100%|██████████| 82/82 [00:25<00:00,  3.19it/s]
+Batches:  66%|██████▌   | 54/82 [00:18<00:09,  2.85it/s]
+---------------------------------------------------------------------------
+KeyboardInterrupt                         Traceback (most recent call last)
+Cell In[6], line 87
+     85     print(f"🔄 Generating embeddings for: {file_name} ({len(df_sampled)} rows)")
+     86     desc_texts = df_sampled['CMPNT_MATL_DESC'].astype(str).tolist()
+---> 87     desc_emb = encoder.encode(
+     88         desc_texts,
+     89         batch_size=130,
+     90         show_progress_bar=True,
+     91         convert_to_numpy=True,
+     92         num_workers=4
+     93     )
+     94     np.save(bert_cache_file, desc_emb)
+     96 if len(desc_emb) != len(df_sampled):
+
+File /anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages/sentence_transformers/SentenceTransformer.py:720, in SentenceTransformer.encode(self, sentences, prompt_name, prompt, batch_size, show_progress_bar, output_value, precision, convert_to_numpy, convert_to_tensor, device, normalize_embeddings, **kwargs)
+    718             # fixes for #522 and #487 to avoid oom problems on gpu with large datasets
+    719             if convert_to_numpy:
+--> 720                 embeddings = embeddings.cpu()
+    722         all_embeddings.extend(embeddings)
+    724 all_embeddings = [all_embeddings[idx] for idx in np.argsort(length_sorted_idx)]
+
+KeyboardInterrupt: 
