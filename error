@@ -1,3 +1,8 @@
-# --- Run for only two specific files ---
-selected_files = ['file1.parquet', 'file2.parquet']  # Replace with actual file names
-all_files = [os.path.join(input_path, f) for f in selected_files]
+Category	Full Count
+CHM	294354131 (294.35M)
+PKG	244395506 (244.40M)
+FNW	47820274 (47.82M)
+FNW_CHM	8892358 (8.89M)
+Liquids and Creams	2185074 (2.19M)
+API	926530 (0.93M)
+Total	598573873 (598.57M)
