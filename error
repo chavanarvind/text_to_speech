@@ -1,14 +1,8 @@
-Hi All,
- 
-I hope you are doing well!
+Thank you for bringing this to our attention.
 
-This is an urgent request. 
-It has come to our attention that there are several unattached disks across our subscriptions incurring significant costs. Upon initial review, we have identified the disk listed below as being associated with the highlighted project.
- 
-Could you please verify at your earliest convenience whether if we need to retain these. ?
- 
-NAME	Project	SIZE (GIB)	OWNER	RESOURCE GROUP	LOCATION	SUBSCRIPTION	DISK STATE	Account Owner
-pvc-66c4d274-a5d3-46c0-bd4e-4487bf82c6b7 	AKS - dtodcaik8	100	-	mc_azr-wdz-aks-development_azr-wdz-dtodcaik8-development_eastus	East US	AZR-WDZ	Unattached	Manish Pradhan
-vmldtotriage01dev-datadisk-001-20240903-171521 	Triage	512	-	azr-wdz-dto-compute-development	East US	AZR-WDZ	Unattached	Manish Pradhan
+I will discuss the disk associations with Gabriel and get back to you with confirmation by tomorrow.
 
-Your prompt attention to this would be greatly appreciated.
+Appreciate your patience.
+
+Best regards,
+Arvind
