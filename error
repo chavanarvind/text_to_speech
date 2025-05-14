@@ -1,12 +1,3 @@
-import os
-import glob
-
-embedding_dir = './data/validation_step/model_artifects/bert_embedding'
-npy_files = glob.glob(os.path.join(embedding_dir, '*.npy'))
-
-for file in npy_files:
-    try:
-        os.remove(file)
-        print(f"🗑️ Removed: {file}")
-    except Exception as e:
-        print(f"❌ Failed to remove {file}: {e}")
+# --- Run for only two specific files ---
+selected_files = ['file1.parquet', 'file2.parquet']  # Replace with actual file names
+all_files = [os.path.join(input_path, f) for f in selected_files]
