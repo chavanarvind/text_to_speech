@@ -1,5 +1,73 @@
-[60]	valid_0's multi_logloss: 0.101991
-/anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages/sklearn/utils/validation.py:2739: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
-  warnings.warn(
-/anaconda/envs/azureml_py38_PT_TF/lib/python3.10/site-packages/sklearn/utils/validation.py:2739: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
-  warnings.warn(
+import os
+import joblib
+import numpy as np
+import pandas as pd
+from lightgbm import LGBMClassifier
+from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.model_selection import train_test_split
+
+# --- Paths ---
+data_dir = './data/validation_step/model_artifects'
+X_path = os.path.join(data_dir, 'X_full.npy')
+y_path = os.path.join(data_dir, 'y_full.npy')
+model_path = os.path.join(data_dir, 'final_model.joblib')
+pred_output = os.path.join(data_dir, 'prediction_scores.csv')
+
+# --- Load Data ---
+X = np.load(X_path)
+y = np.load(y_path)
+print(f"✅ Loaded shapes: X={X.shape}, y={y.shape}")
+
+# --- Train/Validation Split ---
+X_train, X_val, y_train, y_val = train_test_split(
+    X, y, test_size=0.2, stratify=y, random_state=42
+)
+X_train_df = pd.DataFrame(X_train)
+X_val_df = pd.DataFrame(X_val)
+print(f"📊 Split: Train={X_train.shape[0]} | Validation={X_val.shape[0]}")
+
+# --- Train Model ---
+from lightgbm import early_stopping, log_evaluation
+
+model = LGBMClassifier(
+    class_weight='balanced',
+    n_estimators=1000,  # larger value for early stopping
+    random_state=42
+)
+
+model.fit(
+    X_train_df, y_train,
+    eval_set=[(X_val_df, y_val)],
+    eval_metric='logloss',
+    callbacks=[
+        early_stopping(stopping_rounds=10),
+        log_evaluation(period=10)
+    ]
+)
+print(f"🧠 Best iteration used: {model.best_iteration_}")
+joblib.dump(model, model_path)
+print("✅ LightGBM model trained and saved.")
+
+# --- Predict on Validation Set ---
+y_pred = model.predict(X_val_df)
+y_proba = model.predict_proba(X_val_df)
+y_score = np.max(y_proba, axis=1)
+final_pred = np.where(y_score < 0.6, 'Other', y_pred)
+
+# --- Save prediction summary ---
+pred_df = pd.DataFrame({
+    'Original': y_val,
+    'Predicted': y_pred,
+    'Score': y_score,
+    'Final_Prediction': final_pred
+})
+
+pred_df.to_csv(pred_output, index=False)
+print("✅ Prediction scores saved to prediction_scores.csv")
+
+# --- Print Classification Report ---
+print("\n📊 Classification Report:")
+print(classification_report(y_val, final_pred, zero_division=0))
+
+print("\n🔢 Confusion Matrix:")
+print(confusion_matrix(y_val, final_pred))
