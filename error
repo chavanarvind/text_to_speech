@@ -7,34 +7,29 @@ from sentence_transformers import SentenceTransformer
 from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 
 # --- CONFIGURATION ---
-client_file = './data/validation_step/sampled_null_final_category.parquet'  # ⬅️ Replace with your file path
+client_file = './data/validation_step/sampled_null_final_category.parquet'
 output_file = './data/client_predictions.csv'
 required_cols = ['CMPNT_MATL_DESC', 'CMPNT_MATL_DESC_LEN', 'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']
 
 # --- LOAD CLIENT DATA ---
 df = pd.read_parquet(client_file, columns=required_cols)
 df = df[df['CMPNT_MATL_DESC'].notna()].copy()
-print(f" Loaded {len(df)} records from client file.")
+print(f"✅ Loaded {len(df)} records from client file.")
 
 # --- LOAD TRAINED ARTIFACTS ---
-model_path = './data/validation_step/model_artifects/final_model.joblib'
-ordinal_path = './data/validation_step/model_artifects/ordinal_encoder.pkl'
-scaler_path = './data/validation_step/model_artifects/scaler.pkl'
-
-model = joblib.load(model_path)
-ordinal = joblib.load(ordinal_path)
-scaler = joblib.load(scaler_path)
+model = joblib.load('./data/validation_step/model_artifects/final_model.joblib')
+ordinal = joblib.load('./data/validation_step/model_artifects/ordinal_encoder.pkl')
+scaler = joblib.load('./data/validation_step/model_artifects/scaler.pkl')
 
 # --- LOAD BERT MODEL ---
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 encoder = SentenceTransformer('pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb', device=device)
-encoder.max_seq_length = 128  # Optional: cap token length
+encoder.max_seq_length = 128
 
 # --- TRANSFORM FEATURES ---
-print(" Generating BERT embeddings...")
-desc_texts = df['CMPNT_MATL_DESC'].astype(str).tolist()
+print("🔄 Generating BERT embeddings...")
 desc_emb = encoder.encode(
-    desc_texts,
+    df['CMPNT_MATL_DESC'].astype(str).tolist(),
     batch_size=256,
     show_progress_bar=True,
     convert_to_numpy=True,
@@ -45,10 +40,15 @@ length_scaled = scaler.transform(df[['CMPNT_MATL_DESC_LEN']])
 cat_encoded = ordinal.transform(df[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
 X_pred = np.hstack([desc_emb, length_scaled, cat_encoded])
 
-# --- PREDICT ---
-print(" Predicting with LightGBM model...")
-df['Predicted'] = model.predict(X_pred)
+# --- PREDICT WITH CONFIDENCE ---
+print("🧠 Predicting with LightGBM model...")
+y_proba = model.predict_proba(X_pred)
+y_score = np.max(y_proba, axis=1)
+y_pred = model.predict(X_pred)
+df['Score'] = y_score
+df['Predicted'] = y_pred
+df['Final_Prediction'] = np.where(y_score < 0.6, 'Other', y_pred)
 
 # --- SAVE OUTPUT ---
 df.to_csv(output_file, index=False)
-print(f" Predictions saved to: {output_file}")
+print(f"✅ Predictions saved to: {output_file}")
