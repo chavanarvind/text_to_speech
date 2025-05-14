@@ -25,8 +25,24 @@ X_train, X_val, y_train, y_val = train_test_split(
 print(f"📊 Split: Train={X_train.shape[0]} | Validation={X_val.shape[0]}")
 
 # --- Train Model ---
-model = LGBMClassifier(class_weight='balanced', random_state=42)
-model.fit(X_train, y_train)
+from lightgbm import early_stopping, log_evaluation
+
+model = LGBMClassifier(
+    class_weight='balanced',
+    n_estimators=1000,  # larger value for early stopping
+    random_state=42
+)
+
+model.fit(
+    X_train, y_train,
+    eval_set=[(X_val, y_val)],
+    eval_metric='logloss',
+    callbacks=[
+        early_stopping(stopping_rounds=10),
+        log_evaluation(period=10)
+    ]
+)
+print(f"🧠 Best iteration used: {model.best_iteration_}")
 joblib.dump(model, model_path)
 print("✅ LightGBM model trained and saved.")
 
