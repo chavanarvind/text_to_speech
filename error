@@ -1,112 +1,50 @@
 import os
-import glob
+import joblib
 import numpy as np
 import pandas as pd
-import torch
-import joblib
-from sentence_transformers import SentenceTransformer
-from sklearn.preprocessing import OrdinalEncoder, StandardScaler
+from lightgbm import LGBMClassifier
+from sklearn.metrics import classification_report, confusion_matrix
 
-# Setup
-input_path = './data/target_map_cleaned_non_null_target'
-embedding_dir = './data/validation_step/model_artifects/bert_embedding'
-sample_dir = './data/validation_step/model_artifects/sampled_rows'
-output_dir = './data/validation_step/model_artifects'
-os.makedirs(embedding_dir, exist_ok=True)
-os.makedirs(sample_dir, exist_ok=True)
-os.makedirs(output_dir, exist_ok=True)
+# --- Paths ---
+data_dir = './data/validation_step/model_artifects'
+X_path = os.path.join(data_dir, 'X_full.npy')
+y_path = os.path.join(data_dir, 'y_full.npy')
+model_path = os.path.join(data_dir, 'final_model.joblib')
+pred_output = os.path.join(data_dir, 'prediction_scores.csv')
 
-encoder = SentenceTransformer(
-    'pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb',
-    device='cuda' if torch.cuda.is_available() else 'cpu'
-)
+# --- Load Data ---
+X = np.load(X_path)
+y = np.load(y_path)
+print(f"✅ Loaded shapes: X={X.shape}, y={y.shape}")
 
-category_frac_map = {
-    'CHM': 0.05, 'PKG': 0.05, 'FNW': 0.1, 'FNW_CHM': 0.3,
-    'Liquids and Creams': 0.5, 'API': 1.0
-}
+# --- Train Model ---
+model = LGBMClassifier(class_weight='balanced', random_state=42)
+model.fit(X, y)
+joblib.dump(model, model_path)
+print("✅ LightGBM model trained and saved.")
 
-required_cols = [
-    'CMPNT_MATL_DESC', 'CMPNT_MATL_DESC_LEN',
-    'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY',
-    'Final Category'
-]
+# --- Predict with probabilities ---
+y_pred = model.predict(X)
+y_proba = model.predict_proba(X)
+y_score = np.max(y_proba, axis=1)
 
-files = sorted(glob.glob(os.path.join(input_path, '*.parquet')))[:2]  # only 2 files for testing
-output_X, output_y = [], []
+# --- Replace low-confidence predictions ---
+final_pred = np.where(y_score < 0.6, 'Other', y_pred)
 
-for file in files:
-    file_name = os.path.splitext(os.path.basename(file))[0]
-    bert_path = os.path.join(embedding_dir, f'{file_name}_bert.npy')
-    sample_path = os.path.join(sample_dir, f'{file_name}_sampled.parquet')
+# --- Save prediction summary ---
+pred_df = pd.DataFrame({
+    'Original': y,
+    'Predicted': y_pred,
+    'Score': y_score,
+    'Final_Prediction': final_pred
+})
 
-    try:
-        df = pd.read_parquet(file, columns=required_cols)
-        df = df[df['CMPNT_MATL_DESC'].notna()]
-        df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
-        df = df.drop_duplicates(subset=required_cols)
+pred_df.to_csv(pred_output, index=False)
+print("✅ Prediction scores saved to prediction_scores.csv")
 
-        sampled = (
-            df.groupby('Final Category', group_keys=False)
-              .apply(lambda g: g.sample(frac=category_frac_map.get(g.name, 0.1), random_state=42))
-              .reset_index(drop=True)
-        )
+# --- Optional: Print Classification Report ---
+print("\n📊 Classification Report:")
+print(classification_report(y, final_pred))
 
-        if sampled.empty:
-            print(f"⚠️ Skipping {file_name}: no valid sampled rows")
-            continue
-
-        # Embed
-        desc_emb = encoder.encode(
-            sampled['CMPNT_MATL_DESC'].astype(str).tolist(),
-            batch_size=256,
-            show_progress_bar=True,
-            convert_to_numpy=True,
-            num_workers=4
-        )
-
-        if len(desc_emb) != len(sampled):
-            print(f"❌ Skipped {file_name}: embedding length mismatch")
-            continue
-
-        np.save(bert_path, desc_emb)
-        sampled.to_parquet(sample_path, index=False)
-        sampled['__bert_emb'] = list(desc_emb)
-
-        output_X.append(sampled)
-        output_y.append(sampled['Final Category'])
-        print(f"✅ Saved: {file_name} ({len(sampled)} samples)")
-
-    except Exception as e:
-        print(f"❌ Error in {file_name}: {e}")
-
-# --- Combine Data ---
-if not output_X:
-    raise RuntimeError("❌ No valid data processed.")
-
-df_all = pd.concat(output_X, ignore_index=True)
-y_full = df_all['Final Category'].values
-print(f"\n✅ Total samples after merge: {len(df_all)}")
-
-# --- Fit and Save Encoders ---
-ordinal = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
-scaler = StandardScaler()
-
-ordinal.fit(df_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
-scaler.fit(df_all[['CMPNT_MATL_DESC_LEN']])
-
-joblib.dump(ordinal, os.path.join(output_dir, 'ordinal_encoder.pkl'))
-joblib.dump(scaler, os.path.join(output_dir, 'scaler.pkl'))
-print("✅ OrdinalEncoder and Scaler saved.")
-
-# --- Create Final Feature Matrix ---
-meta_scaled = scaler.transform(df_all[['CMPNT_MATL_DESC_LEN']])
-cat_encoded = ordinal.transform(df_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
-bert_array = np.vstack(df_all['__bert_emb'].values)
-
-X_full = np.hstack([bert_array, meta_scaled, cat_encoded])
-np.save(os.path.join(output_dir, 'X_full.npy'), X_full)
-np.save(os.path.join(output_dir, 'y_full.npy'), y_full)
-print("✅ X_full.npy and y_full.npy created with shapes:")
-print(f"   X_full: {X_full.shape}")
-print(f"   y_full: {y_full.shape}")
+print("\n🔢 Confusion Matrix:")
+print(confusion_matrix(y, final_pred))
