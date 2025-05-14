@@ -1,8 +1,51 @@
-Thank you for bringing this to our attention.
+import numpy as np
+import joblib
+from lightgbm import LGBMClassifier, early_stopping, log_evaluation
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, confusion_matrix, f1_score
 
-I will discuss the disk associations with Gabriel and get back to you with confirmation by tomorrow.
+# --- LOAD FEATURES AND LABELS ---
+X = np.load('./data/validation_step/model_artifects/X_full.npy')
+y = np.load('./data/validation_step/model_artifects/y_full.npy')
 
-Appreciate your patience.
+# --- SPLIT INTO TRAIN/VALIDATION ---
+X_train, X_val, y_train, y_val = train_test_split(
+    X, y, test_size=0.2, stratify=y, random_state=42
+)
 
-Best regards,
-Arvind
+# --- TRAIN LIGHTGBM MODEL ---
+model = LGBMClassifier(class_weight='balanced', random_state=42)
+
+# Train with early stopping and logging
+model.fit(
+    X_train,
+    y_train,
+    eval_set=[(X_val, y_val)],
+    eval_metric='logloss',
+    callbacks=[
+        early_stopping(10),
+        log_evaluation(10)
+    ]
+)
+
+# --- SAVE MODEL ---
+joblib.dump(model, './data/validation_step/model_artifects/final_model.joblib')
+print("✅ LightGBM model saved: final_model.joblib")
+
+# --- EVALUATION ---
+y_pred = model.predict(X_val)
+
+print("\n📊 Classification Report:")
+report = classification_report(y_val, y_pred)
+print(report)
+
+print("🔢 Confusion Matrix:")
+print(confusion_matrix(y_val, y_pred))
+
+f1 = f1_score(y_val, y_pred, average='weighted')
+print(f"\n✅ Weighted F1 Score: {f1:.4f}")
+
+# --- SAVE REPORT ---
+with open('./data/validation_step/model_artifects/classification_report.txt', 'w') as f:
+    f.write(report)
+    f.write(f"\nF1 Score (weighted): {f1:.4f}\n")
