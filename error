@@ -1,3 +1,4 @@
 with open('./data/validation_step/model_artifects/y_full.npy', 'rb') as f:
     header = f.read(100)
     print(header)
+output b"\x93NUMPY\x01\x00v\x00{'descr': '|O', 'fortran_order': False, 'shape': (7607322,), }   
