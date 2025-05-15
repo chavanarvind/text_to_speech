@@ -1,4 +1,64 @@
+import os
+import glob
+import numpy as np
 import pandas as pd
+import joblib
+from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 
-df = pd.read_parquet('./data/validation_step/model_artifects/sampled_rows/<one_of_your_files>.parquet')
-print(df.columns)
+# --- Paths ---
+sample_dir = './data/validation_step/model_artifects/sampled_rows'
+embedding_dir = './data/validation_step/model_artifects/bert_embedding'
+output_dir = './data/validation_step/model_artifects'
+os.makedirs(output_dir, exist_ok=True)
+
+X_blocks = []
+y_blocks = []
+all_meta = []
+
+# --- Load each sampled file and its matching embedding ---
+sampled_files = sorted(glob.glob(os.path.join(sample_dir, '*.parquet')))
+for sample_path in sampled_files:
+    file_name = os.path.splitext(os.path.basename(sample_path))[0]
+    emb_path = os.path.join(embedding_dir, f'{file_name}_bert.npy')
+
+    if not os.path.exists(emb_path):
+        print(f"⚠️ Missing embedding for: {file_name}, skipping")
+        continue
+
+    df = pd.read_parquet(sample_path)
+    emb = np.load(emb_path)
+
+    if len(df) != len(emb):
+        print(f"⚠️ Mismatch in rows vs embeddings: {file_name}, skipping")
+        continue
+
+    df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
+    X_blocks.append(emb)
+    y_blocks.append(df['Final Category'].astype(str).values)
+    all_meta.append(df[['CMPNT_MATL_DESC_LEN', 'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+
+# --- Combine All ---
+bert_array = np.vstack(X_blocks)
+y_full = np.concatenate(y_blocks)
+meta_all = pd.concat(all_meta, ignore_index=True)
+
+# --- Encode Meta Features ---
+ordinal = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
+scaler = StandardScaler()
+
+ordinal.fit(meta_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+scaler.fit(meta_all[['CMPNT_MATL_DESC_LEN']])
+
+meta_scaled = scaler.transform(meta_all[['CMPNT_MATL_DESC_LEN']])
+cat_encoded = ordinal.transform(meta_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+
+# --- Final Matrix ---
+X_full = np.hstack([bert_array, meta_scaled, cat_encoded])
+
+# --- Save All ---
+np.save(os.path.join(output_dir, 'X_full.npy'), X_full)
+np.save(os.path.join(output_dir, 'y_full.npy'), y_full)
+joblib.dump(ordinal, os.path.join(output_dir, 'ordinal_encoder.pkl'))
+joblib.dump(scaler, os.path.join(output_dir, 'scaler.pkl'))
+
+print(f"✅ Saved: X_full.npy (shape={X_full.shape}), y_full.npy (shape={y_full.shape})")
