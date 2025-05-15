@@ -1,6 +1,3 @@
-# Verify output arrays
-import numpy as np
-
-X = np.load('./data/validation_step/model_artifects/X_full.npy',allow_pickle=True)
-
-
+with open('./data/validation_step/model_artifects/y_full.npy', 'rb') as f:
+    header = f.read(100)
+    print(header)
