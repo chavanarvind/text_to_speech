@@ -1,70 +1,13 @@
-import numpy as np
-import pandas as pd
-import joblib
-from lightgbm import LGBMClassifier, early_stopping, log_evaluation
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, confusion_matrix, f1_score
+ile /anaconda/envs/azureml_py38/lib/python3.10/site-packages/numba/np/ufunc/__init__.py:3
+      1 # -*- coding: utf-8 -*-
+----> 3 from numba.np.ufunc.decorators import Vectorize, GUVectorize, vectorize, guvectorize
+      4 from numba.np.ufunc._internal import PyUFunc_None, PyUFunc_Zero, PyUFunc_One
+      5 from numba.np.ufunc import _internal, array_exprs
 
-# --- Load Feature Matrix and Labels ---
-X = np.load('./data/validation_step/model_artifects/X_full.npy')
-y = np.load('./data/validation_step/model_artifects/y_full.npy')
+File /anaconda/envs/azureml_py38/lib/python3.10/site-packages/numba/np/ufunc/decorators.py:3
+      1 import inspect
+----> 3 from numba.np.ufunc import _internal
+      4 from numba.np.ufunc.parallel import ParallelUFuncBuilder, ParallelGUFuncBuilder
+      6 from numba.core.registry import DelayedRegistry
 
-# --- Initial Split: 80% (train+test), 20% validation ---
-X_train_test, X_val, y_train_test, y_val = train_test_split(
-    X, y, test_size=0.2, stratify=y, random_state=42
-)
-
-# --- Split again: 75% train, 25% test from that 80% block ---
-X_train, X_test, y_train, y_test = train_test_split(
-    X_train_test, y_train_test, test_size=0.25, stratify=y_train_test, random_state=42
-)
-
-print(f"🔹 Train size:      {X_train.shape[0]}")
-print(f"🔹 Test size:       {X_test.shape[0]}")
-print(f"🔹 Validation size: {X_val.shape[0]}")
-
-# --- Train the model on (train + test) set ---
-X_final_train = np.vstack([X_train, X_test])
-y_final_train = np.concatenate([y_train, y_test])
-
-model = LGBMClassifier(
-    class_weight='balanced',
-    n_estimators=1000,
-    random_state=42
-)
-
-model.fit(
-    X_final_train, y_final_train,
-    eval_set=[(X_val, y_val)],
-    eval_metric='logloss',
-    callbacks=[early_stopping(stopping_rounds=10), log_evaluation(period=10)]
-)
-
-# --- Predict on Validation Set ---
-y_pred = model.predict(X_val)
-y_proba = model.predict_proba(X_val)
-y_score = np.max(y_proba, axis=1)
-
-# --- Evaluation Summary ---
-print("\n📊 Classification Report (Validation):")
-report = classification_report(y_val, y_pred, zero_division=0)
-print(report)
-
-print("\n🧮 Confusion Matrix:")
-print(confusion_matrix(y_val, y_pred))
-
-f1 = f1_score(y_val, y_pred, average='weighted')
-print(f"\n✅ Weighted F1 Score (Validation): {f1:.4f}")
-
-# --- Save Model and Prediction Summary ---
-joblib.dump(model, './data/validation_step/model_artifects/final_model.joblib')
-print("✅ Model saved: final_model.joblib")
-
-# Save predictions
-pred_df = pd.DataFrame({
-    'Actual': y_val,
-    'Predicted': y_pred,
-    'Confidence': y_score
-})
-pred_df.to_csv('./data/validation_step/model_artifects/validation_predictions.csv', index=False)
-print("📁 Saved: validation_predictions.csv")
+SystemError: initialization of _internal failed without raising an exception
