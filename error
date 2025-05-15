@@ -2,63 +2,109 @@ import os
 import glob
 import numpy as np
 import pandas as pd
+import torch
 import joblib
+from sentence_transformers import SentenceTransformer
 from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 
-# --- Paths ---
-sample_dir = './data/validation_step/model_artifects/sampled_rows'
+# Setup
+input_path = './data/target_map_cleaned_non_null_target'
 embedding_dir = './data/validation_step/model_artifects/bert_embedding'
+sample_dir = './data/validation_step/model_artifects/sampled_rows'
 output_dir = './data/validation_step/model_artifects'
+os.makedirs(embedding_dir, exist_ok=True)
+os.makedirs(sample_dir, exist_ok=True)
 os.makedirs(output_dir, exist_ok=True)
 
-X_blocks = []
-y_blocks = []
-all_meta = []
+encoder = SentenceTransformer(
+    'pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb',
+    device='cuda' if torch.cuda.is_available() else 'cpu'
+)
 
-# --- Load each sampled file and its matching embedding ---
-sampled_files = sorted(glob.glob(os.path.join(sample_dir, '*.parquet')))
-for sample_path in sampled_files:
-    file_name = os.path.splitext(os.path.basename(sample_path))[0]
-    emb_path = os.path.join(embedding_dir, f'{file_name}_bert.npy')
+category_frac_map = {
+    'CHM': 0.10, 'PKG': 0.10, 'FNW': 0.20, 'FNW_CHM': 0.30,
+    'Liquids and Creams': 0.50, 'API': 1.0
+}
 
-    if not os.path.exists(emb_path):
-        print(f"⚠️ Missing embedding for: {file_name}, skipping")
-        continue
+required_cols = [
+    'CMPNT_MATL_DESC', 'CMPNT_MATL_DESC_LEN',
+    'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY',
+    'Final Category'
+]
 
-    df = pd.read_parquet(sample_path)
-    emb = np.load(emb_path)
+files = sorted(glob.glob(os.path.join(input_path, '*.parquet'))) # only 2 files for testing
+output_X, output_y = [], []
 
-    if len(df) != len(emb):
-        print(f"⚠️ Mismatch in rows vs embeddings: {file_name}, skipping")
-        continue
+for file in files:
+    file_name = os.path.splitext(os.path.basename(file))[0]
+    bert_path = os.path.join(embedding_dir, f'{file_name}_bert.npy')
+    sample_path = os.path.join(sample_dir, f'{file_name}_sampled.parquet')
 
-    df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
-    X_blocks.append(emb)
-    y_blocks.append(df['Final Category'].astype(str).values)
-    all_meta.append(df[['CMPNT_MATL_DESC_LEN', 'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+    try:
+        df = pd.read_parquet(file, columns=required_cols)
+        df = df[df['CMPNT_MATL_DESC'].notna()]
+        df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
+        df = df.drop_duplicates(subset=required_cols)
 
-# --- Combine All ---
-bert_array = np.vstack(X_blocks)
-y_full = np.concatenate(y_blocks)
-meta_all = pd.concat(all_meta, ignore_index=True)
+        sampled = (
+            df.groupby('Final Category', group_keys=False)
+              .apply(lambda g: g.sample(frac=category_frac_map.get(g.name, 0.1), random_state=42))
+              .reset_index(drop=True)
+        )
 
-# --- Encode Meta Features ---
+        if sampled.empty:
+            print(f"Skipping {file_name}: no valid sampled rows")
+            continue
+
+        # Embed
+        desc_emb = encoder.encode(
+            sampled['CMPNT_MATL_DESC'].astype(str).tolist(),
+            batch_size=256,
+            show_progress_bar=True,
+            convert_to_numpy=True,
+            num_workers=4
+        )
+
+        if len(desc_emb) != len(sampled):
+            print(f" Skipped {file_name}: embedding length mismatch")
+            continue
+
+        np.save(bert_path, desc_emb)
+        sampled.to_parquet(sample_path, index=False)
+        sampled['__bert_emb'] = list(desc_emb)
+
+        output_X.append(sampled)
+        output_y.append(sampled['Final Category'])
+        print(f"✅ Saved: {file_name} ({len(sampled)} samples)")
+
+    except Exception as e:
+        print(f" Error in {file_name}: {e}")
+
+# --- Combine Data ---
+if not output_X:
+    raise RuntimeError(" No valid data processed.")
+
+df_all = pd.concat(output_X, ignore_index=True)
+y_full = df_all['Final Category'].values
+print(f"\n Total samples after merge: {len(df_all)}")
+
+# --- Fit and Save Encoders ---
 ordinal = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
 scaler = StandardScaler()
 
-ordinal.fit(meta_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
-scaler.fit(meta_all[['CMPNT_MATL_DESC_LEN']])
+ordinal.fit(df_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+scaler.fit(df_all[['CMPNT_MATL_DESC_LEN']])
 
-meta_scaled = scaler.transform(meta_all[['CMPNT_MATL_DESC_LEN']])
-cat_encoded = ordinal.transform(meta_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
-
-# --- Final Matrix ---
-X_full = np.hstack([bert_array, meta_scaled, cat_encoded])
-
-# --- Save All ---
-np.save(os.path.join(output_dir, 'X_full.npy'), X_full)
-np.save(os.path.join(output_dir, 'y_full.npy'), y_full)
 joblib.dump(ordinal, os.path.join(output_dir, 'ordinal_encoder.pkl'))
 joblib.dump(scaler, os.path.join(output_dir, 'scaler.pkl'))
+print(" OrdinalEncoder and Scaler saved.")
 
-print(f"✅ Saved: X_full.npy (shape={X_full.shape}), y_full.npy (shape={y_full.shape})")
+# --- Create Final Feature Matrix ---
+meta_scaled = scaler.transform(df_all[['CMPNT_MATL_DESC_LEN']])
+cat_encoded = ordinal.transform(df_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+bert_array = np.vstack(df_all['__bert_emb'].values)
+
+X_full = np.hstack([bert_array, meta_scaled, cat_encoded])
+np.save(os.path.join(output_dir, 'X_full.npy'), X_full)
+np.save(os.path.join(output_dir, 'y_full.npy'), y_full)
+print(" X_full.npy and y_full.npy created")
