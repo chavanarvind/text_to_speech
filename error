@@ -1,4 +1,1 @@
-import pickle
-
-with open('./data/validation_step/model_artifects/X_full.npy', 'rb') as f:
-    X = pickle.load(f)
+UnpicklingError: STACK_GLOBAL requires str
