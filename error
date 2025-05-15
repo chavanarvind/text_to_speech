@@ -1,5 +1,5 @@
-pip uninstall numpy numba -y
-pip cache purge
-
-# Install compatible versions
-pip install numpy==1.23.5 numba==0.56.4
+Batches: 100%|██████████| 608/608 [04:38<00:00,  2.18it/s]
+✅ Loaded 155600 records from client file.
+🔄 Generating BERT embeddings...
+🧠 Predicting with LightGBM model...
+✅ Predictions saved to: ./data/client_predictions.csv
