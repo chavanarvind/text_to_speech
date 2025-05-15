@@ -1,45 +1,4 @@
-import os
-import glob
-import numpy as np
 import pandas as pd
-import joblib
-from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 
-# --- Paths ---
-sample_dir = './data/validation_step/model_artifects/sampled_rows'
-output_dir = './data/validation_step/model_artifects'
-os.makedirs(output_dir, exist_ok=True)
-
-# --- Load and Combine All Sampled Data ---
-sampled_files = sorted(glob.glob(os.path.join(sample_dir, '*.parquet')))
-if not sampled_files:
-    raise RuntimeError("❌ No sampled parquet files found to regenerate X_full and y_full.")
-
-df_all = pd.concat([pd.read_parquet(f) for f in sampled_files], ignore_index=True)
-df_all['Final Category'] = df_all['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
-
-# --- Reconstruct Features ---
-ordinal = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
-scaler = StandardScaler()
-
-ordinal.fit(df_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
-scaler.fit(df_all[['CMPNT_MATL_DESC_LEN']])
-
-meta_scaled = scaler.transform(df_all[['CMPNT_MATL_DESC_LEN']])
-cat_encoded = ordinal.transform(df_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
-bert_array = np.vstack(df_all['__bert_emb'].values)
-
-# --- Combine All Features into X_full ---
-X_full = np.hstack([bert_array, meta_scaled, cat_encoded])
-y_full = df_all['Final Category'].astype(str).values  # force Unicode strings
-
-# --- Save Encoders (optional re-save) ---
-joblib.dump(ordinal, os.path.join(output_dir, 'ordinal_encoder.pkl'))
-joblib.dump(scaler, os.path.join(output_dir, 'scaler.pkl'))
-
-# --- Save Final Files ---
-np.save(os.path.join(output_dir, 'X_full.npy'), X_full)
-np.save(os.path.join(output_dir, 'y_full.npy'), y_full)
-
-print(f"✅ Regenerated: X_full shape = {X_full.shape}, y_full shape = {y_full.shape}, y dtype = {y_full.dtype}")
-print("✅ Saved: X_full.npy, y_full.npy, and updated encoders")
+df = pd.read_parquet('./data/validation_step/model_artifects/sampled_rows/<one_of_your_files>.parquet')
+print(df.columns)
