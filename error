@@ -1,4 +1,1 @@
-Step	Time per record (approx)
-BERT encoding	~1.7 ms
-LightGBM predict	~0.05 ms
-Total	~1.8 ms
+Hi Team, please share sample records for validating model
