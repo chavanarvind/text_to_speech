@@ -1,1 +1,3 @@
-UnpicklingError: STACK_GLOBAL requires str
+pip uninstall numpy -y
+pip cache purge
+pip install numpy==1.24.4
