@@ -1,5 +1,5 @@
-Row Labels	API	CHM	FNW	Liquids and Creams	PKG
-API	159	4	1		3
-FNW		27	2838		37
-Liquids and Creams		21	1	143	27
+Row Labels	API-predicted	CHM-predicted	FNW-predicted	Liquids and Creams-predicted	PKG-predicted
+API-actual	159	4	1		3
+FNW--actual		27	2838		37
+Liquids and Creams--actual		21	1	143	27
 Grand Total	159	52	2840	143	67
