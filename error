@@ -1,10 +1,6 @@
 %sql
-SELECT * CMPNT_MATL_NUM,	CMPNT_MATL_DESC,	CMPNT_MATL_TYPE_CD,	CMPNT_UOM_CD
-
-
-
-
-
-
-
-FROM sc_core.harmonized_bom_data_asset 
+SELECT *
+FROM sc_core.harmonized_bom_data_asset
+WHERE LENGTH(CMPNT_MATL_DESC) > 15
+ORDER BY RANDOM()
+LIMIT 400;
