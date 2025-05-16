@@ -1,14 +1,4 @@
-Hi Team,
-
-Thank you for sharing the sample data. Below is the summary of the model's prediction performance:
-
-Class	Support (Actual)	Correct Predictions	Precision	Recall	F1 Score
-API	167	159	1.00	0.95	0.97
-FNW	2902	2838	0.999	0.98	0.99
-Liquids and Creams	192	143	1.00	0.74	0.85
-Overall Accuracy	3261	3140			96%
-
-Note: As Niharika mentioned in her earlier email, the class FNW_CHM is not a distinct category. However, the current model was trained under the assumption that it is. I will need to run another iteration with the corrected label structure to finalize the model.
-
-Best regards,
-Arvind
+        df = pd.read_parquet(file, columns=required_cols)
+        df = df[df['CMPNT_MATL_DESC'].notna()]
+        df = df.drop_duplicates(subset=required_cols)
+        df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
