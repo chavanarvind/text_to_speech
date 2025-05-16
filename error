@@ -1,1 +1,2 @@
-!pip install --force-reinstall numpy==1.23.5 pandas==1.5.3 pyarrow==14.0.2 --no-cache-dir
+Cleaning file: vaildation_data.csv
+❌ Failed: vaildation_data.csv -> 'utf-8' codec can't decode byte 0xa0 in position 26377: invalid start byte
