@@ -1,2 +1,57 @@
-pip uninstall -y pyarrow numpy
-pip install numpy==1.24.3 pyarrow==11.0.0
+Found existing installation: pyarrow 14.0.2
+Uninstalling pyarrow-14.0.2:
+  Successfully uninstalled pyarrow-14.0.2
+Found existing installation: numpy 2.2.5
+Uninstalling numpy-2.2.5:
+  Successfully uninstalled numpy-2.2.5
+Collecting numpy==1.24.3
+  Downloading numpy-1.24.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (17.3 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 17.3/17.3 MB 35.9 MB/s eta 0:00:0000:0100:01
+Collecting pyarrow==11.0.0
+  Downloading pyarrow-11.0.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (34.9 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 34.9/34.9 MB 21.3 MB/s eta 0:00:0000:0100:01
+Installing collected packages: numpy, pyarrow
+ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
+pandas-ml 0.6.1 requires enum34, which is not installed.
+tensorflow 2.19.0 requires numpy<2.2.0,>=1.26.0, but you have numpy 1.24.3 which is incompatible.
+scikit-image 0.25.0 requires pillow>=10.1, but you have pillow 9.2.0 which is incompatible.
+scikit-image 0.25.0 requires scipy>=1.11.2, but you have scipy 1.11.0 which is incompatible.
+responsibleai 0.36.0 requires networkx<=2.5, but you have networkx 3.4 which is incompatible.
+responsibleai 0.36.0 requires pandas<2.0.0,>=0.25.1, but you have pandas 2.2.3 which is incompatible.
+raiwidgets 0.36.0 requires pandas<2.0.0,>=0.25.1, but you have pandas 2.2.3 which is incompatible.
+numba 0.56.4 requires numpy<1.24,>=1.18, but you have numpy 1.24.3 which is incompatible.
+ml-wrappers 0.5.6 requires pandas<2.0.0, but you have pandas 2.2.3 which is incompatible.
+interpret-community 0.31.0 requires pandas<2.0.0, but you have pandas 2.2.3 which is incompatible.
+erroranalysis 0.5.5 requires pandas<2.0.0,>=0.25.1, but you have pandas 2.2.3 which is incompatible.
+dice-ml 0.11 requires pandas<2.0.0, but you have pandas 2.2.3 which is incompatible.
+dask-sql 2024.5.0 requires dask[dataframe]>=2024.4.1, but you have dask 2023.2.0 which is incompatible.
+dask-sql 2024.5.0 requires distributed>=2024.4.1, but you have distributed 2023.2.0 which is incompatible.
+dask-expr 1.1.10 requires dask==2024.8.0, but you have dask 2023.2.0 which is incompatible.
+azureml-training-tabular 1.60.0 requires numpy<=1.23.5,>=1.16.0; python_version >= "3.8", but you have numpy 1.24.3 which is incompatible.
+azureml-training-tabular 1.60.0 requires pandas==1.5.3, but you have pandas 2.2.3 which is incompatible.
+azureml-training-tabular 1.60.0 requires scipy<1.11.0,>=1.0.0, but you have scipy 1.11.0 which is incompatible.
+azureml-train-automl-runtime 1.60.0 requires numpy<=1.23.5,>=1.16.0; python_version >= "3.8", but you have numpy 1.24.3 which is incompatible.
+azureml-train-automl-runtime 1.60.0 requires pandas==1.5.3, but you have pandas 2.2.3 which is incompatible.
+azureml-train-automl-runtime 1.60.0 requires pyarrow==14.0.2, but you have pyarrow 11.0.0 which is incompatible.
+azureml-opendatasets 1.60.0 requires pandas<=2.0.0,>=0.21.0, but you have pandas 2.2.3 which is incompatible.
+azureml-interpret 1.60.0 requires numpy<=1.23.5; python_version >= "3.8", but you have numpy 1.24.3 which is incompatible.
+azureml-dataset-runtime 1.60.0 requires numpy!=1.19.3,<1.24; sys_platform == "linux", but you have numpy 1.24.3 which is incompatible.
+azureml-automl-runtime 1.60.0 requires numpy<=1.23.5,>=1.16.0; python_version >= "3.8", but you have numpy 1.24.3 which is incompatible.
+azureml-automl-runtime 1.60.0 requires pandas==1.5.3, but you have pandas 2.2.3 which is incompatible.
+azureml-automl-dnn-nlp 1.60.0 requires torch==2.2.2, but you have torch 2.6.0 which is incompatible.
+Successfully installed numpy-1.24.3 pyarrow-11.0.0 -------------AFTER RUNNING MY CODE I GET 
+
+File /anaconda/envs/azureml_py38/lib/python3.10/site-packages/pandas/_libs/__init__.py:18
+     16 import pandas._libs.pandas_parser  # isort: skip # type: ignore[reportUnusedImport]
+     17 import pandas._libs.pandas_datetime  # noqa: F401 # isort: skip # type: ignore[reportUnusedImport]
+---> 18 from pandas._libs.interval import Interval
+     19 from pandas._libs.tslibs import (
+     20     NaT,
+     21     NaTType,
+   (...)
+     26     iNaT,
+     27 )
+
+File pandas/_libs/interval.pyx:1, in init pandas._libs.interval()
+
+ValueError: numpy.dtype size changed, may indicate binary incompatibility. Expected 96 from C header, got 88 from PyObject
