@@ -1,2 +1,1 @@
-Cleaning file: vaildation_data.csv
-❌ Failed: vaildation_data.csv -> 'utf-8' codec can't decode byte 0xa0 in position 26377: invalid start byte
+df = pd.read_csv(input_file, encoding='ISO-8859-1')
