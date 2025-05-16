@@ -1,9 +1,7 @@
 import os
-import glob
 import pandas as pd
-from multiprocessing import Pool, cpu_count
 
-# UNIT_GROUP mapping
+# --- UNIT_GROUP mapping ---
 unit_group_map = {
     'KG': 'CHM', 'KGS': 'CHM', 'KGA': 'CHM', 'KGW': 'CHM', 'G': 'CHM', 'GR': 'CHM', 'GM': 'CHM', 'MG': 'CHM',
     'LB': 'CHM', 'LBS': 'CHM', 'OZ': 'CHM', 'OZA': 'CHM', 'GW': 'CHM', 'TON': 'CHM', 'DR': 'CHM',
@@ -22,36 +20,26 @@ unit_group_map = {
     'MU': 'Unclassified', 'UM': 'Unclassified', 'HU': 'Unclassified'
 }
 
-# Function to process a single file
-def process_file(file_path):
-    try:
-        df = pd.read_parquet(file_path)
+# --- File path ---
+file_path = './data/sample_cleaned.parquet'
 
-        df['MATL_SHRT_DESC_LEN'] = df['MATL_SHRT_DESC'].astype(str).str.len()
-        df['CMPNT_MATL_DESC_LEN'] = df['CMPNT_MATL_DESC'].astype(str).str.len()
+# --- Overwrite in-place ---
+try:
+    print(f"⏳ Processing and overwriting: {os.path.basename(file_path)}")
+    df = pd.read_parquet(file_path)
 
-        # Map unit to group
-        df['UNIT_GROUP'] = (
-            df['CMPNT_UOM_CD']
-            .fillna('')
-            .str.upper()
-            .map(unit_group_map)
-            .fillna('Unclassified')
-        )
+    df['MATL_SHRT_DESC_LEN'] = df['MATL_SHRT_DESC'].astype(str).str.len()
+    df['CMPNT_MATL_DESC_LEN'] = df['CMPNT_MATL_DESC'].astype(str).str.len()
 
-        # Save to new folder (target_map_with_rules)
-        output_file = file_path.replace("train_test_data", "target_map_with_rules")
-        os.makedirs(os.path.dirname(output_file), exist_ok=True)
-        df.to_parquet(output_file, index=False)
+    df['UNIT_GROUP'] = (
+        df['CMPNT_UOM_CD']
+        .fillna('')
+        .str.upper()
+        .map(unit_group_map)
+        .fillna('Unclassified')
+    )
 
-        print(f" Done: {os.path.basename(file_path)}")
-    except Exception as e:
-        print(f" Failed: {os.path.basename(file_path)} -> {e}")
-
-# Main parallel execution
-if __name__ == '__main__':
-    input_path = './data/validation_step'
-    all_files = glob.glob(os.path.join(input_path, '*.parquet'))
-
-    with Pool(cpu_count()) as pool:
-        pool.map(process_file, all_files)
+    df.to_parquet(file_path, index=False)  # ⬅️ Overwrites the original file
+    print(f"✅ Overwritten: {file_path}")
+except Exception as e:
+    print(f"❌ Failed to process {file_path} -> {e}")
