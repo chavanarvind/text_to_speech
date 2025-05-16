@@ -1,1 +1,1 @@
-df = df[~df['Final Category'].isin(['FNW or CHM', 'FNW_CHM'])]
+print("✅ Unique Final Categories:", df['Final Category'].unique())
