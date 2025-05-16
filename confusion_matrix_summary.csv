@@ -1,4 +1,1 @@
-        df = pd.read_parquet(file, columns=required_cols)
-        df = df[df['CMPNT_MATL_DESC'].notna()]
-        df = df.drop_duplicates(subset=required_cols)
-        df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
+df = df[~df['Final Category'].isin(['FNW or CHM', 'FNW_CHM'])]
