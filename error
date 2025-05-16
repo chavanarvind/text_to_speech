@@ -1,26 +1,2 @@
-    12 import warnings
----> 14 from pandas._libs.properties import cache_readonly
-     15 from pandas._typing import (
-     16     F,
-     17     T,
-     18 )
-     19 from pandas.util._exceptions import find_stack_level
-
-File /anaconda/envs/azureml_py38/lib/python3.10/site-packages/pandas/_libs/__init__.py:13
-      1 __all__ = [
-      2     "NaT",
-      3     "NaTType",
-   (...)
-      9     "Interval",
-     10 ]
----> 13 from pandas._libs.interval import Interval
-     14 from pandas._libs.tslibs import (
-     15     NaT,
-     16     NaTType,
-   (...)
-     21     iNaT,
-     22 )
-
-File /anaconda/envs/azureml_py38/lib/python3.10/site-packages/pandas/_libs/interval.pyx:1, in init pandas._libs.interval()
-
-ValueError: numpy.dtype size changed, may indicate binary incompatibility. Expected 96 from C header, got 88 from PyObject
+pip uninstall -y numpy pandas
+pip install numpy pandas
