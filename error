@@ -4,8 +4,8 @@ import time
 import pandas as pd
 
 # --- Paths ---
-input_file = './data/sample.parquet'
-output_file = './data/sample_cleaned.parquet'
+input_file = './data/sample.csv'                    # CSV input
+output_file = './data/sample_cleaned.parquet'       # Parquet output
 os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
 # --- Precompiled regex patterns ---
@@ -20,7 +20,7 @@ patterns = {
     'spf_number': re.compile(r"(\D)(spf\d+)")
 }
 
-# --- Cleaning logic ---
+# --- Cleaning function ---
 def clean_series(series):
     return (series.str.lower()
         .str.replace(patterns['non_alphanumeric'], '', regex=True)
@@ -33,12 +33,12 @@ def clean_series(series):
         .str.replace(patterns['spf_number'], r'\1 \2 ', regex=True)
     )
 
-# --- Processing the single file ---
+# --- Process single CSV file ---
 try:
     print(f"⏳ Cleaning file: {os.path.basename(input_file)}")
     start = time.time()
 
-    df = pd.read_parquet(input_file)
+    df = pd.read_csv(input_file)
 
     df['MATL_SHRT_DESC'] = clean_series(df['MATL_SHRT_DESC'].fillna(''))
     df['CMPNT_MATL_DESC'] = clean_series(df['CMPNT_MATL_DESC'].fillna(''))
