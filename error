@@ -1,37 +1,66 @@
+#data cleaning step
 import os
+import re
 import time
-import polars as pl
+import glob
+import pandas as pd
+from multiprocessing import Pool, cpu_count
+from functools import partial
 
-# --- Paths ---
-input_csv = './data/sample.csv'
-output_file = './data/sample.parquet'
-os.makedirs(os.path.dirname(output_file), exist_ok=True)
+# --- Precompiled regex patterns ---
+patterns = {
+    'non_alphanumeric': re.compile(r'[^A-Za-z0-9&% ]+'),
+    'percent_space': re.compile(r"\s*%\s*"),
+    'canada_variants': re.compile(r'(canada|can|(ca\d+)$|ca)'),
+    'remove_canada': re.compile(r'canada\s*(\d{2,})|(canada\d+)|canada|can\s*(\d{2,})|(can\d+)|can|(ca\d+)|ca\s(\d{2,})|ca$|(ca\s)'),
+    'units': re.compile(r"(\D)(\d+)(\s*)(ml|l|gr|gm|g|ct)"),
+    'spf_space': re.compile(r"(\s)(spf)\s*([\d+])"),
+    'units_no_space': re.compile(r'([\d+])\s*(?:ml|l|gr|gm|g|ct)(?: |$)'),
+    'spf_number': re.compile(r"(\D)(spf\d+)")
+}
 
-# --- Load mapping ---
-target_map_df = pl.read_csv('./data/target_map.csv', columns=['CMPNT_CAT_CD_DESC', 'Final Category']).unique()
+def clean_series(series):
+    return (series.str.lower()
+        .str.replace(patterns['non_alphanumeric'], '', regex=True)
+        .str.replace(patterns['percent_space'], '% ', regex=True)
+        .str.replace(patterns['canada_variants'], r' \1', regex=True)
+        .str.replace(patterns['remove_canada'], '', regex=True)
+        .str.replace(patterns['units'], r'\1 \2\3\4 ', regex=True)
+        .str.replace(patterns['spf_space'], r'\1\2\3', regex=True)
+        .str.replace(patterns['units_no_space'], lambda z: z.group().replace(" ", ""), regex=True)
+        .str.replace(patterns['spf_number'], r'\1 \2 ', regex=True)
+    )
 
-# --- Required columns to extract ---
-columns_to_read = [
-    'MATL_SHRT_DESC',
-    'CMPNT_MATL_DESC',
-    'CMPNT_MATL_TYPE_CD',
-    'CMPNT_CAT_CD_DESC',
-    'CMPNT_UOM_CD'
-]
+def text_clean_step(file, input_path, output_path):
+    try:
+        df = pd.read_parquet(file)
 
-try:
-    print(f"⏳ Start processing: {os.path.basename(input_csv)}")
-    start = time.time()
+        df['MATL_SHRT_DESC'] = clean_series(df['MATL_SHRT_DESC'].fillna(''))
+        df['CMPNT_MATL_DESC'] = clean_series(df['CMPNT_MATL_DESC'].fillna(''))
 
-    # Read CSV and select required columns
-    df = pl.read_csv(input_csv).select(columns_to_read).unique()
+        df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'] = (
+            df['MATL_SHRT_DESC'] + ' ' + df['CMPNT_MATL_DESC']
+        ).str.strip()
 
-    # Left join with target mapping
-    joined = df.join(target_map_df, on='CMPNT_CAT_CD_DESC', how='left')
+        rel_path = os.path.relpath(file, input_path)
+        output_file = os.path.join(output_path, rel_path)
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        df.to_parquet(output_file, index=False)
 
-    # Save result as Parquet
-    joined.write_parquet(output_file, compression='snappy')
+        print(f"Done: {os.path.basename(file)}")
+    except Exception as e:
+        print(f"Failed: {os.path.basename(file)} -> {e}")
 
-    print(f"✅ Done: {input_csv} → {output_file} | ⏱️ {time.time() - start:.2f}s")
-except Exception as e:
-    print(f"❌ Error processing {input_csv}: {e}")
+# --- Setup & execution ---
+if __name__ == '__main__':
+    input_path = './data/target_map_parquet_files'
+    output_path = './data/target_map_cleaned'
+    max_processes = cpu_count()  # Or set manually
+
+    all_files = glob.glob(os.path.join(input_path, '*.parquet'))
+
+    # Use functools.partial to pass static args to worker
+    worker_func = partial(text_clean_step, input_path=input_path, output_path=output_path)
+
+    with Pool(processes=max_processes) as pool:
+        pool.map(worker_func, all_files)
