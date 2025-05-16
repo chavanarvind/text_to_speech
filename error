@@ -1,12 +1,13 @@
-#abbreviation step
+# abbreviation step for one file
 import os
 import re
-import glob
 import pandas as pd
-from multiprocessing import Pool, cpu_count
+
+# --- Paths ---
+input_file = './data/sample_cleaned.parquet'   # ⬅️ Update this path if needed
+abbrev_csv_path = './data/abbreviation_expension_updated.csv'
 
 # --- Load abbreviation mapping ---
-abbrev_csv_path = './data/abbreviation_expension_updated.csv'
 abbrev_df = pd.read_csv(abbrev_csv_path)
 abbrev_map = {k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])}
 
@@ -16,29 +17,20 @@ abbrev_pattern = re.compile(
     flags=re.IGNORECASE
 )
 
-# --- Function for match replacement using the map ---
+# --- Function to replace matched abbreviations ---
 def replace_match(m):
     return abbrev_map.get(m.group(0).lower(), m.group(0))
 
-# --- Worker function for one file ---
-def process_file(file):
-    try:
-        df = pd.read_parquet(file)
+# --- Process one file ---
+try:
+    print(f"⏳ Expanding abbreviations in: {os.path.basename(input_file)}")
+    df = pd.read_parquet(input_file)
 
-        # Expand abbreviations in the combined text column
-        df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'] = df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'].str.replace(
-            abbrev_pattern, replace_match, regex=True
-        )
+    df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'] = df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'].str.replace(
+        abbrev_pattern, replace_match, regex=True
+    )
 
-        df.to_parquet(file, index=False)
-        print(f"Done: {os.path.basename(file)}")
-    except Exception as e:
-        print(f"Failed: {os.path.basename(file)} -> {e}")
-
-# --- Run multiprocessing pool ---
-if __name__ == '__main__':
-    input_path = './data/validation_step'
-    files = glob.glob(os.path.join(input_path, '*.parquet'))
-
-    with Pool(processes=cpu_count()) as pool:
-        pool.map(process_file, files)
+    df.to_parquet(input_file, index=False)
+    print(f"✅ Done: {input_file}")
+except Exception as e:
+    print(f"❌ Failed: {os.path.basename(input_file)} -> {e}")
