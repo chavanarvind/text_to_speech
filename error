@@ -1,45 +1,85 @@
 import os
+import glob
 import pandas as pd
+from multiprocessing import Pool, cpu_count
 
-# --- UNIT_GROUP mapping ---
-unit_group_map = {
-    'KG': 'CHM', 'KGS': 'CHM', 'KGA': 'CHM', 'KGW': 'CHM', 'G': 'CHM', 'GR': 'CHM', 'GM': 'CHM', 'MG': 'CHM',
-    'LB': 'CHM', 'LBS': 'CHM', 'OZ': 'CHM', 'OZA': 'CHM', 'GW': 'CHM', 'TON': 'CHM', 'DR': 'CHM',
-    'L': 'Liquid', 'LT': 'Liquid', 'ML': 'Liquid', 'CC': 'Liquid', 'CL': 'Liquid', 'CCM': 'Liquid', 'GLL': 'Liquid',
-    'EA': 'Discrete', 'PC': 'Discrete', 'PCS': 'Discrete', 'Pcs': 'Discrete', 'PKT': 'Discrete', 'PK': 'Discrete',
-    'PAK': 'Discrete', 'PCK': 'Discrete', 'CS': 'Discrete', 'CSE': 'Discrete', 'CT': 'Discrete', 'CA': 'Discrete',
-    'ST': 'Discrete', 'GRO': 'Discrete', 'BX': 'Discrete',
-    'BOT': 'Containers', 'BOTTLE': 'Containers', 'ROLL': 'Containers', 'ROL': 'Containers', 'REEL': 'Containers', 'KAR': 'Containers',
-    'FT': 'Dimensional', 'YD': 'Dimensional', 'KM': 'Dimensional', 'DM': 'Dimensional', 'M': 'Dimensional',
-    'M1': 'Dimensional', 'M2': 'Dimensional', 'KM2': 'Dimensional', 'YD2': 'Dimensional', 'FT3': 'Dimensional',
-    'SQM': 'Dimensional', 'sqm': 'Dimensional', 'MYD': 'Dimensional', 'MI': 'Dimensional', 'SM': 'Dimensional',
-    'LM': 'Dimensional', 'LF': 'Dimensional', 'MH': 'Dimensional', 'KN': 'Dimensional', 'CH': 'Dimensional',
-    'TH': 'Unclassified', 'THU': 'Unclassified', 'IM': 'Unclassified', 'NOS': 'Unclassified', 'NO': 'Unclassified',
-    'TS': 'Unclassified', 'KA': 'Unclassified', 'ZPC': 'Unclassified', 'ZCT': 'Unclassified', '0%': 'Unclassified',
-    'KP': 'Unclassified', 'GP': 'Unclassified', 'KAI': 'Unclassified', 'SY': 'Unclassified', 'UN': 'Unclassified',
-    'MU': 'Unclassified', 'UM': 'Unclassified', 'HU': 'Unclassified'
-}
+# --- Smart category mapping function ---
+def map_cmpnt_type_category(val):
+    if pd.isna(val):
+        return 'OTHER'
+    
+    val_clean = str(val).strip()
+    val_lower = val_clean.lower()
+    val_upper = val_clean.upper()
 
-# --- File path ---
-file_path = './data/sample_cleaned.parquet'
+    # ERP material type mapping (preserving ERP business meaning)
+    erp_type_map = {
+        'FERT': 'FINISHED_PRODUCT',
+        'HALB': 'SEMI_FINISHED',
+        'ROH': 'RAW_MATERIAL',
+        'VERP': 'PACKAGING_MATERIAL',
+        'TRAD': 'TRADED_GOOD',
+        'ERSA': 'SUBCONTRACT_COMPONENT',
+        'API': 'API',
+        'TPF': 'TRADE_PRODUCT',
+        'PACK': 'PACKAGING',
+        'ZHBG': 'INTERMEDIATE',
+        'EPC': 'EXCIPIENT',
+        'EPF': 'FINISHED_PRODUCT',
+        'HAWA': 'TRADING_GOOD',
+        'ZEXI': 'EXCIPIENT',
+        'ZROH': 'RAW_MATERIAL',
+        'SAPR': 'PACKAGING',
+        'IM': 'INTERMEDIATE',
+        'UNBW': 'NON_VALUATED',
+        'IG': 'INTERMEDIATE_GOOD'
+    }
 
-# --- Overwrite in-place ---
-try:
-    print(f"⏳ Processing and overwriting: {os.path.basename(file_path)}")
-    df = pd.read_parquet(file_path)
+    # Priority 1: Known ERP codes
+    if val_upper in erp_type_map:
+        return erp_type_map[val_upper]
 
-    df['MATL_SHRT_DESC_LEN'] = df['MATL_SHRT_DESC'].astype(str).str.len()
-    df['CMPNT_MATL_DESC_LEN'] = df['CMPNT_MATL_DESC'].astype(str).str.len()
+    # Priority 2: Descriptive pattern matching
+    if any(x in val_lower for x in ['packaging', 'bottle', 'jar', 'cap', 'carton', 'tube', 'pouch', 'closure']):
+        return 'PACKAGING'
+    if any(x in val_lower for x in ['chemical', 'solvent', 'alcohol', 'acid', 'buffer', 'salt', 'preservative']):
+        return 'CHEMICAL'
+    if any(x in val_lower for x in ['actives', 'naturals', 'flavor', 'fragrance', 'api']):
+        return 'ACTIVES_NATURALS'
+    if any(x in val_lower for x in ['film', 'foil', 'label', 'sleeve']):
+        return 'FILMS_LABELS'
+    if any(x in val_lower for x in ['soap', 'conditioner', 'emulsifier', 'thickener', 'talc', 'sunscreen']):
+        return 'COSMETIC_BASE'
+    if any(x in val_lower for x in ['glass', 'pump', 'puff']):
+        return 'CONTAINERS'
 
-    df['UNIT_GROUP'] = (
-        df['CMPNT_UOM_CD']
-        .fillna('')
-        .str.upper()
-        .map(unit_group_map)
-        .fillna('Unclassified')
-    )
+    # Priority 3: Unrecognized short ERP-like code
+    if len(val_clean) <= 5 and val_clean.isalnum():
+        return 'ERP_CODE'
 
-    df.to_parquet(file_path, index=False)  # ⬅️ Overwrites the original file
-    print(f"✅ Overwritten: {file_path}")
-except Exception as e:
-    print(f"❌ Failed to process {file_path} -> {e}")
+    # Fallback
+    return 'OTHER'
+
+# --- Per-file processing ---
+def process_file(file_path):
+    try:
+        df = pd.read_parquet(file_path)
+
+       
+        # Apply mapping
+        df['CMPNT_MATL_TYPE_CATEGORY'] = df['CMPNT_MATL_TYPE_CD'].apply(map_cmpnt_type_category)
+
+        # Overwrite original file with new column
+        df.to_parquet(file_path, index=False)
+        print(f" Updated: {os.path.basename(file_path)}")
+
+    except Exception as e:
+        print(f" Failed: {os.path.basename(file_path)} -> {e}")
+
+# --- Parallel execution ---
+if __name__ == '__main__':
+    input_path = './data/validation_step'
+    all_files = 'glob.glob(os.path.join(input_path, '*.parquet'))'
+
+    with Pool(cpu_count()) as pool:
+        pool.map(process_file, all_files)
