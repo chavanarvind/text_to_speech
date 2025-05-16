@@ -1,18 +1,16 @@
 import os
-import glob
 import pandas as pd
-from multiprocessing import Pool, cpu_count
 
 # --- Smart category mapping function ---
 def map_cmpnt_type_category(val):
     if pd.isna(val):
         return 'OTHER'
-    
+
     val_clean = str(val).strip()
     val_lower = val_clean.lower()
     val_upper = val_clean.upper()
 
-    # ERP material type mapping (preserving ERP business meaning)
+    # ERP material type mapping
     erp_type_map = {
         'FERT': 'FINISHED_PRODUCT',
         'HALB': 'SEMI_FINISHED',
@@ -35,11 +33,9 @@ def map_cmpnt_type_category(val):
         'IG': 'INTERMEDIATE_GOOD'
     }
 
-    # Priority 1: Known ERP codes
     if val_upper in erp_type_map:
         return erp_type_map[val_upper]
 
-    # Priority 2: Descriptive pattern matching
     if any(x in val_lower for x in ['packaging', 'bottle', 'jar', 'cap', 'carton', 'tube', 'pouch', 'closure']):
         return 'PACKAGING'
     if any(x in val_lower for x in ['chemical', 'solvent', 'alcohol', 'acid', 'buffer', 'salt', 'preservative']):
@@ -53,33 +49,22 @@ def map_cmpnt_type_category(val):
     if any(x in val_lower for x in ['glass', 'pump', 'puff']):
         return 'CONTAINERS'
 
-    # Priority 3: Unrecognized short ERP-like code
     if len(val_clean) <= 5 and val_clean.isalnum():
         return 'ERP_CODE'
 
-    # Fallback
     return 'OTHER'
 
-# --- Per-file processing ---
-def process_file(file_path):
-    try:
-        df = pd.read_parquet(file_path)
+# --- Single file path ---
+input_file = './data/sample_cleaned.parquet'
 
-       
-        # Apply mapping
-        df['CMPNT_MATL_TYPE_CATEGORY'] = df['CMPNT_MATL_TYPE_CD'].apply(map_cmpnt_type_category)
+# --- Process single file ---
+try:
+    print(f"⏳ Mapping material type category in: {os.path.basename(input_file)}")
+    df = pd.read_parquet(input_file)
 
-        # Overwrite original file with new column
-        df.to_parquet(file_path, index=False)
-        print(f" Updated: {os.path.basename(file_path)}")
+    df['CMPNT_MATL_TYPE_CATEGORY'] = df['CMPNT_MATL_TYPE_CD'].apply(map_cmpnt_type_category)
 
-    except Exception as e:
-        print(f" Failed: {os.path.basename(file_path)} -> {e}")
-
-# --- Parallel execution ---
-if __name__ == '__main__':
-    input_path = './data/validation_step'
-    all_files = 'glob.glob(os.path.join(input_path, '*.parquet'))'
-
-    with Pool(cpu_count()) as pool:
-        pool.map(process_file, all_files)
+    df.to_parquet(input_file, index=False)
+    print(f"✅ Updated and overwritten: {input_file}")
+except Exception as e:
+    print(f"❌ Failed to process {input_file} -> {e}")
