@@ -1,12 +1,2 @@
-   import pandas as pd
-  File "/anaconda/envs/azureml_py38/lib/python3.10/site-packages/pandas/__init__.py", line 26, in <module>
-    from pandas.compat import (
-  File "/anaconda/envs/azureml_py38/lib/python3.10/site-packages/pandas/compat/__init__.py", line 27, in <module>
-    from pandas.compat.pyarrow import (
-  File "/anaconda/envs/azureml_py38/lib/python3.10/site-packages/pandas/compat/pyarrow.py", line 8, in <module>
-    import pyarrow as pa
-  File "/anaconda/envs/azureml_py38/lib/python3.10/site-packages/pyarrow/__init__.py", line 65, in <module>
-    import pyarrow.lib as _lib
----------------------------------------------------------------------------
-AttributeError                            Traceback (most recent call last)
-AttributeError: _ARRAY_API not found
+pip uninstall -y pyarrow numpy
+pip install numpy==1.24.3 pyarrow==11.0.0
