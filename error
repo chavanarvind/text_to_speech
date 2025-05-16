@@ -1,10 +1,10 @@
-Hi Team,
+%sql
+SELECT * CMPNT_MATL_NUM,	CMPNT_MATL_DESC,	CMPNT_MATL_TYPE_CD,	CMPNT_UOM_CD
 
-Hope you're doing well.
 
-To proceed with model validation, could you please share a few sample records, particularly for smaller categories such as API, Liquids, Lotions, etc.?
-This will help us confirm that the model handles these classes appropriately.
 
-Appreciate your support.
 
-Best regards,
+
+
+
+FROM sc_core.harmonized_bom_data_asset 
