@@ -1,11 +1,12 @@
-#data cleaning step
 import os
 import re
 import time
-import glob
 import pandas as pd
-from multiprocessing import Pool, cpu_count
-from functools import partial
+
+# --- Paths ---
+input_file = './data/sample.parquet'
+output_file = './data/sample_cleaned.parquet'
+os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
 # --- Precompiled regex patterns ---
 patterns = {
@@ -19,6 +20,7 @@ patterns = {
     'spf_number': re.compile(r"(\D)(spf\d+)")
 }
 
+# --- Cleaning logic ---
 def clean_series(series):
     return (series.str.lower()
         .str.replace(patterns['non_alphanumeric'], '', regex=True)
@@ -31,36 +33,22 @@ def clean_series(series):
         .str.replace(patterns['spf_number'], r'\1 \2 ', regex=True)
     )
 
-def text_clean_step(file, input_path, output_path):
-    try:
-        df = pd.read_parquet(file)
+# --- Processing the single file ---
+try:
+    print(f"⏳ Cleaning file: {os.path.basename(input_file)}")
+    start = time.time()
 
-        df['MATL_SHRT_DESC'] = clean_series(df['MATL_SHRT_DESC'].fillna(''))
-        df['CMPNT_MATL_DESC'] = clean_series(df['CMPNT_MATL_DESC'].fillna(''))
+    df = pd.read_parquet(input_file)
 
-        df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'] = (
-            df['MATL_SHRT_DESC'] + ' ' + df['CMPNT_MATL_DESC']
-        ).str.strip()
+    df['MATL_SHRT_DESC'] = clean_series(df['MATL_SHRT_DESC'].fillna(''))
+    df['CMPNT_MATL_DESC'] = clean_series(df['CMPNT_MATL_DESC'].fillna(''))
 
-        rel_path = os.path.relpath(file, input_path)
-        output_file = os.path.join(output_path, rel_path)
-        os.makedirs(os.path.dirname(output_file), exist_ok=True)
-        df.to_parquet(output_file, index=False)
+    df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'] = (
+        df['MATL_SHRT_DESC'] + ' ' + df['CMPNT_MATL_DESC']
+    ).str.strip()
 
-        print(f"Done: {os.path.basename(file)}")
-    except Exception as e:
-        print(f"Failed: {os.path.basename(file)} -> {e}")
+    df.to_parquet(output_file, index=False)
 
-# --- Setup & execution ---
-if __name__ == '__main__':
-    input_path = './data/target_map_parquet_files'
-    output_path = './data/target_map_cleaned'
-    max_processes = cpu_count()  # Or set manually
-
-    all_files = glob.glob(os.path.join(input_path, '*.parquet'))
-
-    # Use functools.partial to pass static args to worker
-    worker_func = partial(text_clean_step, input_path=input_path, output_path=output_path)
-
-    with Pool(processes=max_processes) as pool:
-        pool.map(worker_func, all_files)
+    print(f"✅ Done: {input_file} → {output_file} | ⏱️ {time.time() - start:.2f}s")
+except Exception as e:
+    print(f"❌ Failed: {os.path.basename(input_file)} -> {e}")
