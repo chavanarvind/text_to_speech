@@ -1,70 +1,54 @@
-import numpy as np
-import pandas as pd
+import os
 import joblib
-from lightgbm import LGBMClassifier, early_stopping, log_evaluation
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, confusion_matrix, f1_score
+import torch
+import pandas as pd
+import numpy as np
+from sentence_transformers import SentenceTransformer
+from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 
-# --- Load Feature Matrix and Labels ---
-X = np.load('./data/validation_step/model_artifects/model_artifects_no_FNW_CHM/X_full.npy',allow_pickle=True)
-y = np.load('./data/validation_step/model_artifects/model_artifects_no_FNW_CHM/y_full.npy',allow_pickle=True)
+# --- CONFIGURATION ---
+client_file = './data/validation_step/sampled_null_final_category.parquet'
+output_file = './data/client_predictions.csv'
+required_cols = ['CMPNT_MATL_DESC', 'CMPNT_MATL_DESC_LEN', 'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']
 
-# --- Initial Split: 80% (train+test), 20% validation ---
-X_train_test, X_val, y_train_test, y_val = train_test_split(
-    X, y, test_size=0.2, stratify=y, random_state=42
+# --- LOAD CLIENT DATA ---
+df = pd.read_parquet(client_file, columns=required_cols)
+df = df[df['CMPNT_MATL_DESC'].notna()].copy()
+print(f"✅ Loaded {len(df)} records from client file.")
+
+# --- LOAD TRAINED ARTIFACTS ---
+model = joblib.load('./data/validation_step/model_artifects/final_model.joblib')
+ordinal = joblib.load('./data/validation_step/model_artifects/ordinal_encoder.pkl')
+scaler = joblib.load('./data/validation_step/model_artifects/scaler.pkl')
+
+# --- LOAD BERT MODEL ---
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+encoder = SentenceTransformer('pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb', device=device)
+encoder.max_seq_length = 128
+
+# --- TRANSFORM FEATURES ---
+print("🔄 Generating BERT embeddings...")
+desc_emb = encoder.encode(
+    df['CMPNT_MATL_DESC'].astype(str).tolist(),
+    batch_size=256,
+    show_progress_bar=True,
+    convert_to_numpy=True,
+    num_workers=4
 )
 
-# --- Split again: 75% train, 25% test from that 80% block ---
-X_train, X_test, y_train, y_test = train_test_split(
-    X_train_test, y_train_test, test_size=0.25, stratify=y_train_test, random_state=42
-)
+length_scaled = scaler.transform(df[['CMPNT_MATL_DESC_LEN']])
+cat_encoded = ordinal.transform(df[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+X_pred = np.hstack([desc_emb, length_scaled, cat_encoded])
 
-print(f"🔹 Train size:      {X_train.shape[0]}")
-print(f"🔹 Test size:       {X_test.shape[0]}")
-print(f"🔹 Validation size: {X_val.shape[0]}")
-
-# --- Train the model on (train + test) set ---
-X_final_train = np.vstack([X_train, X_test])
-y_final_train = np.concatenate([y_train, y_test])
-
-model = LGBMClassifier(
-    class_weight='balanced',
-    n_estimators=1000,
-    random_state=42
-)
-
-model.fit(
-    X_final_train, y_final_train,
-    eval_set=[(X_val, y_val)],
-    eval_metric='logloss',
-    callbacks=[early_stopping(stopping_rounds=10), log_evaluation(period=10)]
-)
-
-# --- Predict on Validation Set ---
-y_pred = model.predict(X_val)
-y_proba = model.predict_proba(X_val)
+# --- PREDICT WITH CONFIDENCE ---
+print("🧠 Predicting with LightGBM model...")
+y_proba = model.predict_proba(X_pred)
 y_score = np.max(y_proba, axis=1)
+y_pred = model.predict(X_pred)
+df['Score'] = y_score
+df['Predicted'] = y_pred
+df['Final_Prediction'] = np.where(y_score < 0.6, 'Other', y_pred)
 
-# --- Evaluation Summary ---
-print("\n📊 Classification Report (Validation):")
-report = classification_report(y_val, y_pred, zero_division=0)
-print(report)
-
-print("\n🧮 Confusion Matrix:")
-print(confusion_matrix(y_val, y_pred))
-
-f1 = f1_score(y_val, y_pred, average='weighted')
-print(f"\n✅ Weighted F1 Score (Validation): {f1:.4f}")
-
-# --- Save Model and Prediction Summary ---
-joblib.dump(model, './data/validation_step/model_artifects//model_artifects_no_FNW_CHM/final_model.joblib')
-print("✅ Model saved: final_model.joblib")
-
-# Save predictions
-pred_df = pd.DataFrame({
-    'Actual': y_val,
-    'Predicted': y_pred,
-    'Confidence': y_score
-})
-pred_df.to_csv('./data/validation_step/model_artifects/validation_predictions_no_fnw_chm.csv', index=False)
-print("📁 Saved: validation_predictions.csv")
+# --- SAVE OUTPUT ---
+df.to_csv(output_file, index=False)
+print(f"✅ Predictions saved to: {output_file}")
