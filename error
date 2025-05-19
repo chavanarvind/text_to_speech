@@ -1,1 +1,21 @@
-can you please send an email to Katie about output result storage? Also, please provide new field names created for RPM categorization.
+Hi Katie,
+
+Hope you're doing well.
+
+As part of the RPM categorization pipeline, I’ve prepared the processed output files and model artifacts. Could you please share the Azure Storage account details where I should push these files?
+
+Specifically, I’m looking for:
+
+The storage account name
+
+The appropriate container name and folder path
+
+Any access credentials or connection string I should use
+
+Also, let me know if there are any specific conventions I should follow for organizing these files.
+
+Thanks for your help!
+
+Best regards,
+Arvind
+
