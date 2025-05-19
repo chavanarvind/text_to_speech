@@ -14,3 +14,5 @@ pip install --force-reinstall --no-cache-dir numpy pandas
 ---------------------------------------------------------------------------
 AttributeError                            Traceback (most recent call last)
 AttributeError: _ARRAY_API not found
+pip uninstall -y pyarrow numpy
+pip install numpy==1.23.5 pyarrow==12.0.1
