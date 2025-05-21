@@ -1,78 +1,78 @@
-category	count
-PKG - Labels	18805025
-PKG - Corrugated	18200496
-PKG - Cartons	8677390
-PKG - Labels or PKG - Leaflets	4410686
-PKG - Other Packaging	2735249
-PKG - Films (Polybags)	2407897
-PKG - Tubes	1569179
-PKG - Caps/Closures/Lids	1379116
-CHM - Flavors / Fragrances	1261102
-PKG - Bottles (PET)	1139834
-PKG - Films (Other Plastic)	892203
-PKG - Bottles (HDPE)	822718
-PKG - Other Rigid Packaging (Glass packaging)	728547
-PKG - Bottles (PP)	659948
-CHM - Conditioners / Emollients	656326
-PKG - Promotional Materials	587578
-PKG - Cosmetics	538389
-PKG - Pumps	528040
-PKG - Leaflets	412661
-CHM - Naturals	406888
-FNW - Barrier & Pouch Films	338724
-CHM - Sunscreens	329916
-PKG - Foils	327776
-CHM - Thickeners	306107
-FNW - Release Paper	302583
-CHM - Dyes / Colorants	288972
-PKG - Thermoformed (All other)	255386
-PKG - Jars	247570
-CHM - Actives	242839
-CHM - Preservatives	224613
-FNW - Bonded NW	216766
-PKG - Injection Molded Components	195327
-CHM - Surfactants (Commodity) or CHM - Surfactants (Specialty)	184331
-PKG - Sleeves	183491
-CHM - Acids / Buffers / Salts	175196
-CHM - Emulsifiers	167185
-CHM - Other Chemicals (waxes & new items)	158517
-CHM - Silicones & Hydrogels	155832
-CHM - Exfolients	148017
-CHM - Surfactants (Specialty)	134642
-PKG - Films (Paper)	118883
-FNW - Apertured Films (including PE/PP)	103552
-CHM - Alcohols / Solvents	89442
-CHM - Fatty Acids & Fatty Alcohols	82956
-FNW - Other nonwovens	80964
-CHM - Vitamins	80204
-CHM - Corn Derivatives and Sweeteners	78199
-FNW - Needlepunch/Padstock	73547
-FNW - Fiber (Excluding pulp & Rayon)	63009
-FNW - Airlaid	55427
-CHM - Mineral Oil / Petrolatum	55273
-CHM - Inorganic	44553
-PKG - Inserts	44158
-FNW - Adhesives	41092
-FNW - Wovens	30291
-CHM - Glycerin	26935
-FNW - Cotton	25909
-FNW - Spunlace/Airlace	20884
-FNW - Pulp	17873
-PKG - Metals (Tins and Cans)	16450
-CHM - Capsules	13081
-CHM - Talc	11350
-CHM - Soap Chips	11007
-CHM - Flavors / Fragrances or CHM - Dyes / Colorants	10664
-FNW - Superabsorbents (SAP)	9988
-CHM - Surfactants (Commodity)	9776
-PKG - Films (PVC)	9706
-FNW - Rayon	7264
-PKG - Bottles (PET) or PKG - Bottles (HDPE) or PKG - Bottles (PP)	6810
-CHM - Actives or CHM - Naturals	4540
-PKG - Films (Laminates)	3224
-FNW - Adhesives or CHM - Adhesives	2270
-CHM - Gum Base	1736
-PKG - Metals (Tins and Cans) or PKG - Pumps	992
-FNW - Foams	454
-CHM - Soap Chips Vegetable Base	454
-PKG - Films (Laminates) or PKG - Tubes	248
+category	count	CAT
+PKG - Labels	18805025	PKG
+PKG - Corrugated	18200496	PKG
+PKG - Cartons	8677390	PKG
+PKG - Labels or PKG - Leaflets	4410686	PKG
+PKG - Other Packaging	2735249	PKG
+PKG - Films (Polybags)	2407897	PKG
+PKG - Tubes	1569179	PKG
+PKG - Caps/Closures/Lids	1379116	PKG
+CHM - Flavors / Fragrances	1261102	CHM
+PKG - Bottles (PET)	1139834	PKG
+PKG - Films (Other Plastic)	892203	PKG
+PKG - Bottles (HDPE)	822718	PKG
+PKG - Other Rigid Packaging (Glass packaging)	728547	PKG
+PKG - Bottles (PP)	659948	PKG
+CHM - Conditioners / Emollients	656326	CHM
+PKG - Promotional Materials	587578	PKG
+PKG - Cosmetics	538389	PKG
+PKG - Pumps	528040	PKG
+PKG - Leaflets	412661	PKG
+CHM - Naturals	406888	CHM
+FNW - Barrier & Pouch Films	338724	FNW
+CHM - Sunscreens	329916	CHM
+PKG - Foils	327776	PKG
+CHM - Thickeners	306107	CHM
+FNW - Release Paper	302583	FNW
+CHM - Dyes / Colorants	288972	CHM
+PKG - Thermoformed (All other)	255386	PKG
+PKG - Jars	247570	PKG
+CHM - Actives	242839	CHM
+CHM - Preservatives	224613	CHM
+FNW - Bonded NW	216766	FNW
+PKG - Injection Molded Components	195327	PKG
+CHM - Surfactants (Commodity) or CHM - Surfactants (Specialty)	184331	CHM
+PKG - Sleeves	183491	PKG
+CHM - Acids / Buffers / Salts	175196	CHM
+CHM - Emulsifiers	167185	CHM
+CHM - Other Chemicals (waxes & new items)	158517	CHM
+CHM - Silicones & Hydrogels	155832	CHM
+CHM - Exfolients	148017	CHM
+CHM - Surfactants (Specialty)	134642	CHM
+PKG - Films (Paper)	118883	PKG
+FNW - Apertured Films (including PE/PP)	103552	FNW
+CHM - Alcohols / Solvents	89442	CHM
+CHM - Fatty Acids & Fatty Alcohols	82956	CHM
+FNW - Other nonwovens	80964	FNW
+CHM - Vitamins	80204	CHM
+CHM - Corn Derivatives and Sweeteners	78199	CHM
+FNW - Needlepunch/Padstock	73547	FNW
+FNW - Fiber (Excluding pulp & Rayon)	63009	FNW
+FNW - Airlaid	55427	FNW
+CHM - Mineral Oil / Petrolatum	55273	CHM
+CHM - Inorganic	44553	CHM
+PKG - Inserts	44158	PKG
+FNW - Adhesives	41092	FNW
+FNW - Wovens	30291	FNW
+CHM - Glycerin	26935	CHM
+FNW - Cotton	25909	FNW
+FNW - Spunlace/Airlace	20884	FNW
+FNW - Pulp	17873	FNW
+PKG - Metals (Tins and Cans)	16450	PKG
+CHM - Capsules	13081	CHM
+CHM - Talc	11350	CHM
+CHM - Soap Chips	11007	CHM
+CHM - Flavors / Fragrances or CHM - Dyes / Colorants	10664	CHM
+FNW - Superabsorbents (SAP)	9988	FNW
+CHM - Surfactants (Commodity)	9776	CHM
+PKG - Films (PVC)	9706	PKG
+FNW - Rayon	7264	FNW
+PKG - Bottles (PET) or PKG - Bottles (HDPE) or PKG - Bottles (PP)	6810	PKG
+CHM - Actives or CHM - Naturals	4540	CHM
+PKG - Films (Laminates)	3224	PKG
+FNW - Adhesives or CHM - Adhesives	2270	FNW
+CHM - Gum Base	1736	CHM
+PKG - Metals (Tins and Cans) or PKG - Pumps	992	PKG
+FNW - Foams	454	FNW
+CHM - Soap Chips Vegetable Base	454	CHM
+PKG - Films (Laminates) or PKG - Tubes	248	PKG
