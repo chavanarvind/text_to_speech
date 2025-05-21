@@ -1,4 +1,18 @@
-df = df[
-    df['Final Category'].notna() &
-    (df['Final Category'] == 'PKG')
-]
+Processing mapped_file0
+Processed: mapped_file0 (10692 rows)
+Processing mapped_file1
+Processed: mapped_file1 (10655 rows)
+Processing mapped_file10
+Processed: mapped_file102 (10665 rows)
+Processing mapped_file103
+Processed: mapped_file103 (9874 rows)
+Processing mapped_file104
+Processed: mapped_file104 (10672 rows)
+Processing mapped_file105
+Batches: 100%|██████████| 42/42 [00:23<00:00,  1.81it/s]
+Batches: 100%|██████████| 42/42 [00:23<00:00,  1.79it/s]
+Batches: 100%|██████████| 42/42 [00:22<00:00,  1.84it/s]
+Batches: 100%|██████████| 42/42 [00:23<00:00,  1.76it/s]
+Batches: 100%|██████████| 42/42 [00:23<00:00,  1.79it/s]
+Batches: 100%|██████████| 39/39 [00:20<00:00,  1.91it/s]
+Batches: 100%|██████████| 42/42 [00:23<00:00,  1.79it/s]
