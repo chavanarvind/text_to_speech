@@ -1,78 +1,121 @@
-category	count	CAT
-PKG - Labels	18805025	PKG
-PKG - Corrugated	18200496	PKG
-PKG - Cartons	8677390	PKG
-PKG - Labels or PKG - Leaflets	4410686	PKG
-PKG - Other Packaging	2735249	PKG
-PKG - Films (Polybags)	2407897	PKG
-PKG - Tubes	1569179	PKG
-PKG - Caps/Closures/Lids	1379116	PKG
-CHM - Flavors / Fragrances	1261102	CHM
-PKG - Bottles (PET)	1139834	PKG
-PKG - Films (Other Plastic)	892203	PKG
-PKG - Bottles (HDPE)	822718	PKG
-PKG - Other Rigid Packaging (Glass packaging)	728547	PKG
-PKG - Bottles (PP)	659948	PKG
-CHM - Conditioners / Emollients	656326	CHM
-PKG - Promotional Materials	587578	PKG
-PKG - Cosmetics	538389	PKG
-PKG - Pumps	528040	PKG
-PKG - Leaflets	412661	PKG
-CHM - Naturals	406888	CHM
-FNW - Barrier & Pouch Films	338724	FNW
-CHM - Sunscreens	329916	CHM
-PKG - Foils	327776	PKG
-CHM - Thickeners	306107	CHM
-FNW - Release Paper	302583	FNW
-CHM - Dyes / Colorants	288972	CHM
-PKG - Thermoformed (All other)	255386	PKG
-PKG - Jars	247570	PKG
-CHM - Actives	242839	CHM
-CHM - Preservatives	224613	CHM
-FNW - Bonded NW	216766	FNW
-PKG - Injection Molded Components	195327	PKG
-CHM - Surfactants (Commodity) or CHM - Surfactants (Specialty)	184331	CHM
-PKG - Sleeves	183491	PKG
-CHM - Acids / Buffers / Salts	175196	CHM
-CHM - Emulsifiers	167185	CHM
-CHM - Other Chemicals (waxes & new items)	158517	CHM
-CHM - Silicones & Hydrogels	155832	CHM
-CHM - Exfolients	148017	CHM
-CHM - Surfactants (Specialty)	134642	CHM
-PKG - Films (Paper)	118883	PKG
-FNW - Apertured Films (including PE/PP)	103552	FNW
-CHM - Alcohols / Solvents	89442	CHM
-CHM - Fatty Acids & Fatty Alcohols	82956	CHM
-FNW - Other nonwovens	80964	FNW
-CHM - Vitamins	80204	CHM
-CHM - Corn Derivatives and Sweeteners	78199	CHM
-FNW - Needlepunch/Padstock	73547	FNW
-FNW - Fiber (Excluding pulp & Rayon)	63009	FNW
-FNW - Airlaid	55427	FNW
-CHM - Mineral Oil / Petrolatum	55273	CHM
-CHM - Inorganic	44553	CHM
-PKG - Inserts	44158	PKG
-FNW - Adhesives	41092	FNW
-FNW - Wovens	30291	FNW
-CHM - Glycerin	26935	CHM
-FNW - Cotton	25909	FNW
-FNW - Spunlace/Airlace	20884	FNW
-FNW - Pulp	17873	FNW
-PKG - Metals (Tins and Cans)	16450	PKG
-CHM - Capsules	13081	CHM
-CHM - Talc	11350	CHM
-CHM - Soap Chips	11007	CHM
-CHM - Flavors / Fragrances or CHM - Dyes / Colorants	10664	CHM
-FNW - Superabsorbents (SAP)	9988	FNW
-CHM - Surfactants (Commodity)	9776	CHM
-PKG - Films (PVC)	9706	PKG
-FNW - Rayon	7264	FNW
-PKG - Bottles (PET) or PKG - Bottles (HDPE) or PKG - Bottles (PP)	6810	PKG
-CHM - Actives or CHM - Naturals	4540	CHM
-PKG - Films (Laminates)	3224	PKG
-FNW - Adhesives or CHM - Adhesives	2270	FNW
-CHM - Gum Base	1736	CHM
-PKG - Metals (Tins and Cans) or PKG - Pumps	992	PKG
-FNW - Foams	454	FNW
-CHM - Soap Chips Vegetable Base	454	CHM
-PKG - Films (Laminates) or PKG - Tubes	248	PKG
+import os
+import glob
+import numpy as np
+import pandas as pd
+import torch
+import joblib
+from sentence_transformers import SentenceTransformer
+from sklearn.preprocessing import OrdinalEncoder, StandardScaler
+
+# --- Paths ---
+input_path = './data/target_map_cleaned_non_null_target'
+embedding_dir = './data/validation_step/model_artifects/bert_embedding_no_FNW_CHM'
+sample_dir = './data/validation_step/model_artifects/sampled_rows_no_FNW_CHM'
+output_dir = './data/validation_step/model_artifects/model_artifects_no_FNW_CHM'
+os.makedirs(embedding_dir, exist_ok=True)
+os.makedirs(sample_dir, exist_ok=True)
+os.makedirs(output_dir, exist_ok=True)
+
+# --- BERT Encoder ---
+encoder = SentenceTransformer(
+    'pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb',
+    device='cuda' if torch.cuda.is_available() else 'cpu'
+)
+
+# --- Sampling Map ---
+category_frac_map = {
+    'CHM': 0.10, 'PKG': 0.10, 'FNW': 0.40, 'FNW_CHM': 0.0,'FNW or CHM' :0.0,
+    'Liquids and Creams': 0.50, 'API': 1.0
+}
+
+required_cols = [
+    'CMPNT_MATL_DESC', 'CMPNT_MATL_DESC_LEN',
+    'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY',
+    'Final Category'
+]
+
+files = sorted(glob.glob(os.path.join(input_path, '*.parquet')))
+output_X = []
+output_y = []
+meta_features = []
+
+for file in files:
+    file_name = os.path.splitext(os.path.basename(file))[0]
+    print(f"Processing {file_name}")
+
+    try:
+        df = pd.read_parquet(file, columns=required_cols)
+        df = df[df['CMPNT_MATL_DESC'].notna()]
+        df = df.drop_duplicates(subset=required_cols)
+        #df['Final Category'] = df['Final Category'].replace({'FNW or CHM': 'FNW_CHM'})
+        df = df[~df['Final Category'].isin(['FNW or CHM','FNW_CHM'])]
+        print("Unique Final Categories:", df['Final Category'].unique())
+
+        sampled = (
+            df.groupby('Final Category', group_keys=False)
+              .apply(lambda g: g.sample(frac=category_frac_map.get(g.name, 0.1), random_state=42))
+              .reset_index(drop=True)
+        )
+
+        if sampled.empty:
+            print(f" Skipping {file_name}: no valid sampled rows")
+            continue
+
+        # Encode descriptions
+        desc_emb = encoder.encode(
+            sampled['CMPNT_MATL_DESC'].astype(str).tolist(),
+            batch_size=256,
+            show_progress_bar=True,
+            convert_to_numpy=True,
+            num_workers=4
+        )
+
+        if len(desc_emb) != len(sampled):
+            print(f" Skipped {file_name}: embedding/sample size mismatch")
+            continue
+
+        # Save sampled for auditing
+        sampled.to_parquet(os.path.join(sample_dir, f'{file_name}_sampled.parquet'), index=False)
+        np.save(os.path.join(embedding_dir, f'{file_name}_bert.npy'), desc_emb)
+
+        # Accumulate for X/y
+        output_X.append(desc_emb)
+        output_y.append(sampled['Final Category'].astype(str).values)
+        meta_features.append(sampled[['CMPNT_MATL_DESC_LEN', 'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+
+        print(f"Processed: {file_name} ({len(sampled)} rows)")
+
+    except Exception as e:
+        print(f"Error processing {file_name}: {e}")
+
+# --- Final Checks ---
+if not output_X:
+    raise RuntimeError("No valid embeddings or samples generated.")
+
+# --- Stack Features and Labels ---
+bert_array = np.vstack(output_X)
+y_full = np.concatenate(output_y)
+meta_all = pd.concat(meta_features, ignore_index=True)
+
+# --- Encode Meta ---
+ordinal = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
+scaler = StandardScaler()
+
+ordinal.fit(meta_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+scaler.fit(meta_all[['CMPNT_MATL_DESC_LEN']])
+
+meta_scaled = scaler.transform(meta_all[['CMPNT_MATL_DESC_LEN']])
+cat_encoded = ordinal.transform(meta_all[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+
+# --- Final Feature Matrix ---
+X_full = np.hstack([bert_array, meta_scaled, cat_encoded])
+
+# --- Save Everything ---
+np.save(os.path.join(output_dir, 'X_full.npy'), X_full)
+np.save(os.path.join(output_dir, 'y_full.npy'), y_full)  # string dtype avoids pickle issues
+joblib.dump(ordinal, os.path.join(output_dir, 'ordinal_encoder.pkl'))
+joblib.dump(scaler, os.path.join(output_dir, 'scaler.pkl'))
+
+print(f"\n All files saved:")
+print(f"   X_full.npy shape = {X_full.shape}")
+print(f"   y_full.npy shape = {y_full.shape}, dtype = {y_full.dtype}")
