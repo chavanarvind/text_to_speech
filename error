@@ -46,3 +46,5 @@ all_files = glob.glob(os.path.join(input_path, '*.parquet'))
 with ThreadPoolExecutor(max_workers=8) as executor:
     for idx, file in enumerate(all_files):
         executor.submit(process_file, idx, file)
+
+----filtered = joined.filter(pl.col('Final Category').is_in(['PKG', 'CHM']))
