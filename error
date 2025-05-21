@@ -1,1 +1,4 @@
-df = df[df['Final Category'] == 'PKG']
+df = df[
+    df['Final Category'].notna() &
+    (df['Final Category'] == 'PKG')
+]
