@@ -1,50 +1,26 @@
-import os
-import glob
-import time
-import pyarrow.parquet as pq
-import polars as pl
-from concurrent.futures import ThreadPoolExecutor
-
-# --- Paths ---
-input_path = './data/parquet_files'
-output_path = './sub_cat_data/target_map_parquet_files'
-os.makedirs(output_path, exist_ok=True)
-
-# --- Load mapping ---
-target_map_df = pl.read_csv('./data/target_map.csv', columns=['CMPNT_CAT_CD_DESC', 'Final Category','Subcategory group']).unique()
-
-# --- Required columns to extract ---
-columns_to_read = [
-    'CMPNT_MATL_DESC',
-    'CMPNT_MATL_TYPE_CD',
-    'CMPNT_CAT_CD_DESC',
-    'CMPNT_UOM_CD'
-]
-
-# --- File processor ---
 def process_file(file_idx, file):
     try:
         print(f" Start: {os.path.basename(file)}")
         start = time.time()
 
-        table = pq.read_table(file, columns=columns_to_read)  # Read full file
+        table = pq.read_table(file, columns=columns_to_read)
         df = pl.from_arrow(table).unique()
 
         # Left join with target map
         joined = df.join(target_map_df, on='CMPNT_CAT_CD_DESC', how='left')
 
+        # Filter for Final Category == 'PKG' or 'CHM'
+        filtered = joined.filter(pl.col('Final Category').is_in(['PKG', 'CHM']))
+
+        # Skip saving if filtered is empty
+        if filtered.is_empty():
+            print(f" Skipped: {os.path.basename(file)} (no matching categories)")
+            return
+
         # Save compressed output
         out_file = os.path.join(output_path, f'mapped_file{file_idx}.parquet')
-        joined.write_parquet(out_file, compression='snappy')
+        filtered.write_parquet(out_file, compression='snappy')
 
         print(f" Done: {os.path.basename(file)} → {out_file} | ⏱️ {time.time() - start:.2f}s")
     except Exception as e:
         print(f" Error: {os.path.basename(file)} -> {e}")
-
-# --- Run with thread pool ---
-all_files = glob.glob(os.path.join(input_path, '*.parquet'))
-with ThreadPoolExecutor(max_workers=8) as executor:
-    for idx, file in enumerate(all_files):
-        executor.submit(process_file, idx, file)
-
-----filtered = joined.filter(pl.col('Final Category').is_in(['PKG', 'CHM']))
