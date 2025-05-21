@@ -27,7 +27,7 @@ def process_file(file_path):
     try:
         df = pd.read_parquet(file_path)
 
-        
+        # Compute material description length
         df['CMPNT_MATL_DESC_LEN'] = df['CMPNT_MATL_DESC'].astype(str).str.len()
 
         # Map unit to group
@@ -39,10 +39,8 @@ def process_file(file_path):
             .fillna('Unclassified')
         )
 
-        # Save to new folder (target_map_with_rules)
-        output_file = file_path.replace("train_test_data", "target_map_with_rules")
-        os.makedirs(os.path.dirname(output_file), exist_ok=True)
-        df.to_parquet(output_file, index=False)
+        # Overwrite the same file
+        df.to_parquet(file_path, index=False)
 
         print(f" Done: {os.path.basename(file_path)}")
     except Exception as e:
