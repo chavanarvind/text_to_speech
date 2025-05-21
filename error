@@ -1,14 +1,57 @@
-import polars as pl
+import os
+import glob
+import pandas as pd
+from multiprocessing import Pool, cpu_count
 
-# Path to your Parquet file
-file_path = './data/parquet_files/sample_file.parquet'  # Replace with actual file
+# UNIT_GROUP mapping
+unit_group_map = {
+    'KG': 'CHM', 'KGS': 'CHM', 'KGA': 'CHM', 'KGW': 'CHM', 'G': 'CHM', 'GR': 'CHM', 'GM': 'CHM', 'MG': 'CHM',
+    'LB': 'CHM', 'LBS': 'CHM', 'OZ': 'CHM', 'OZA': 'CHM', 'GW': 'CHM', 'TON': 'CHM', 'DR': 'CHM',
+    'L': 'Liquid', 'LT': 'Liquid', 'ML': 'Liquid', 'CC': 'Liquid', 'CL': 'Liquid', 'CCM': 'Liquid', 'GLL': 'Liquid',
+    'EA': 'Discrete', 'PC': 'Discrete', 'PCS': 'Discrete', 'Pcs': 'Discrete', 'PKT': 'Discrete', 'PK': 'Discrete',
+    'PAK': 'Discrete', 'PCK': 'Discrete', 'CS': 'Discrete', 'CSE': 'Discrete', 'CT': 'Discrete', 'CA': 'Discrete',
+    'ST': 'Discrete', 'GRO': 'Discrete', 'BX': 'Discrete',
+    'BOT': 'Containers', 'BOTTLE': 'Containers', 'ROLL': 'Containers', 'ROL': 'Containers', 'REEL': 'Containers', 'KAR': 'Containers',
+    'FT': 'Dimensional', 'YD': 'Dimensional', 'KM': 'Dimensional', 'DM': 'Dimensional', 'M': 'Dimensional',
+    'M1': 'Dimensional', 'M2': 'Dimensional', 'KM2': 'Dimensional', 'YD2': 'Dimensional', 'FT3': 'Dimensional',
+    'SQM': 'Dimensional', 'sqm': 'Dimensional', 'MYD': 'Dimensional', 'MI': 'Dimensional', 'SM': 'Dimensional',
+    'LM': 'Dimensional', 'LF': 'Dimensional', 'MH': 'Dimensional', 'KN': 'Dimensional', 'CH': 'Dimensional',
+    'TH': 'Unclassified', 'THU': 'Unclassified', 'IM': 'Unclassified', 'NOS': 'Unclassified', 'NO': 'Unclassified',
+    'TS': 'Unclassified', 'KA': 'Unclassified', 'ZPC': 'Unclassified', 'ZCT': 'Unclassified', '0%': 'Unclassified',
+    'KP': 'Unclassified', 'GP': 'Unclassified', 'KAI': 'Unclassified', 'SY': 'Unclassified', 'UN': 'Unclassified',
+    'MU': 'Unclassified', 'UM': 'Unclassified', 'HU': 'Unclassified'
+}
 
-# Read the file
-df = pl.read_parquet(file_path)
+# Function to process a single file
+def process_file(file_path):
+    try:
+        df = pd.read_parquet(file_path)
 
-# Get unique values in 'Final Category' column
-unique_values = df.select(pl.col('Final Category')).unique()
+        
+        df['CMPNT_MATL_DESC_LEN'] = df['CMPNT_MATL_DESC'].astype(str).str.len()
 
-# Print results
-print("Unique values in 'Final Category':")
-print(unique_values)
+        # Map unit to group
+        df['UNIT_GROUP'] = (
+            df['CMPNT_UOM_CD']
+            .fillna('')
+            .str.upper()
+            .map(unit_group_map)
+            .fillna('Unclassified')
+        )
+
+        # Save to new folder (target_map_with_rules)
+        output_file = file_path.replace("train_test_data", "target_map_with_rules")
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        df.to_parquet(output_file, index=False)
+
+        print(f" Done: {os.path.basename(file_path)}")
+    except Exception as e:
+        print(f" Failed: {os.path.basename(file_path)} -> {e}")
+
+# Main parallel execution
+if __name__ == '__main__':
+    input_path = './sub_cat_data/target_map_cleaned'
+    all_files = glob.glob(os.path.join(input_path, '*.parquet'))
+
+    with Pool(cpu_count()) as pool:
+        pool.map(process_file, all_files)
