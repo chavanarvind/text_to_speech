@@ -1,10 +1,15 @@
-Drop NA's
-    erp_im = erp_im[erp_im[ERP_PART_DESC].notna()].copy()
-    erp_im = erp_im[erp_im[ERP_PART_ID].notna()].copy()
- 
-    erp_em = erp_em[erp_em[ERP_PART_DESC].notna()].copy()
-    erp_em = erp_em[erp_em[ERP_PART_ID].notna()].copy()
-    print("After NULL ERP_PART_DESC filter:")
-    print("ERP IM - ERP_PART_IDs still present:", set(cmp_check_list) & set(erp_im[ERP_PART_ID].unique()))
-    print("ERP EM - ERP_PART_IDs still present:", set(cmp_check_list) & set(erp_em[ERP_PART_ID].unique()))
- 
+# Diagnostic: Check if any tracked ERP_PART_IDs are about to be dropped due to missing values
+print("Pre-Filter Diagnostic — ERP IM")
+
+print("Rows where ERP_PART_ID is in cmp_check_list:")
+print(erp_im[erp_im[ERP_PART_ID].isin(cmp_check_list)])
+
+print("\nRows where ERP_PART_ID is in cmp_check_list AND ERP_PART_DESC is missing:")
+print(erp_im[erp_im[ERP_PART_ID].isin(cmp_check_list) & erp_im[ERP_PART_DESC].isna()])
+
+print("\nRows where ERP_PART_ID is missing (NaN):")
+print(erp_im[erp_im[ERP_PART_ID].isna()])
+
+# Optional: Data types
+print("\nERP_PART_ID dtype:", erp_im[ERP_PART_ID].dtype)
+print("Unique values (first few):", erp_im[ERP_PART_ID].dropna().unique()[:5])
