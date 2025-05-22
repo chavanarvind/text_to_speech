@@ -1,7 +1,6 @@
-print("\n🔍 [STEP 1] After IM Load — Tracked CMPNT_MATL_NUM presence")
-df_im_step1 = erp_im[erp_im["CMPNT_MATL_NUM"].isin(cmp_check_list)][["CMPNT_MATL_NUM", "CMPNT_MATL_DESC"]]
-if not df_im_step1.empty:
-    print(df_im_step1.to_markdown(index=False))
+print("\n🔍 [STEP 2] After NULL Filter — Tracked CMPNT_MATL_NUM presence")
+df_im_step2 = erp_im[erp_im["CMPNT_MATL_NUM"].isin(cmp_check_list)][["CMPNT_MATL_NUM", "CMPNT_MATL_DESC"]]
+if not df_im_step2.empty:
+    print(df_im_step2.to_markdown(index=False))
 else:
-    print(" None of the tracked CMPNT_MATL_NUMs found in raw ERP IM")
-erp_im = get_data_from_local(data_dir)[0]  # or get_data_from_azure(erp_im_name)
+    print("All tracked CMPNT_MATL_NUMs were dropped by NULL filter in ERP IM")
