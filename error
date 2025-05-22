@@ -1,3 +1,6 @@
-print("🔍 Checking if tracked IDs exist in TRU")
-print("CMPNT_MATL_NUMs in IM:", cmp_check_list)
-print("Matched in TRU:", set(cmp_check_list) & set(tru[TRU_MAT_NUM].unique()))
+print("\n🔍 [STEP 1] After IM Load — Tracked CMPNT_MATL_NUM presence")
+df_im_step1 = erp_im[erp_im["CMPNT_MATL_NUM"].isin(cmp_check_list)][["CMPNT_MATL_NUM", "CMPNT_MATL_DESC"]]
+if not df_im_step1.empty:
+    print(df_im_step1.to_markdown(index=False))
+else:
+    print(" None of the tracked CMPNT_MATL_NUMs found in raw ERP IM")
