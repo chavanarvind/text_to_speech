@@ -1,10 +1,6 @@
-Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
-  File "cross_hound/matcher.py", line 1431, in <module>
-    main(input_dir=args.get('input_dir'),
-  File "cross_hound/matcher.py", line 1281, in main
-    erp, tru, erp_discarded, tru_discarded, run_params, tru_no_erp,tru_off_specs_no_common, bundles = ingest_data_and_prepare_examples(
-  File "/mnt/azureml/cr/j/ac531fe5aa60448c8ee3c616372259c7/exe/wd/cross_hound/data_ingestion.py", line 194, in ingest_data_and_prepare_examples
-    s.makedirs(user_logs_path, exist_ok=True)
-UnboundLocalError: local variable 's' referenced before assignment
+cmp_check_list = ['02109345', '02109344', '02109429', '02150019', '02111769', '02112146', '02111779']
+df_check = erp_im[erp_im["CMPNT_MATL_NUM"].isin(cmp_check_list)]
 
-
+user_logs_path = os.path.join(os.getcwd(), "user_logs")
+os.makedirs(user_logs_path, exist_ok=True)
+df_check.to_csv(os.path.join(user_logs_path, "erp_im_tracked_ids.csv"), index=False)
