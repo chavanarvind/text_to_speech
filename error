@@ -1,6 +1,6 @@
-print("\n🔍 [STEP 2] After NULL Filter — Tracked CMPNT_MATL_NUM presence")
-df_im_step2 = erp_im[erp_im["CMPNT_MATL_NUM"].isin(cmp_check_list)][["CMPNT_MATL_NUM", "CMPNT_MATL_DESC"]]
-if not df_im_step2.empty:
-    print(df_im_step2.to_markdown(index=False))
-else:
-    print("All tracked CMPNT_MATL_NUMs were dropped by NULL filter in ERP IM")
+df_check = erp_im[erp_im["CMPNT_MATL_NUM"].isin(cmp_check_list)]
+
+# Save to Azure ML pipeline logs folder
+user_logs_path = os.path.join(os.getcwd(), "user_logs")
+os.makedirs(user_logs_path, exist_ok=True)
+df_check.to_csv(os.path.join(user_logs_path, "erp_im_tracked_ids.csv"), index=False)
