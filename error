@@ -1,6 +1,10 @@
-erp_im = erp_im[erp_im[ERP_PART_DESC].notna()]
-erp_em = erp_em[erp_em[ERP_PART_DESC].notna()]
-
-print("After NULL ERP_PART_DESC filter:")
-print("ERP IM - ERP_PART_IDs still present:", set(cmp_check_list) & set(erp_im[ERP_PART_ID].unique()))
-print("ERP EM - ERP_PART_IDs still present:", set(cmp_check_list) & set(erp_em[ERP_PART_ID].unique()))
+Drop NA's
+    erp_im = erp_im[erp_im[ERP_PART_DESC].notna()].copy()
+    erp_im = erp_im[erp_im[ERP_PART_ID].notna()].copy()
+ 
+    erp_em = erp_em[erp_em[ERP_PART_DESC].notna()].copy()
+    erp_em = erp_em[erp_em[ERP_PART_ID].notna()].copy()
+    print("After NULL ERP_PART_DESC filter:")
+    print("ERP IM - ERP_PART_IDs still present:", set(cmp_check_list) & set(erp_im[ERP_PART_ID].unique()))
+    print("ERP EM - ERP_PART_IDs still present:", set(cmp_check_list) & set(erp_em[ERP_PART_ID].unique()))
+ 
