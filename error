@@ -1,15 +1,5 @@
-# Diagnostic: Check if any tracked ERP_PART_IDs are about to be dropped due to missing values
-print("Pre-Filter Diagnostic — ERP IM")
-
-print("Rows where ERP_PART_ID is in cmp_check_list:")
-print(erp_im[erp_im[ERP_PART_ID].isin(cmp_check_list)])
-
-print("\nRows where ERP_PART_ID is in cmp_check_list AND ERP_PART_DESC is missing:")
-print(erp_im[erp_im[ERP_PART_ID].isin(cmp_check_list) & erp_im[ERP_PART_DESC].isna()])
-
-print("\nRows where ERP_PART_ID is missing (NaN):")
-print(erp_im[erp_im[ERP_PART_ID].isna()])
-
-# Optional: Data types
-print("\nERP_PART_ID dtype:", erp_im[ERP_PART_ID].dtype)
-print("Unique values (first few):", erp_im[ERP_PART_ID].dropna().unique()[:5])
+-- Check if tracked IDs are missing ERP_PART_DESC
+SELECT CMPNT_MATL_NUM AS ERP_PART_ID, CMPNT_MATL_DESC AS ERP_PART_DESC
+FROM bom_rstr.nlp_input_bom_hier_dtls
+WHERE CMPNT_MATL_NUM IN ('02109345','02109344','02109429','02150019','02111769','02112146','02111779')
+  AND (CMPNT_MATL_DESC IS NULL OR TRIM(CMPNT_MATL_DESC) = '')
