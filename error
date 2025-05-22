@@ -4,3 +4,4 @@ if not df_im_step1.empty:
     print(df_im_step1.to_markdown(index=False))
 else:
     print(" None of the tracked CMPNT_MATL_NUMs found in raw ERP IM")
+erp_im = get_data_from_local(data_dir)[0]  # or get_data_from_azure(erp_im_name)
