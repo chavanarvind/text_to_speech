@@ -1,146 +1,193 @@
-import json
-import sys
-from azureml.core import Experiment, RunConfiguration, Environment, Workspace, Dataset
-from azureml.core.authentication import ServicePrincipalAuthentication
 
-from azureml.pipeline.core import Pipeline
-from azureml.pipeline.steps import PythonScriptStep
-from azureml.data import OutputFileDatasetConfig
+def main(input_dir,
+         erp_im_dataset_name,
+         erp_em_dataset_name,
+         tru_dataset_name,
+         trade_names_dataset_name,
+         data_version,
+         sentence_transformer_dir,
+         save=False,
+         output_dir: Union[None, str] = None,
+         datastore_name='xbomrefadlsg2',
+         device='cuda',
+         upload_to_adls=True,
+         embeddings_save_dir="precalculated_embeddings",
+         model_type='offline_transformer',
+         db_style='pandas',
+         use_azure_dataset=True):
+    run_params = {}
+    erp, tru, erp_discarded, tru_discarded, run_params, tru_no_erp,tru_off_specs_no_common, bundles = ingest_data_and_prepare_examples(
+        input_dir,
+        erp_im_dataset_name,
+        erp_em_dataset_name,
+        tru_dataset_name,
+        trade_names_dataset_name,
+        run_params,
+        output_dir)
+
+    matched, unmatched = full_matching_routine(data_version, db_style, device,
+                                               embeddings_save_dir, erp, model_type,
+                                               sentence_transformer_dir, tru, use_azure_dataset, bundles, output_dir)
+    unmatched['Matching Reason'] = 'Not match in any round'
+
+    print('#' * 60)
+    print('Main matching routine finished. Will append tru not common')
+    print('#' * 60)
+    unmatched_by_default = tru_no_erp.copy()
+    missing_cols = list(set(unmatched.columns) - set(unmatched_by_default.columns))
+    for col in missing_cols:
+        unmatched_by_default[col] = None
+    unmatched_by_default = unmatched_by_default[unmatched.columns]
+    unmatched_by_default['is_matched'] = False
+    unmatched_by_default['PLNT_CD'] = 'Not Found in ERP'
+    unmatched_by_default['SRC_SYS_CD'] = 'Not Found in ERP'
+    unmatched_by_default[UNIFIED_MC_COL] = unmatched_by_default[TRU_MAT_NUM]
+    unmatched_by_default['Matching Reason'] = 'Code not found in ERP'
+    unmatched = pd.concat([unmatched, unmatched_by_default], ignore_index=True)
+
+    # Match off-specs
+    try:
+        print('')
+        print('#' * 60)
+        print('Starting off spec matching')
+        print('#' * 60)
+        common_codes = (set(erp_discarded[ERP_MAT_NUM]).intersection(set(tru_discarded[TRU_MAT_NUM])))
+        print('Common number of codes in both sources off-specs: ', len(common_codes))
+        erp_discarded = erp_discarded[erp_discarded[ERP_MAT_NUM].isin(common_codes)].reset_index(drop=True)
+        print("erp_discarded_dataset",erp_discarded)
+        print("erp_discarded_dataset",len(erp_discarded))
+        tru_no_common = tru_off_specs_no_common
+        tru_discarded = tru_discarded[tru_discarded[TRU_MAT_NUM].isin(common_codes)].reset_index(drop=True)
+
+        matched_off_specs, unmatched_off_specs = full_matching_routine(data_version, db_style, device,
+                                                                       embeddings_save_dir, erp_discarded, model_type,
+                                                                       sentence_transformer_dir, tru_discarded,
+                                                                       use_azure_dataset,
+                                                                       bundles, output_dir)
+        matched_off_specs['Matching Reason'] = 'Off Spec Match'
+        unmatched_off_specs['Matching Reason'] = 'Off Spec Non Match'
+
+        matched = pd.concat([matched, matched_off_specs], ignore_index=True)
+        print('matched_off_specs_dataset',matched_off_specs)
+        unmatched = pd.concat([unmatched, unmatched_off_specs], ignore_index=True)
+
+        try:
+            unmatched_by_default = tru_no_common.copy()
+            missing_cols = list(set(unmatched.columns) - set(unmatched_by_default.columns))
+            for col in missing_cols:
+                unmatched_by_default[col] = None
+            unmatched_by_default = unmatched_by_default[unmatched.columns]
+            unmatched_by_default['is_matched'] = False
+            unmatched_by_default['PLNT_CD'] = 'Not Found in ERP'
+            unmatched_by_default['SRC_SYS_CD'] = 'Not Found in ERP'
+            unmatched_by_default[UNIFIED_MC_COL] = unmatched_by_default[TRU_MAT_NUM]
+            unmatched_by_default['Matching Reason'] = 'Off Spec Code not found in ERP'
+            unmatched = pd.concat([unmatched, unmatched_by_default], ignore_index=True)
+            #updated for missing comp id issue
+            erp_no_common = erp_discarded[~erp_discarded[ERP_MAT_NUM].isin(common_codes)]
+            unmatched_by_default_erp = erp_no_common.copy()
+            missing_cols = list(set(unmatched.columns) - set(unmatched_by_default_erp.columns))
+            for col in missing_cols:
+                unmatched_by_default_erp[col] = None
+                unmatched_by_default_erp = unmatched_by_default_erp[unmatched.columns]
+                unmatched_by_default_erp['is_matched'] = False
+                unmatched_by_default_erp[UNIFIED_MC_COL] = unmatched_by_default_erp[ERP_MAT_NUM] # check in the result
+                unmatched_by_default_erp['Matching Reason'] = 'Off Spec Non Match'
+                unmatched = pd.concat([unmatched, unmatched_by_default_erp], ignore_index=True)
+        except Exception as e:
+            print('Attaching not common tru coming from off specs did not work')
+    except Exception as e:
+        print('Matching off-specs did not work')
+        print(e) 
+        error_details = traceback.format_exc()
+        print("Exception details:\n", error_details)
+        exit(1)
+
+    full_matches = pd.concat([matched, unmatched], ignore_index=True)
+
+    print('#' * 60)
+    print('FULL MATCHING ROUTINE FINISHED.')
+    print('#' * 60)
+
+    print('n#' * 60)
+    print('STARTING PREDICTION JOB FOR RAW MATERIALS')
+    print('#' * 60)
+
+    run = Run.get_context()
+    if run.identity.startswith('OfflineRun'):  # We are running local.
+        workspace = Workspace.from_config(path='../.azureml/dev_config.json')
+    else:  # We are running a pipeline inside azureml
+        workspace = run.experiment.workspace
+
+    try:
+        full_matches[CLASSIFICATION_COL] = predict(workspace, full_matches, TRU_SPEC_DESC, 'CHILD_TYPE_CD')
+        print("Prediction added to the full data")
+        print('#' * 60)
+        print('#' * 60)
+        print('FULL MATCHING ROUTINE FINISHED. WILL SAVE RESULTS.')
+        print('#' * 60)
+    except Exception as e:
+        print('PC TEMPLATE Prediction did not work')
+        print(e)
+        full_matches[CLASSIFICATION_COL] = None
+
+    print('#' * 60)
+    print('Boosting Matched based on PC')
+    print('#' * 60)
+    try:
+        full_matches = boost_matches(full_matches, workspace)
+    except:
+        full_matches.to_csv(f'{output_dir}/full_matches_failed_from_boosting.csv', index=False)
+        raise exit(1)
+
+    matched = save_results(datastore_name, erp_discarded, full_matches, output_dir, save,
+                           tru_discarded, run_params, upload_to_adls)
+
+    return matched, run_params
 
 
-def set_aml_config_for_training(ws, compute_name):
-    compute_target = ws.compute_targets[compute_name]
-    aml_run_config = RunConfiguration()
-    aml_run_config.target = compute_target
-    env = Environment.get(workspace=ws,
-                          name="Bom_X_Evaluator")
-    aml_run_config.environment = env
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input-dir')
+    parser.add_argument('--erp-im-dataset-name')
+    parser.add_argument('--erp-em-dataset-name')
+    parser.add_argument('--tru-dataset-name')
+    parser.add_argument('--trade-names-name')
+    parser.add_argument('--output_dir', default='../../../matched_data')
+    parser.add_argument('--sentence-transformer-dir',
+                        default='../../../register_static_inputs_in_azure/all_roberta_large_v1')
+    parser.add_argument('--embeddings-dir')
+    parser.add_argument('--datastore-name')
+    parser.add_argument('--data-version')
+    parser.add_argument('--model-type')
+    parser.add_argument('--db-style')
+    parser.add_argument('--device')
+    return vars(parser.parse_args())
 
-    return aml_run_config
-
-
-def workspace_from_cmd(args):
-    print('Reading workspace from command line arguments')
-    tenant_id = args[1]
-    client_id = args[2]
-    client_secret = args[3]
-    config_file = args[4]
-
-    # Needed when triggering from Jenkins
-    service_principal_auth = ServicePrincipalAuthentication(tenant_id=tenant_id,
-                                                            service_principal_id=client_id,
-                                                            service_principal_password=client_secret)
-    path = '../.azureml/' + config_file
-
-    with open(path) as json_file_obj:
-        config_json = json.load(json_file_obj)
-
-    return Workspace(subscription_id=config_json['subscription_id'],
-                     resource_group=config_json['resource_group'],
-                     workspace_name=config_json['workspace_name'],
-                     auth=service_principal_auth)
-
-
-def workspace_from_config(path):
-    print('Reading workspace from local config file')
-    with open(path) as json_file_obj:
-        config_json = json.load(json_file_obj)
-
-    return Workspace(subscription_id=config_json['subscription_id'],
-                     resource_group=config_json['resource_group'],
-                     workspace_name=config_json['workspace_name'])
-
-
-#ENV = 'dev'
-ENV = 'dev'
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:  # Command line args
-        workspace = workspace_from_cmd(sys.argv)
-        # Default to dev when running from jenkins
-        aml_config_file = 'dev_config.json'
-        datastore_name = 'xbomrefadlsg2'
-        compute_name = 'llm-gpu-cluster-2'
-    else:
-        if ENV == 'prod':
-            aml_config_file = 'prod_config.json'
-            datastore_name = 'xbom_prod_adlsgen2'
-            compute_name = 'bom-cluster-2'
-        else:
-            aml_config_file = 'dev_config.json'
-            datastore_name = 'xbomrefadlsg2'
-            compute_name = 'llm-gpu-cluster-2'
-
-        workspace = workspace_from_config(path='../.azureml/' + aml_config_file)
-
-    aml_config = set_aml_config_for_training(workspace, compute_name=compute_name)
-
-    # version = 'aug_2023'
-    # version = 'sep9_2023'
-    # version = '5k'
-    # version = 'sep19_2023'
-    # version = 'oct10_2023'
-    # version = 'nov14_2023'
-    # version = 'may14_2024'
-#    version = 'jun12_2024'
-    version = 'aug20_2024'
-
-    model_type = 'offline_transformer'
-    # model_type = 'open_ai'
-    transformer_model = 'all-roberta-large-kft'
-    db_style = 'pandas'
-
-    sentence_transformer_dir = (Dataset
-                                .get_by_name(workspace, name=transformer_model)
-                                .as_named_input('transformer_model')
-                                .as_mount()
-                                )
-    try:
-        embeddings_dir = (Dataset
-                          .get_by_name(workspace, name=f'bom_embeddings_{model_type}_{version}')
-                          .as_named_input('embeddings')
-                          .as_mount()
-                          )
-    except Exception as e:
-        print(e)
-        embeddings_dir = 'new_embd'
-
-    # This will return the id of the datasets
-    erp_im_data = Dataset.get_by_name(workspace, f'nlp_input_bom_hier_dtls').as_named_input(f'erp_im_bom')
-    erp_em_data = Dataset.get_by_name(workspace, f'nlp_input_bom_hier').as_named_input(f'erp_em_bom')
-    tru_data = Dataset.get_by_name(workspace, f'nlp_input_p360_bom').as_named_input(f'tru_bom')
-    trade_names_data = Dataset.get_by_name(workspace, 'nlp_input_p360_trdnm').as_named_input('trade_names_feb08_2024')
-
-    matches_output = OutputFileDatasetConfig(name='matches')
-    full_training_step = PythonScriptStep(
-        name="Cross Hound Matching",
-        source_directory="src",
-        script_name="cross_hound/matcher.py",
-        arguments=['--erp-im-dataset-name', erp_im_data,
-                   '--erp-em-dataset-name', erp_em_data,
-                   '--tru-dataset-name', tru_data,
-                   '--trade-names-name', trade_names_data,
-                   '--sentence-transformer-dir', sentence_transformer_dir,
-                   '--embeddings-dir', embeddings_dir,
-                   '--output_dir', matches_output,
-                   '--datastore-name', datastore_name,
-                   '--data-version', version,
-                   '--model-type', model_type,
-                   '--db-style', db_style],
-        runconfig=aml_config,
-        allow_reuse=False
-    )
-
-    pipeline = Pipeline(workspace=workspace, steps=[full_training_step])
-    print('Pipeline created and about to be deployed')
+    args = get_args()
 
     try:
-        from git import Repo
-
-        local_branch = Repo(search_parent_directories=True).active_branch.name
-        local_branch = local_branch.replace('/', '-')
-        local_branch = local_branch.replace(' ', '-')
+        run = Run.get_context()
+        openai.api_key = run.get_secret(name='CrossHound')
+        openai.api_base = 'https://cog-openai-dto-crosshound-01-dev.openai.azure.com'
+        openai.api_type = 'azure'
+        openai.api_version = '2023-05-15'  # this may change in the future
+        deployment_name = 'text-embedding-ada-002'
     except:
-        local_branch = 'jenkins_run'
-    pipeline_run = Experiment(workspace, name=f'xHound-{local_branch}').submit(pipeline)
-    pipeline_run.wait_for_completion()
+        pass
+    main(input_dir=args.get('input_dir'),
+         erp_im_dataset_name=args.get('erp_im_dataset_name'),
+         erp_em_dataset_name=args.get('erp_em_dataset_name'),
+         tru_dataset_name=args.get('tru_dataset_name'),
+         trade_names_dataset_name=args.get('trade_names_name'),
+         data_version=args.get('data_version'),
+         sentence_transformer_dir=args.get('sentence_transformer_dir'),
+         save=True,
+         output_dir=args.get('output_dir'),
+         datastore_name=args.get('datastore_name', 'xbomrefadlsg2'),
+         model_type=args.get('model_type'),
+         db_style=args.get('db_style'),
+         use_azure_dataset=True,
+         embeddings_save_dir=args.get('embeddings_dir'))
