@@ -1,54 +1,146 @@
-import os
-import joblib
-import torch
-import pandas as pd
-import numpy as np
-from sentence_transformers import SentenceTransformer
-from sklearn.preprocessing import OrdinalEncoder, StandardScaler
+import json
+import sys
+from azureml.core import Experiment, RunConfiguration, Environment, Workspace, Dataset
+from azureml.core.authentication import ServicePrincipalAuthentication
 
-# --- CONFIGURATION ---
-client_file = './data/validation_step/sampled_null_final_category.parquet'
-output_file = './data/client_predictions.csv'
-required_cols = ['CMPNT_MATL_DESC', 'CMPNT_MATL_DESC_LEN', 'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']
+from azureml.pipeline.core import Pipeline
+from azureml.pipeline.steps import PythonScriptStep
+from azureml.data import OutputFileDatasetConfig
 
-# --- LOAD CLIENT DATA ---
-df = pd.read_parquet(client_file, columns=required_cols)
-df = df[df['CMPNT_MATL_DESC'].notna()].copy()
-print(f"✅ Loaded {len(df)} records from client file.")
 
-# --- LOAD TRAINED ARTIFACTS ---
-model = joblib.load('./data/validation_step/model_artifects/final_model.joblib')
-ordinal = joblib.load('./data/validation_step/model_artifects/ordinal_encoder.pkl')
-scaler = joblib.load('./data/validation_step/model_artifects/scaler.pkl')
+def set_aml_config_for_training(ws, compute_name):
+    compute_target = ws.compute_targets[compute_name]
+    aml_run_config = RunConfiguration()
+    aml_run_config.target = compute_target
+    env = Environment.get(workspace=ws,
+                          name="Bom_X_Evaluator")
+    aml_run_config.environment = env
 
-# --- LOAD BERT MODEL ---
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-encoder = SentenceTransformer('pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb', device=device)
-encoder.max_seq_length = 128
+    return aml_run_config
 
-# --- TRANSFORM FEATURES ---
-print("🔄 Generating BERT embeddings...")
-desc_emb = encoder.encode(
-    df['CMPNT_MATL_DESC'].astype(str).tolist(),
-    batch_size=256,
-    show_progress_bar=True,
-    convert_to_numpy=True,
-    num_workers=4
-)
 
-length_scaled = scaler.transform(df[['CMPNT_MATL_DESC_LEN']])
-cat_encoded = ordinal.transform(df[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
-X_pred = np.hstack([desc_emb, length_scaled, cat_encoded])
+def workspace_from_cmd(args):
+    print('Reading workspace from command line arguments')
+    tenant_id = args[1]
+    client_id = args[2]
+    client_secret = args[3]
+    config_file = args[4]
 
-# --- PREDICT WITH CONFIDENCE ---
-print("🧠 Predicting with LightGBM model...")
-y_proba = model.predict_proba(X_pred)
-y_score = np.max(y_proba, axis=1)
-y_pred = model.predict(X_pred)
-df['Score'] = y_score
-df['Predicted'] = y_pred
-df['Final_Prediction'] = np.where(y_score < 0.6, 'Other', y_pred)
+    # Needed when triggering from Jenkins
+    service_principal_auth = ServicePrincipalAuthentication(tenant_id=tenant_id,
+                                                            service_principal_id=client_id,
+                                                            service_principal_password=client_secret)
+    path = '../.azureml/' + config_file
 
-# --- SAVE OUTPUT ---
-df.to_csv(output_file, index=False)
-print(f"✅ Predictions saved to: {output_file}")
+    with open(path) as json_file_obj:
+        config_json = json.load(json_file_obj)
+
+    return Workspace(subscription_id=config_json['subscription_id'],
+                     resource_group=config_json['resource_group'],
+                     workspace_name=config_json['workspace_name'],
+                     auth=service_principal_auth)
+
+
+def workspace_from_config(path):
+    print('Reading workspace from local config file')
+    with open(path) as json_file_obj:
+        config_json = json.load(json_file_obj)
+
+    return Workspace(subscription_id=config_json['subscription_id'],
+                     resource_group=config_json['resource_group'],
+                     workspace_name=config_json['workspace_name'])
+
+
+#ENV = 'dev'
+ENV = 'dev'
+
+if __name__ == '__main__':
+    if len(sys.argv) > 1:  # Command line args
+        workspace = workspace_from_cmd(sys.argv)
+        # Default to dev when running from jenkins
+        aml_config_file = 'dev_config.json'
+        datastore_name = 'xbomrefadlsg2'
+        compute_name = 'llm-gpu-cluster-2'
+    else:
+        if ENV == 'prod':
+            aml_config_file = 'prod_config.json'
+            datastore_name = 'xbom_prod_adlsgen2'
+            compute_name = 'bom-cluster-2'
+        else:
+            aml_config_file = 'dev_config.json'
+            datastore_name = 'xbomrefadlsg2'
+            compute_name = 'llm-gpu-cluster-2'
+
+        workspace = workspace_from_config(path='../.azureml/' + aml_config_file)
+
+    aml_config = set_aml_config_for_training(workspace, compute_name=compute_name)
+
+    # version = 'aug_2023'
+    # version = 'sep9_2023'
+    # version = '5k'
+    # version = 'sep19_2023'
+    # version = 'oct10_2023'
+    # version = 'nov14_2023'
+    # version = 'may14_2024'
+#    version = 'jun12_2024'
+    version = 'aug20_2024'
+
+    model_type = 'offline_transformer'
+    # model_type = 'open_ai'
+    transformer_model = 'all-roberta-large-kft'
+    db_style = 'pandas'
+
+    sentence_transformer_dir = (Dataset
+                                .get_by_name(workspace, name=transformer_model)
+                                .as_named_input('transformer_model')
+                                .as_mount()
+                                )
+    try:
+        embeddings_dir = (Dataset
+                          .get_by_name(workspace, name=f'bom_embeddings_{model_type}_{version}')
+                          .as_named_input('embeddings')
+                          .as_mount()
+                          )
+    except Exception as e:
+        print(e)
+        embeddings_dir = 'new_embd'
+
+    # This will return the id of the datasets
+    erp_im_data = Dataset.get_by_name(workspace, f'nlp_input_bom_hier_dtls').as_named_input(f'erp_im_bom')
+    erp_em_data = Dataset.get_by_name(workspace, f'nlp_input_bom_hier').as_named_input(f'erp_em_bom')
+    tru_data = Dataset.get_by_name(workspace, f'nlp_input_p360_bom').as_named_input(f'tru_bom')
+    trade_names_data = Dataset.get_by_name(workspace, 'nlp_input_p360_trdnm').as_named_input('trade_names_feb08_2024')
+
+    matches_output = OutputFileDatasetConfig(name='matches')
+    full_training_step = PythonScriptStep(
+        name="Cross Hound Matching",
+        source_directory="src",
+        script_name="cross_hound/matcher.py",
+        arguments=['--erp-im-dataset-name', erp_im_data,
+                   '--erp-em-dataset-name', erp_em_data,
+                   '--tru-dataset-name', tru_data,
+                   '--trade-names-name', trade_names_data,
+                   '--sentence-transformer-dir', sentence_transformer_dir,
+                   '--embeddings-dir', embeddings_dir,
+                   '--output_dir', matches_output,
+                   '--datastore-name', datastore_name,
+                   '--data-version', version,
+                   '--model-type', model_type,
+                   '--db-style', db_style],
+        runconfig=aml_config,
+        allow_reuse=False
+    )
+
+    pipeline = Pipeline(workspace=workspace, steps=[full_training_step])
+    print('Pipeline created and about to be deployed')
+
+    try:
+        from git import Repo
+
+        local_branch = Repo(search_parent_directories=True).active_branch.name
+        local_branch = local_branch.replace('/', '-')
+        local_branch = local_branch.replace(' ', '-')
+    except:
+        local_branch = 'jenkins_run'
+    pipeline_run = Experiment(workspace, name=f'xHound-{local_branch}').submit(pipeline)
+    pipeline_run.wait_for_completion()
