@@ -1,135 +1,49 @@
+import os
+from typing import List
 
-def main(input_dir,
-         erp_im_dataset_name,
-         erp_em_dataset_name,
-         tru_dataset_name,
-         trade_names_dataset_name,
-         data_version,
-         sentence_transformer_dir,
-         save=False,
-         output_dir: Union[None, str] = None,
-         datastore_name='xbomrefadlsg2',
-         device='cuda',
-         upload_to_adls=True,
-         embeddings_save_dir="precalculated_embeddings",
-         model_type='offline_transformer',
-         db_style='pandas',
-         use_azure_dataset=True):
-    run_params = {}
-    erp, tru, erp_discarded, tru_discarded, run_params, tru_no_erp,tru_off_specs_no_common, bundles = ingest_data_and_prepare_examples(
-        input_dir,
-        erp_im_dataset_name,
-        erp_em_dataset_name,
-        tru_dataset_name,
-        trade_names_dataset_name,
-        run_params,
-        output_dir)
+import pandas as pd
 
-    matched, unmatched = full_matching_routine(data_version, db_style, device,
-                                               embeddings_save_dir, erp, model_type,
-                                               sentence_transformer_dir, tru, use_azure_dataset, bundles, output_dir)
-    unmatched['Matching Reason'] = 'Not match in any round'
+from cross_hound.config import IRRELEVANT_MATERIALS
 
-    print('#' * 60)
-    print('Main matching routine finished. Will append tru not common')
-    print('#' * 60)
-    unmatched_by_default = tru_no_erp.copy()
-    missing_cols = list(set(unmatched.columns) - set(unmatched_by_default.columns))
-    for col in missing_cols:
-        unmatched_by_default[col] = None
-    unmatched_by_default = unmatched_by_default[unmatched.columns]
-    unmatched_by_default['is_matched'] = False
-    unmatched_by_default['PLNT_CD'] = 'Not Found in ERP'
-    unmatched_by_default['SRC_SYS_CD'] = 'Not Found in ERP'
-    unmatched_by_default[UNIFIED_MC_COL] = unmatched_by_default[TRU_MAT_NUM]
-    unmatched_by_default['Matching Reason'] = 'Code not found in ERP'
-    unmatched = pd.concat([unmatched, unmatched_by_default], ignore_index=True)
+xhound_folder = os.path.dirname(os.path.realpath(__file__))
+src_folder = os.path.abspath(os.path.join(xhound_folder, os.pardir))
 
-    # Match off-specs
-    try:
-        print('')
-        print('#' * 60)
-        print('Starting off spec matching')
-        print('#' * 60)
-        common_codes = (set(erp_discarded[ERP_MAT_NUM]).intersection(set(tru_discarded[TRU_MAT_NUM])))
-        print('Common number of codes in both sources off-specs: ', len(common_codes))
-        erp_discarded = erp_discarded[erp_discarded[ERP_MAT_NUM].isin(common_codes)].reset_index(drop=True)
-        print("erp_discarded_dataset",erp_discarded)
-        print("erp_discarded_dataset",len(erp_discarded))
-        tru_no_common = tru_off_specs_no_common
-        tru_discarded = tru_discarded[tru_discarded[TRU_MAT_NUM].isin(common_codes)].reset_index(drop=True)
+OFF_SPEC_LIST = pd.read_csv(f'{src_folder}/reference_tables/off_spec_items.csv', dtype=str)
 
-        matched_off_specs, unmatched_off_specs = full_matching_routine(data_version, db_style, device,
-                                                                       embeddings_save_dir, erp_discarded, model_type,
-                                                                       sentence_transformer_dir, tru_discarded,
-                                                                       use_azure_dataset,
-                                                                       bundles, output_dir)
-        matched_off_specs['Matching Reason'] = 'Off Spec Match'
-        unmatched_off_specs['Matching Reason'] = 'Off Spec Non Match'
 
-        matched = pd.concat([matched, matched_off_specs], ignore_index=True)
-        print('matched_off_specs_dataset',matched_off_specs)
-        unmatched = pd.concat([unmatched, unmatched_off_specs], ignore_index=True)
+def classify_as_off_spec(df: pd.DataFrame) -> List:
+    '''
+    df should have as first column the id and as second column the description
 
-        try:
-            unmatched_by_default = tru_no_common.copy()
-            missing_cols = list(set(unmatched.columns) - set(unmatched_by_default.columns))
-            for col in missing_cols:
-                unmatched_by_default[col] = None
-            unmatched_by_default = unmatched_by_default[unmatched.columns]
-            unmatched_by_default['is_matched'] = False
-            unmatched_by_default['PLNT_CD'] = 'Not Found in ERP'
-            unmatched_by_default['SRC_SYS_CD'] = 'Not Found in ERP'
-            unmatched_by_default[UNIFIED_MC_COL] = unmatched_by_default[TRU_MAT_NUM]
-            unmatched_by_default['Matching Reason'] = 'Off Spec Code not found in ERP'
-            unmatched = pd.concat([unmatched, unmatched_by_default], ignore_index=True)
-        except Exception as e:
-            print('Attaching not common tru coming from off specs did not work')
-    except Exception as e:
-        print('Matching off-specs did not work')
-        print(e) 
-        error_details = traceback.format_exc()
-        print("Exception details:\n", error_details)
-        exit(1)
+    Data can be either ERP or TRU as the OFF_SPEC_LIST includes both
+    '''
 
-    full_matches = pd.concat([matched, unmatched], ignore_index=True)
+    n = len(df)
+    col_id = df.columns[0]
+    col_desc = df.columns[1]
 
-    print('#' * 60)
-    print('FULL MATCHING ROUTINE FINISHED.')
-    print('#' * 60)
+    df_reference = df.merge(OFF_SPEC_LIST[['id']].drop_duplicates(),
+                            left_on=col_id,
+                            right_on='id',
+                            how='left')
 
-    print('n#' * 60)
-    print('STARTING PREDICTION JOB FOR RAW MATERIALS')
-    print('#' * 60)
+    assert n == len(df_reference), 'duplicates produced after inspecting ids'
 
-    run = Run.get_context()
-    if run.identity.startswith('OfflineRun'):  # We are running local.
-        workspace = Workspace.from_config(path='../.azureml/dev_config.json')
-    else:  # We are running a pipeline inside azureml
-        workspace = run.experiment.workspace
+    df_reference = df_reference.merge(OFF_SPEC_LIST[['description']].drop_duplicates(),
+                                      left_on=col_desc,
+                                      right_on='description',
+                                      how='left')
 
-    try:
-        full_matches[CLASSIFICATION_COL] = predict(workspace, full_matches, TRU_SPEC_DESC, 'CHILD_TYPE_CD')
-        print("Prediction added to the full data")
-        print('#' * 60)
-        print('#' * 60)
-        print('FULL MATCHING ROUTINE FINISHED. WILL SAVE RESULTS.')
-        print('#' * 60)
-    except Exception as e:
-        print('PC TEMPLATE Prediction did not work')
-        print(e)
-        full_matches[CLASSIFICATION_COL] = None
+    # If either id or description are found in the off spec list, mark it as off spec
+    based_on_list = df_reference[['id', 'description']].notna().any(axis=1)
 
-    print('#' * 60)
-    print('Boosting Matched based on PC')
-    print('#' * 60)
-    try:
-        full_matches = boost_matches(full_matches, workspace)
-    except:
-        full_matches.to_csv(f'{output_dir}/full_matches_failed_from_boosting.csv', index=False)
-        raise exit(1)
+    keyword_match = (df[col_desc]
+                     .str
+                     .lower()
+                     .str
+                     .contains('|'.join(IRRELEVANT_MATERIALS), case=False)
+                     )
+    keyword_match = (keyword_match | df[col_desc].str.lower().isin(['agua', 'aqua']))
 
-    matched = save_results(datastore_name, erp_discarded, full_matches, output_dir, save,
-                           tru_discarded, run_params, upload_to_adls)
-
-    return matched, run_params
+    final_result = (based_on_list | keyword_match)
+    return final_result
