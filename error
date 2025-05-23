@@ -1,112 +1,54 @@
-import argparse, os, re, pickle, nltk
-from azureml.core import Run,Dataset
-from azureml.core.model import Model
+import os
+import joblib
+import torch
 import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
+import numpy as np
+from sentence_transformers import SentenceTransformer
+from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 
-def get_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--input-dataset-name')
-    parser.add_argument('--model-loc')
-    parser.add_argument('--model-name')
-    parser.add_argument('--vectorizer-folder')
-    parser.add_argument('--vectorizer-name')
-    parser.add_argument('--predicted-data')
-    parser.add_argument('--model_registry_loc')
-    parser.add_argument('--vectorizer_registry_loc')
+# --- CONFIGURATION ---
+client_file = './data/validation_step/sampled_null_final_category.parquet'
+output_file = './data/client_predictions.csv'
+required_cols = ['CMPNT_MATL_DESC', 'CMPNT_MATL_DESC_LEN', 'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']
 
-    return vars(parser.parse_args())
+# --- LOAD CLIENT DATA ---
+df = pd.read_parquet(client_file, columns=required_cols)
+df = df[df['CMPNT_MATL_DESC'].notna()].copy()
+print(f"✅ Loaded {len(df)} records from client file.")
 
-# Function to read pickle file
-def read_pickle_file(pickle_loc, model=False):
-    if model:
-        model = None
-        with open(pickle_loc + '/model.pkl', 'rb') as fin:
-            model = pickle.load(fin)
-        return model
-    else:
-        vectorizer = None
-        with open(pickle_loc + '/vectorizer.pickle', 'rb') as fin:
-            vectorizer = pickle.load(fin)
-        return vectorizer
+# --- LOAD TRAINED ARTIFACTS ---
+model = joblib.load('./data/validation_step/model_artifects/final_model.joblib')
+ordinal = joblib.load('./data/validation_step/model_artifects/ordinal_encoder.pkl')
+scaler = joblib.load('./data/validation_step/model_artifects/scaler.pkl')
 
-# Function to extract only words from the text
-def search_words(text):
-    result = re.findall(r'\b[^\d\W]+\b', text)
-    return " ".join(result)
+# --- LOAD BERT MODEL ---
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+encoder = SentenceTransformer('pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb', device=device)
+encoder.max_seq_length = 128
 
-def preprocessing_data(data, vectorizer_loc, reg_loc):
-    # 1. Lowering the text
-    data = data.str.lower()
-    # 2. Getting all the non numerical values
-    # Function to extract only words from the text
-    data = data.apply(lambda x : search_words(x))
-    # 3. Removing stop words (Removing and adding some more stopwords)
-    stopwords = nltk.corpus.stopwords.words('english')
-    stopwords.remove('can')
-    stopwords.extend(['x', 'mm', 'm²', 'ml', 'μm', 'g'])
-    data = data.apply(lambda x: ' '.join([word for word in x.split() if word not in (stopwords)]))
-    # 4. Converting data to tf-idf vector
-    vectorizer = TfidfVectorizer()
-    X_train_tfidf = vectorizer.fit_transform(data) # remember to use the original X_train set
-    print(X_train_tfidf.shape)
-    # 5. Save Vectorizer
-    os.makedirs(reg_loc, exist_ok=True)
-    with open(reg_loc + '/vectorizer.pickle', 'wb') as fin:
-        pickle.dump(vectorizer, fin)
-    return X_train_tfidf
+# --- TRANSFORM FEATURES ---
+print("🔄 Generating BERT embeddings...")
+desc_emb = encoder.encode(
+    df['CMPNT_MATL_DESC'].astype(str).tolist(),
+    batch_size=256,
+    show_progress_bar=True,
+    convert_to_numpy=True,
+    num_workers=4
+)
 
-def model_training(preprocessed_data, y, model_loc, reg_loc):
-    # fitting the Logistic Regression Model
-    lr_multinomial_model = LogisticRegression(multi_class='multinomial', solver='lbfgs')
-    lr_multinomial_model.fit(preprocessed_data, y)
-    # Save Model
-    os.makedirs(reg_loc, exist_ok=True)
-    with open(reg_loc + '/model.pkl', 'wb') as fin:
-        pickle.dump(lr_multinomial_model, fin)
-    return lr_multinomial_model
+length_scaled = scaler.transform(df[['CMPNT_MATL_DESC_LEN']])
+cat_encoded = ordinal.transform(df[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+X_pred = np.hstack([desc_emb, length_scaled, cat_encoded])
 
-def predict_data(model, preprocessed_data, input_data, save_predicted_data):
-    prediction = model.predict(preprocessed_data)
-    input_data['PC_Template_Prediction'] = prediction
-    # Save Results
-    os.makedirs(save_predicted_data, exist_ok=True)
-    input_data.to_parquet(save_predicted_data + '/data.parquet')
+# --- PREDICT WITH CONFIDENCE ---
+print("🧠 Predicting with LightGBM model...")
+y_proba = model.predict_proba(X_pred)
+y_score = np.max(y_proba, axis=1)
+y_pred = model.predict(X_pred)
+df['Score'] = y_score
+df['Predicted'] = y_pred
+df['Final_Prediction'] = np.where(y_score < 0.6, 'Other', y_pred)
 
-def register_vectorizer_model(vectorizer_loc, vectorizer_name, model_loc, model_name, workspace):
-    vectorizer = Model.register(model_path= vectorizer_loc + '/vectorizer.pickle',
-                          model_name= vectorizer_name,
-                          tags= {'project':'BOM'},
-                          description="TF-IDF Vectorizer that will take raw material description and converts it into tf-idf Sparse Matrix",
-                          workspace=workspace)
-    
-    model = Model.register(model_path= model_loc + '/model.pkl',
-                          model_name= model_name,
-                          tags={'project':'BOM'},
-                          description="Classification model that will take raw material description and classifies it into a category",
-                          workspace=workspace)
-
-def main(input_data_location, model_loc, model_name, tf_idf_vectorizer_loc, tf_idf_vectorizer_name, predicted_data_loc, 
-         model_reg_loc, vectorizer_reg_loc, run):
-    # Reading raw Data
-    input_data = pd.read_parquet(input_data_location)
-    preprocessed_sparse_data = preprocessing_data(input_data['RM Title'], tf_idf_vectorizer_loc, vectorizer_reg_loc)
-    trained_model = model_training(preprocessed_sparse_data, input_data['PC_Template'], model_loc, model_reg_loc)
-    predict_data(trained_model, preprocessed_sparse_data, input_data, predicted_data_loc)
-    ws = run.experiment.workspace
-    register_vectorizer_model(vectorizer_reg_loc, tf_idf_vectorizer_name,
-                              model_reg_loc, model_name, ws)
-
-if __name__ == '__main__':
-    args = get_args()
-    run = Run.get_context()
-    main(args.get('input_dataset_name'),
-         args.get('model_loc'),
-         args.get('model_name'),
-         args.get('vectorizer_folder'),
-         args.get('vectorizer_name'),
-         args.get('predicted_data'),
-         args.get('model_registry_loc'),
-         args.get('vectorizer_registry_loc'),
-         run)
+# --- SAVE OUTPUT ---
+df.to_csv(output_file, index=False)
+print(f"✅ Predictions saved to: {output_file}")
