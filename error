@@ -4,68 +4,74 @@ try:
     print('Starting off spec matching')
     print('#' * 60)
 
-    # STEP 1: Calculate all ERP-only codes BEFORE filtering
+    # Capture all unique material codes before filtering
     all_erp_codes = set(erp_discarded[ERP_MAT_NUM].dropna())
     all_tru_codes = set(tru_discarded[TRU_MAT_NUM].dropna())
     common_codes = all_erp_codes.intersection(all_tru_codes)
-    erp_only_codes = all_erp_codes - all_tru_codes
-    print('Common number of codes in both sources off-specs:', len(common_codes))
-    print('ERP-only codes:', erp_only_codes)
 
-    # STEP 2: Save ERP-only records before filtering
-    erp_only_df = erp_discarded[erp_discarded[ERP_MAT_NUM].isin(erp_only_codes)].copy()
+    print('Common number of codes in both sources off-specs: ', len(common_codes))
 
-    # STEP 3: Filter both for matching
-    erp_discarded = erp_discarded[erp_discarded[ERP_MAT_NUM].isin(common_codes)].reset_index(drop=True)
-    tru_discarded = tru_discarded[tru_discarded[TRU_MAT_NUM].isin(common_codes)].reset_index(drop=True)
+    # Preserve original erp_discarded for fallback use later
+    erp_discarded_common = erp_discarded[erp_discarded[ERP_MAT_NUM].isin(common_codes)].reset_index(drop=True)
+    tru_discarded_common = tru_discarded[tru_discarded[TRU_MAT_NUM].isin(common_codes)].reset_index(drop=True)
     tru_no_common = tru_off_specs_no_common
 
-    # STEP 4: Perform full matching routine
     matched_off_specs, unmatched_off_specs = full_matching_routine(
         data_version, db_style, device,
-        embeddings_save_dir, erp_discarded, model_type,
-        sentence_transformer_dir, tru_discarded,
-        use_azure_dataset,
-        bundles, output_dir
+        embeddings_save_dir, erp_discarded_common, model_type,
+        sentence_transformer_dir, tru_discarded_common,
+        use_azure_dataset, bundles, output_dir
     )
 
     matched_off_specs['Matching Reason'] = 'Off Spec Match'
     unmatched_off_specs['Matching Reason'] = 'Off Spec Non Match'
+
     matched = pd.concat([matched, matched_off_specs], ignore_index=True)
     unmatched = pd.concat([unmatched, unmatched_off_specs], ignore_index=True)
 
-    # STEP 5: Add TRU-only off-specs (not in ERP)
-    unmatched_by_default = tru_no_common.copy()
-    missing_cols = list(set(unmatched.columns) - set(unmatched_by_default.columns))
-    for col in missing_cols:
-        unmatched_by_default[col] = None
-    unmatched_by_default = unmatched_by_default[unmatched.columns]
-    unmatched_by_default['is_matched'] = False
-    unmatched_by_default['PLNT_CD'] = 'Not Found in ERP'
-    unmatched_by_default['SRC_SYS_CD'] = 'Not Found in ERP'
-    unmatched_by_default[UNIFIED_MC_COL] = unmatched_by_default[TRU_MAT_NUM]
-    unmatched_by_default['Matching Reason'] = 'Off Spec Code not found in ERP'
-    unmatched = pd.concat([unmatched, unmatched_by_default], ignore_index=True)
+    try:
+        print('#' * 60)
+        print('Handling unmatched Tru + ERP records from off-spec')
+        print('#' * 60)
 
-    # STEP 6: Add ERP-only off-specs (not in TRU)
-    missing_cols = list(set(unmatched.columns) - set(erp_only_df.columns))
-    for col in missing_cols:
-        erp_only_df[col] = None
-    erp_only_df = erp_only_df[unmatched.columns]
-    erp_only_df['is_matched'] = False
-    erp_only_df[UNIFIED_MC_COL] = erp_only_df[ERP_MAT_NUM]
-    erp_only_df['Matching Reason'] = 'Off Spec Non Match'
-    unmatched = pd.concat([unmatched, erp_only_df], ignore_index=True)
+        # --- Tru records not found in ERP ---
+        unmatched_by_default = tru_no_common.copy()
+        missing_cols = list(set(unmatched.columns) - set(unmatched_by_default.columns))
+        for col in missing_cols:
+            unmatched_by_default[col] = None
+        unmatched_by_default = unmatched_by_default[unmatched.columns]
+        unmatched_by_default['is_matched'] = False
+        unmatched_by_default['PLNT_CD'] = 'Not Found in ERP'
+        unmatched_by_default['SRC_SYS_CD'] = 'Not Found in ERP'
+        unmatched_by_default[UNIFIED_MC_COL] = unmatched_by_default[TRU_MAT_NUM]
+        unmatched_by_default['Matching Reason'] = 'Off Spec Code not found in ERP'
+        unmatched = pd.concat([unmatched, unmatched_by_default], ignore_index=True)
 
-    # Save unmatched for verification
-    df_check = unmatched
-    user_logs_path = os.path.join(os.getcwd(), "user_logs")
-    os.makedirs(user_logs_path, exist_ok=True)
-    df_check.to_csv(os.path.join(user_logs_path, "missing_mat_data.csv"), index=False)
+        # --- ERP records not in TRU (all_erp_codes - all_tru_codes) ---
+        erp_only_codes = all_erp_codes - all_tru_codes
+        erp_only_df = erp_discarded[erp_discarded[ERP_MAT_NUM].isin(erp_only_codes)].copy()
+        missing_cols = list(set(unmatched.columns) - set(erp_only_df.columns))
+        for col in missing_cols:
+            erp_only_df[col] = None
+        erp_only_df = erp_only_df[unmatched.columns]
+        erp_only_df['is_matched'] = False
+        erp_only_df[UNIFIED_MC_COL] = erp_only_df[ERP_MAT_NUM]
+        erp_only_df['Matching Reason'] = 'Off Spec Non Match'
+        unmatched = pd.concat([unmatched, erp_only_df], ignore_index=True)
 
-except Exception as e:
-    print('Matching off-specs did not work')
-    print(e)
-    error_details = traceback.format_exc()
-    print("Exception details:\n", error_details)
+        # Optional: save diagnostic CSV
+        df_check = unmatched
+        user_logs_path = os.path.join(os.getcwd(), "user_logs")
+        os.makedirs(user_logs_path, exist_ok=True)
+        df_check.to_csv(os.path.join(user_logs_path, "missing_mat_data.csv"), index=False)
+
+    except Exception as e_inner:
+        print('⚠️ Error while attaching unmatched Tru or ERP off-spec records')
+        print(e_inner)
+        print(traceback.format_exc())
+
+except Exception as e_outer:
+    print('❌ Matching off-specs did not work')
+    print(e_outer)
+    print(traceback.format_exc())
     exit(1)
