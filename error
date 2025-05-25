@@ -1,3 +1,5 @@
+tru_discarded_common.drop_duplicates(subset=[TRU_SPEC_ID], inplace=True)
+
 # Identify TRU specs related to ERP off-spec material numbers but missing in tru_discarded
 erp_part_ids = set(erp_discarded[ERP_MAT_NUM])
 tru_mat_ids = set(tru[TRU_MAT_NUM])
