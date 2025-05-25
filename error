@@ -1189,10 +1189,8 @@ def full_matching_routine(data_version, db_style, device, embeddings_save_dir, e
     known_rejections_df = pd.read_csv(f'{fortrea_folder}/reference_tables/rejections_fortrea.csv')
     add_key_prediction(known_rejections_df)
     known_rejections = list(known_rejections_df['key_prediction'].unique())
-    similarities = [jaccard_similarity,
-                    leven_similarity,
-                    jaccard_similarity]
-    thresholds = [0.0, 0.3, 0.3]
+    similarities = [jaccard_similarity]
+    thresholds = [0.3]
     current_full_matches, erp_to_match, tru_to_match, previous_round = match_text_in_rounds(similarities,
                                                                                             thresholds,
                                                                                             erp_to_match,
@@ -1313,17 +1311,20 @@ def main(input_dir,
         print('#' * 60)
         print('Starting off spec matching')
         print('#' * 60)
-        common_codes = (set(erp_discarded[ERP_MAT_NUM]).intersection(set(tru_discarded[TRU_MAT_NUM])))
-        print('Common number of codes in both sources off-specs: ', len(common_codes))
-        erp_discarded = erp_discarded[erp_discarded[ERP_MAT_NUM].isin(common_codes)].reset_index(drop=True)
-        print("erp_discarded_dataset",erp_discarded)
-        print("erp_discarded_dataset",len(erp_discarded))
+        # STEP 1: Calculate all ERP-only codes BEFORE filtering
+        all_erp_codes = set(erp_discarded[ERP_MAT_NUM])
+        all_tru_codes = set(tru_discarded[TRU_MAT_NUM])
+        common_codes = all_erp_codes.intersection(all_tru_codes)
+        erp_only_codes = all_erp_codes - all_tru_codes
+        print('Common number of codes in both sources off-specs:', len(common_codes))
+        print('ERP-only codes:', erp_only_codes)
+        erp_discarded_common = erp_discarded[erp_discarded[ERP_MAT_NUM].isin(common_codes)].reset_index(drop=True)
+        tru_discarded_common = tru_discarded[tru_discarded[TRU_MAT_NUM].isin(common_codes)].reset_index(drop=True)
         tru_no_common = tru_off_specs_no_common
-        tru_discarded = tru_discarded[tru_discarded[TRU_MAT_NUM].isin(common_codes)].reset_index(drop=True)
-
+        # STEP 4: Perform full matching routine
         matched_off_specs, unmatched_off_specs = full_matching_routine(data_version, db_style, device,
-                                                                       embeddings_save_dir, erp_discarded, model_type,
-                                                                       sentence_transformer_dir, tru_discarded,
+                                                                       embeddings_save_dir, erp_discarded_common, model_type,
+                                                                       sentence_transformer_dir, tru_discarded_common,
                                                                        use_azure_dataset,
                                                                        bundles, output_dir)
         matched_off_specs['Matching Reason'] = 'Off Spec Match'
@@ -1334,6 +1335,7 @@ def main(input_dir,
         unmatched = pd.concat([unmatched, unmatched_off_specs], ignore_index=True)
 
         try:
+            # --- Tru records not found in ERP --
             unmatched_by_default = tru_no_common.copy()
             missing_cols = list(set(unmatched.columns) - set(unmatched_by_default.columns))
             for col in missing_cols:
@@ -1346,45 +1348,21 @@ def main(input_dir,
             unmatched_by_default['Matching Reason'] = 'Off Spec Code not found in ERP'
             unmatched = pd.concat([unmatched, unmatched_by_default], ignore_index=True)
             #updated for missing comp id issue
-            erp_no_common = erp_discarded[~erp_discarded[ERP_MAT_NUM].isin(common_codes)]
-            unmatched_by_default_erp = erp_no_common.copy()
-            missing_cols = list(set(unmatched.columns) - set(unmatched_by_default_erp.columns))
-            for col in missing_cols:
-                unmatched_by_default_erp[col] = None
-            unmatched_by_default_erp = unmatched_by_default_erp[unmatched.columns]
-            unmatched_by_default_erp['is_matched'] = False
-            unmatched_by_default_erp[UNIFIED_MC_COL] = unmatched_by_default_erp[ERP_MAT_NUM] # check in the result
-            unmatched_by_default_erp['Matching Reason'] = 'Off Spec Non Match'
-            unmatched = pd.concat([unmatched, unmatched_by_default_erp], ignore_index=True)
-            #updated for missing comp id issue---not in tru but in erp
-            # STEP 1: Identify ERP-only material codes
-            all_erp_codes = set(erp_discarded[ERP_MAT_NUM].dropna())
-            all_tru_codes = set(tru_discarded[TRU_MAT_NUM].dropna())
+            # --- ERP records not in TRU (all_erp_codes - all_tru_codes) ---
             erp_only_codes = all_erp_codes - all_tru_codes
-            print("erp_only_codes:\n", erp_only_codes)
-            # STEP 2: Filter ERP records not present in TRU
             erp_only_df = erp_discarded[erp_discarded[ERP_MAT_NUM].isin(erp_only_codes)].copy()
-
-            # STEP 3: Align column structure with `unmatched`
             missing_cols = list(set(unmatched.columns) - set(erp_only_df.columns))
             for col in missing_cols:
                 erp_only_df[col] = None
             erp_only_df = erp_only_df[unmatched.columns]
-
-            # STEP 4: Set unmatched flags and metadata
             erp_only_df['is_matched'] = False
             erp_only_df[UNIFIED_MC_COL] = erp_only_df[ERP_MAT_NUM]
             erp_only_df['Matching Reason'] = 'Off Spec Non Match'
-            #erp_only_df['PLNT_CD'] = erp_only_df.get('PLNT_CD', 'Not Found')
-            #erp_only_df['SRC_SYS_CD'] = erp_only_df.get('SRC_SYS_CD', 'Not Found')
-
-            # STEP 5: Append to unmatched
+            
             unmatched = pd.concat([unmatched, erp_only_df], ignore_index=True)
 
 
-
-
-            df_check = unmatched
+            df_check = erp_only_df
             user_logs_path = os.path.join(os.getcwd(), "user_logs")
             os.makedirs(user_logs_path, exist_ok=True)
             df_check.to_csv(os.path.join(user_logs_path, "missing_mat_data.csv"), index=False)
