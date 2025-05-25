@@ -1,16 +1,18 @@
-tru_no_common = tru_off_specs_no_common
-
-# 👇 ADD THIS NEW BLOCK HERE
+# Identify TRU specs related to ERP off-spec material numbers but missing in tru_discarded
 erp_part_ids = set(erp_discarded[ERP_MAT_NUM])
 tru_mat_ids = set(tru[TRU_MAT_NUM])
 common_material_ids = erp_part_ids.intersection(tru_mat_ids)
+
 extra_tru_candidates = tru[tru[TRU_MAT_NUM].isin(common_material_ids)]
 extra_tru_candidates = extra_tru_candidates[
     ~extra_tru_candidates[TRU_SPEC_ID].isin(tru_discarded[TRU_SPEC_ID])
 ]
+
 if not extra_tru_candidates.empty:
     print(f'Adding {len(extra_tru_candidates)} extra TRU specs to tru_discarded for off-spec match')
+    
+    # Step 1: Add these missing specs to tru_discarded
     tru_discarded = pd.concat([tru_discarded, extra_tru_candidates], ignore_index=True).drop_duplicates(subset=[TRU_SPEC_ID])
 
-# STEP 4: Perform full matching routine
-matched_off_specs, unmatched_off_specs = full_matching_routine(...)
+    # Step 2: Recalculate tru_discarded_common so it includes new entries
+    tru_discarded_common = tru_discarded[tru_discarded[TRU_MAT_NUM].isin(common_material_ids)].reset_index(drop=True)
