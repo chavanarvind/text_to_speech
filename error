@@ -1,188 +1,146 @@
-#model_train_full_data.py
-import argparse, os, re, pickle, nltk
-from azureml.core import Run,Dataset
-from azureml.core.model import Model
-import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
+import json
+import sys
+from azureml.core import Experiment, RunConfiguration, Environment, Workspace, Dataset
+from azureml.core.authentication import ServicePrincipalAuthentication
 
-def get_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--input-dataset-name')
-    parser.add_argument('--model-loc')
-    parser.add_argument('--model-name')
-    parser.add_argument('--vectorizer-folder')
-    parser.add_argument('--vectorizer-name')
-    parser.add_argument('--predicted-data')
-    parser.add_argument('--model_registry_loc')
-    parser.add_argument('--vectorizer_registry_loc')
+from azureml.pipeline.core import Pipeline
+from azureml.pipeline.steps import PythonScriptStep
+from azureml.data import OutputFileDatasetConfig
 
-    return vars(parser.parse_args())
 
-# Function to read pickle file
-def read_pickle_file(pickle_loc, model=False):
-    if model:
-        model = None
-        with open(pickle_loc + '/model.pkl', 'rb') as fin:
-            model = pickle.load(fin)
-        return model
-    else:
-        vectorizer = None
-        with open(pickle_loc + '/vectorizer.pickle', 'rb') as fin:
-            vectorizer = pickle.load(fin)
-        return vectorizer
+def set_aml_config_for_training(ws, compute_name):
+    compute_target = ws.compute_targets[compute_name]
+    aml_run_config = RunConfiguration()
+    aml_run_config.target = compute_target
+    env = Environment.get(workspace=ws,
+                          name="Bom_X_Evaluator")
+    aml_run_config.environment = env
 
-# Function to extract only words from the text
-def search_words(text):
-    result = re.findall(r'\b[^\d\W]+\b', text)
-    return " ".join(result)
+    return aml_run_config
 
-def preprocessing_data(data, vectorizer_loc, reg_loc):
-    # 1. Lowering the text
-    data = data.str.lower()
-    # 2. Getting all the non numerical values
-    # Function to extract only words from the text
-    data = data.apply(lambda x : search_words(x))
-    # 3. Removing stop words (Removing and adding some more stopwords)
-    stopwords = nltk.corpus.stopwords.words('english')
-    stopwords.remove('can')
-    stopwords.extend(['x', 'mm', 'm²', 'ml', 'μm', 'g'])
-    data = data.apply(lambda x: ' '.join([word for word in x.split() if word not in (stopwords)]))
-    # 4. Converting data to tf-idf vector
-    vectorizer = TfidfVectorizer()
-    X_train_tfidf = vectorizer.fit_transform(data) # remember to use the original X_train set
-    print(X_train_tfidf.shape)
-    # 5. Save Vectorizer
-    os.makedirs(reg_loc, exist_ok=True)
-    with open(reg_loc + '/vectorizer.pickle', 'wb') as fin:
-        pickle.dump(vectorizer, fin)
-    return X_train_tfidf
 
-def model_training(preprocessed_data, y, model_loc, reg_loc):
-    # fitting the Logistic Regression Model
-    lr_multinomial_model = LogisticRegression(multi_class='multinomial', solver='lbfgs')
-    lr_multinomial_model.fit(preprocessed_data, y)
-    # Save Model
-    os.makedirs(reg_loc, exist_ok=True)
-    with open(reg_loc + '/model.pkl', 'wb') as fin:
-        pickle.dump(lr_multinomial_model, fin)
-    return lr_multinomial_model
+def workspace_from_cmd(args):
+    print('Reading workspace from command line arguments')
+    tenant_id = args[1]
+    client_id = args[2]
+    client_secret = args[3]
+    config_file = args[4]
 
-def predict_data(model, preprocessed_data, input_data, save_predicted_data):
-    prediction = model.predict(preprocessed_data)
-    input_data['PC_Template_Prediction'] = prediction
-    # Save Results
-    os.makedirs(save_predicted_data, exist_ok=True)
-    input_data.to_parquet(save_predicted_data + '/data.parquet')
+    # Needed when triggering from Jenkins
+    service_principal_auth = ServicePrincipalAuthentication(tenant_id=tenant_id,
+                                                            service_principal_id=client_id,
+                                                            service_principal_password=client_secret)
+    path = '../.azureml/' + config_file
 
-def register_vectorizer_model(vectorizer_loc, vectorizer_name, model_loc, model_name, workspace):
-    vectorizer = Model.register(model_path= vectorizer_loc + '/vectorizer.pickle',
-                          model_name= vectorizer_name,
-                          tags= {'project':'BOM'},
-                          description="TF-IDF Vectorizer that will take raw material description and converts it into tf-idf Sparse Matrix",
-                          workspace=workspace)
-    
-    model = Model.register(model_path= model_loc + '/model.pkl',
-                          model_name= model_name,
-                          tags={'project':'BOM'},
-                          description="Classification model that will take raw material description and classifies it into a category",
-                          workspace=workspace)
+    with open(path) as json_file_obj:
+        config_json = json.load(json_file_obj)
 
-def main(input_data_location, model_loc, model_name, tf_idf_vectorizer_loc, tf_idf_vectorizer_name, predicted_data_loc, 
-         model_reg_loc, vectorizer_reg_loc, run):
-    # Reading raw Data
-    input_data = pd.read_parquet(input_data_location)
-    preprocessed_sparse_data = preprocessing_data(input_data['RM Title'], tf_idf_vectorizer_loc, vectorizer_reg_loc)
-    trained_model = model_training(preprocessed_sparse_data, input_data['PC_Template'], model_loc, model_reg_loc)
-    predict_data(trained_model, preprocessed_sparse_data, input_data, predicted_data_loc)
-    ws = run.experiment.workspace
-    register_vectorizer_model(vectorizer_reg_loc, tf_idf_vectorizer_name,
-                              model_reg_loc, model_name, ws)
+    return Workspace(subscription_id=config_json['subscription_id'],
+                     resource_group=config_json['resource_group'],
+                     workspace_name=config_json['workspace_name'],
+                     auth=service_principal_auth)
+
+
+def workspace_from_config(path):
+    print('Reading workspace from local config file')
+    with open(path) as json_file_obj:
+        config_json = json.load(json_file_obj)
+
+    return Workspace(subscription_id=config_json['subscription_id'],
+                     resource_group=config_json['resource_group'],
+                     workspace_name=config_json['workspace_name'])
+
+
+#ENV = 'dev'
+ENV = 'dev'
 
 if __name__ == '__main__':
-    args = get_args()
-    run = Run.get_context()
-    main(args.get('input_dataset_name'),
-         args.get('model_loc'),
-         args.get('model_name'),
-         args.get('vectorizer_folder'),
-         args.get('vectorizer_name'),
-         args.get('predicted_data'),
-         args.get('model_registry_loc'),
-         args.get('vectorizer_registry_loc'),
-         run)
+    if len(sys.argv) > 1:  # Command line args
+        workspace = workspace_from_cmd(sys.argv)
+        # Default to dev when running from jenkins
+        aml_config_file = 'dev_config.json'
+        datastore_name = 'xbomrefadlsg2'
+        compute_name = 'llm-gpu-cluster-2'
+    else:
+        if ENV == 'prod':
+            aml_config_file = 'prod_config.json'
+            datastore_name = 'xbom_prod_adlsgen2'
+            compute_name = 'bom-cluster-2'
+        else:
+            aml_config_file = 'dev_config.json'
+            datastore_name = 'xbomrefadlsg2'
+            compute_name = 'llm-gpu-cluster-2'
 
+        workspace = workspace_from_config(path='../.azureml/' + aml_config_file)
 
-#inferencing.py
+    aml_config = set_aml_config_for_training(workspace, compute_name=compute_name)
 
-import pickle
-import re
+    # version = 'aug_2023'
+    # version = 'sep9_2023'
+    # version = '5k'
+    # version = 'sep19_2023'
+    # version = 'oct10_2023'
+    # version = 'nov14_2023'
+    # version = 'may14_2024'
+#    version = 'jun12_2024'
+    version = 'aug20_2024'
 
-import nltk
-from azureml.core.model import Model
+    model_type = 'offline_transformer'
+    # model_type = 'open_ai'
+    transformer_model = 'all-roberta-large-kft'
+    db_style = 'pandas'
 
-from cross_hound.constants import MODEL_NAME, VECTORIZER_NAME
+    sentence_transformer_dir = (Dataset
+                                .get_by_name(workspace, name=transformer_model)
+                                .as_named_input('transformer_model')
+                                .as_mount()
+                                )
+    try:
+        embeddings_dir = (Dataset
+                          .get_by_name(workspace, name=f'bom_embeddings_{model_type}_{version}')
+                          .as_named_input('embeddings')
+                          .as_mount()
+                          )
+    except Exception as e:
+        print(e)
+        embeddings_dir = 'new_embd'
 
+    # This will return the id of the datasets
+    erp_im_data = Dataset.get_by_name(workspace, f'nlp_input_bom_hier_dtls').as_named_input(f'erp_im_bom')
+    erp_em_data = Dataset.get_by_name(workspace, f'nlp_input_bom_hier').as_named_input(f'erp_em_bom')
+    tru_data = Dataset.get_by_name(workspace, f'nlp_input_p360_bom').as_named_input(f'tru_bom')
+    trade_names_data = Dataset.get_by_name(workspace, 'nlp_input_p360_trdnm').as_named_input('trade_names_feb08_2024')
 
-# Function to extract only words from the text
-def search_words(text):
-    result = re.findall(r'\b[^\d\W]+\b', text)
-    return " ".join(result)
+    matches_output = OutputFileDatasetConfig(name='matches')
+    full_training_step = PythonScriptStep(
+        name="Cross Hound Matching",
+        source_directory="src",
+        script_name="cross_hound/matcher.py",
+        arguments=['--erp-im-dataset-name', erp_im_data,
+                   '--erp-em-dataset-name', erp_em_data,
+                   '--tru-dataset-name', tru_data,
+                   '--trade-names-name', trade_names_data,
+                   '--sentence-transformer-dir', sentence_transformer_dir,
+                   '--embeddings-dir', embeddings_dir,
+                   '--output_dir', matches_output,
+                   '--datastore-name', datastore_name,
+                   '--data-version', version,
+                   '--model-type', model_type,
+                   '--db-style', db_style],
+        runconfig=aml_config,
+        allow_reuse=False
+    )
 
+    pipeline = Pipeline(workspace=workspace, steps=[full_training_step])
+    print('Pipeline created and about to be deployed')
 
-def preprocess_data(data):
-    # 1. Lowering the text
-    data = data.str.lower()
-    # 2. Getting all the non numerical values
-    # Function to extract only words from the text
-    data = data.apply(lambda x: search_words(x))
-    # 3. Removing stop words (Removing and adding some more stopwords)
-    stopwords = nltk.corpus.stopwords.words('english')
-    stopwords.remove('can')
-    stopwords.extend(['x', 'mm', 'm²', 'ml', 'μm', 'g'])
-    data = data.apply(lambda x: ' '.join([word for word in x.split() if word not in (stopwords)]))
-    return data
+    try:
+        from git import Repo
 
-
-def get_registered_object(name, workspace):
-    object_path = Model(workspace=workspace, name=name).get_model_path(model_name=name, _workspace=workspace)
-    object_fetched = None
-    with open(object_path, 'rb') as fin:
-        object_fetched = pickle.load(fin)
-    return object_fetched
-
-
-def predict(workspace, data, column_for_prediction, column_for_filter):
-    print('#' * 60)
-    print("In the Prediction function for raw materials")
-    copied_data = data.copy()
-    print("Applying Filter for only PC Components with Generic template")
-    filtered_data_generic = copied_data[
-        copied_data['TEMPL_TYPE_CD'].isin(['Packaging Component (PC) Generic Doc Centric Template',
-                                         'Packaging Component (PC) McNeil Doc Centric Template',
-                                         'Generic PC - Other / General'])]
-    filtered_data_generic = filtered_data_generic[filtered_data_generic[column_for_prediction].notna()]
-    print(filtered_data_generic.shape)
-    print("Preprocessing the data")
-    filtered_data_generic[column_for_prediction] = preprocess_data(filtered_data_generic[column_for_prediction])
-    print("Preprocessing completed")
-    print(f"Getting vectorizer object - {VECTORIZER_NAME}")
-    vectorizer = get_registered_object(name=VECTORIZER_NAME, workspace=workspace)
-    print("Transforming data to tf-idf vector")
-    filtered_data_generic_vector = vectorizer.transform(filtered_data_generic[column_for_prediction])
-    print(f"Getting registered ML Model - {MODEL_NAME}")
-    lr_model = get_registered_object(name=MODEL_NAME, workspace=workspace)
-    print("Predicting...")
-    predicted_results = lr_model.predict(filtered_data_generic_vector)
-    print(len(predicted_results))
-    filtered_data_generic['PREDICTION'] = predicted_results
-    merged_results = copied_data.merge(filtered_data_generic[['PREDICTION']],
-                                       how='left', left_index=True, right_index=True)
-
-    merged_results['PREDICTION'] = [prediction if not_null else original for prediction, not_null, original in
-                                    zip(merged_results['PREDICTION'],
-                                        merged_results['PREDICTION'].notna(),
-                                        merged_results['TEMPL_TYPE_CD'])]
-    print("Predictions completed. Data Merged to the raw table")
-    print('#' * 60)
-    return merged_results['PREDICTION']
+        local_branch = Repo(search_parent_directories=True).active_branch.name
+        local_branch = local_branch.replace('/', '-')
+        local_branch = local_branch.replace(' ', '-')
+    except:
+        local_branch = 'jenkins_run'
+    pipeline_run = Experiment(workspace, name=f'xHound-{local_branch}').submit(pipeline)
+    pipeline_run.wait_for_completion()
