@@ -1,85 +1,188 @@
-# --- Off Spec Matching with Extra TRU Specs Inclusion ---
-try:
-    print('')
+#model_train_full_data.py
+import argparse, os, re, pickle, nltk
+from azureml.core import Run,Dataset
+from azureml.core.model import Model
+import pandas as pd
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input-dataset-name')
+    parser.add_argument('--model-loc')
+    parser.add_argument('--model-name')
+    parser.add_argument('--vectorizer-folder')
+    parser.add_argument('--vectorizer-name')
+    parser.add_argument('--predicted-data')
+    parser.add_argument('--model_registry_loc')
+    parser.add_argument('--vectorizer_registry_loc')
+
+    return vars(parser.parse_args())
+
+# Function to read pickle file
+def read_pickle_file(pickle_loc, model=False):
+    if model:
+        model = None
+        with open(pickle_loc + '/model.pkl', 'rb') as fin:
+            model = pickle.load(fin)
+        return model
+    else:
+        vectorizer = None
+        with open(pickle_loc + '/vectorizer.pickle', 'rb') as fin:
+            vectorizer = pickle.load(fin)
+        return vectorizer
+
+# Function to extract only words from the text
+def search_words(text):
+    result = re.findall(r'\b[^\d\W]+\b', text)
+    return " ".join(result)
+
+def preprocessing_data(data, vectorizer_loc, reg_loc):
+    # 1. Lowering the text
+    data = data.str.lower()
+    # 2. Getting all the non numerical values
+    # Function to extract only words from the text
+    data = data.apply(lambda x : search_words(x))
+    # 3. Removing stop words (Removing and adding some more stopwords)
+    stopwords = nltk.corpus.stopwords.words('english')
+    stopwords.remove('can')
+    stopwords.extend(['x', 'mm', 'm²', 'ml', 'μm', 'g'])
+    data = data.apply(lambda x: ' '.join([word for word in x.split() if word not in (stopwords)]))
+    # 4. Converting data to tf-idf vector
+    vectorizer = TfidfVectorizer()
+    X_train_tfidf = vectorizer.fit_transform(data) # remember to use the original X_train set
+    print(X_train_tfidf.shape)
+    # 5. Save Vectorizer
+    os.makedirs(reg_loc, exist_ok=True)
+    with open(reg_loc + '/vectorizer.pickle', 'wb') as fin:
+        pickle.dump(vectorizer, fin)
+    return X_train_tfidf
+
+def model_training(preprocessed_data, y, model_loc, reg_loc):
+    # fitting the Logistic Regression Model
+    lr_multinomial_model = LogisticRegression(multi_class='multinomial', solver='lbfgs')
+    lr_multinomial_model.fit(preprocessed_data, y)
+    # Save Model
+    os.makedirs(reg_loc, exist_ok=True)
+    with open(reg_loc + '/model.pkl', 'wb') as fin:
+        pickle.dump(lr_multinomial_model, fin)
+    return lr_multinomial_model
+
+def predict_data(model, preprocessed_data, input_data, save_predicted_data):
+    prediction = model.predict(preprocessed_data)
+    input_data['PC_Template_Prediction'] = prediction
+    # Save Results
+    os.makedirs(save_predicted_data, exist_ok=True)
+    input_data.to_parquet(save_predicted_data + '/data.parquet')
+
+def register_vectorizer_model(vectorizer_loc, vectorizer_name, model_loc, model_name, workspace):
+    vectorizer = Model.register(model_path= vectorizer_loc + '/vectorizer.pickle',
+                          model_name= vectorizer_name,
+                          tags= {'project':'BOM'},
+                          description="TF-IDF Vectorizer that will take raw material description and converts it into tf-idf Sparse Matrix",
+                          workspace=workspace)
+    
+    model = Model.register(model_path= model_loc + '/model.pkl',
+                          model_name= model_name,
+                          tags={'project':'BOM'},
+                          description="Classification model that will take raw material description and classifies it into a category",
+                          workspace=workspace)
+
+def main(input_data_location, model_loc, model_name, tf_idf_vectorizer_loc, tf_idf_vectorizer_name, predicted_data_loc, 
+         model_reg_loc, vectorizer_reg_loc, run):
+    # Reading raw Data
+    input_data = pd.read_parquet(input_data_location)
+    preprocessed_sparse_data = preprocessing_data(input_data['RM Title'], tf_idf_vectorizer_loc, vectorizer_reg_loc)
+    trained_model = model_training(preprocessed_sparse_data, input_data['PC_Template'], model_loc, model_reg_loc)
+    predict_data(trained_model, preprocessed_sparse_data, input_data, predicted_data_loc)
+    ws = run.experiment.workspace
+    register_vectorizer_model(vectorizer_reg_loc, tf_idf_vectorizer_name,
+                              model_reg_loc, model_name, ws)
+
+if __name__ == '__main__':
+    args = get_args()
+    run = Run.get_context()
+    main(args.get('input_dataset_name'),
+         args.get('model_loc'),
+         args.get('model_name'),
+         args.get('vectorizer_folder'),
+         args.get('vectorizer_name'),
+         args.get('predicted_data'),
+         args.get('model_registry_loc'),
+         args.get('vectorizer_registry_loc'),
+         run)
+
+
+#inferencing.py
+
+import pickle
+import re
+
+import nltk
+from azureml.core.model import Model
+
+from cross_hound.constants import MODEL_NAME, VECTORIZER_NAME
+
+
+# Function to extract only words from the text
+def search_words(text):
+    result = re.findall(r'\b[^\d\W]+\b', text)
+    return " ".join(result)
+
+
+def preprocess_data(data):
+    # 1. Lowering the text
+    data = data.str.lower()
+    # 2. Getting all the non numerical values
+    # Function to extract only words from the text
+    data = data.apply(lambda x: search_words(x))
+    # 3. Removing stop words (Removing and adding some more stopwords)
+    stopwords = nltk.corpus.stopwords.words('english')
+    stopwords.remove('can')
+    stopwords.extend(['x', 'mm', 'm²', 'ml', 'μm', 'g'])
+    data = data.apply(lambda x: ' '.join([word for word in x.split() if word not in (stopwords)]))
+    return data
+
+
+def get_registered_object(name, workspace):
+    object_path = Model(workspace=workspace, name=name).get_model_path(model_name=name, _workspace=workspace)
+    object_fetched = None
+    with open(object_path, 'rb') as fin:
+        object_fetched = pickle.load(fin)
+    return object_fetched
+
+
+def predict(workspace, data, column_for_prediction, column_for_filter):
     print('#' * 60)
-    print('Starting off spec matching (including extra TRU not in discarded)')
+    print("In the Prediction function for raw materials")
+    copied_data = data.copy()
+    print("Applying Filter for only PC Components with Generic template")
+    filtered_data_generic = copied_data[
+        copied_data['TEMPL_TYPE_CD'].isin(['Packaging Component (PC) Generic Doc Centric Template',
+                                         'Packaging Component (PC) McNeil Doc Centric Template',
+                                         'Generic PC - Other / General'])]
+    filtered_data_generic = filtered_data_generic[filtered_data_generic[column_for_prediction].notna()]
+    print(filtered_data_generic.shape)
+    print("Preprocessing the data")
+    filtered_data_generic[column_for_prediction] = preprocess_data(filtered_data_generic[column_for_prediction])
+    print("Preprocessing completed")
+    print(f"Getting vectorizer object - {VECTORIZER_NAME}")
+    vectorizer = get_registered_object(name=VECTORIZER_NAME, workspace=workspace)
+    print("Transforming data to tf-idf vector")
+    filtered_data_generic_vector = vectorizer.transform(filtered_data_generic[column_for_prediction])
+    print(f"Getting registered ML Model - {MODEL_NAME}")
+    lr_model = get_registered_object(name=MODEL_NAME, workspace=workspace)
+    print("Predicting...")
+    predicted_results = lr_model.predict(filtered_data_generic_vector)
+    print(len(predicted_results))
+    filtered_data_generic['PREDICTION'] = predicted_results
+    merged_results = copied_data.merge(filtered_data_generic[['PREDICTION']],
+                                       how='left', left_index=True, right_index=True)
+
+    merged_results['PREDICTION'] = [prediction if not_null else original for prediction, not_null, original in
+                                    zip(merged_results['PREDICTION'],
+                                        merged_results['PREDICTION'].notna(),
+                                        merged_results['TEMPL_TYPE_CD'])]
+    print("Predictions completed. Data Merged to the raw table")
     print('#' * 60)
-
-    # Step 1: Calculate ERP/TRU material code sets
-    all_erp_codes = set(erp_discarded[ERP_MAT_NUM])
-    all_tru_codes = set(tru_discarded[TRU_MAT_NUM])
-    common_codes = all_erp_codes.intersection(all_tru_codes)
-    erp_only_codes = all_erp_codes - all_tru_codes
-
-    print('Common number of codes in both sources off-specs:', len(common_codes))
-    print('ERP-only codes:', erp_only_codes)
-
-    # Step 2: Core datasets for matching
-    erp_discarded_common = erp_discarded[erp_discarded[ERP_MAT_NUM].isin(common_codes)].reset_index(drop=True)
-    tru_discarded_common = tru_discarded[tru_discarded[TRU_MAT_NUM].isin(common_codes)].reset_index(drop=True)
-
-    # Step 3: Include extra TRU specs not in tru_discarded
-    tru_mat_ids_full = set(tru[TRU_MAT_NUM])
-    extra_common_ids = all_erp_codes.intersection(tru_mat_ids_full)
-    extra_tru_candidates = tru[
-        tru[TRU_MAT_NUM].isin(extra_common_ids) &
-        ~tru[TRU_SPEC_ID].isin(tru_discarded[TRU_SPEC_ID])
-    ].copy()
-
-    if not extra_tru_candidates.empty:
-        print(f'Adding {len(extra_tru_candidates)} extra TRU specs to tru_discarded_common for off-spec match')
-        tru_discarded_common = pd.concat([tru_discarded_common, extra_tru_candidates], ignore_index=True)
-        tru_discarded_common.drop_duplicates(subset=[TRU_SPEC_ID], inplace=True)
-
-    # Step 4: Full off-spec match
-    matched_off_specs, unmatched_off_specs = full_matching_routine(
-        data_version, db_style, device,
-        embeddings_save_dir, erp_discarded_common, model_type,
-        sentence_transformer_dir, tru_discarded_common,
-        use_azure_dataset, bundles, output_dir
-    )
-    matched_off_specs['Matching Reason'] = 'Off Spec Match'
-    unmatched_off_specs['Matching Reason'] = 'Off Spec Non Match'
-
-    matched = pd.concat([matched, matched_off_specs], ignore_index=True)
-    unmatched = pd.concat([unmatched, unmatched_off_specs], ignore_index=True)
-
-    # Step 5: Append TRU-only
-    try:
-        unmatched_by_default = tru_off_specs_no_common.copy()
-        missing_cols = list(set(unmatched.columns) - set(unmatched_by_default.columns))
-        for col in missing_cols:
-            unmatched_by_default[col] = None
-        unmatched_by_default = unmatched_by_default[unmatched.columns]
-        unmatched_by_default['is_matched'] = False
-        unmatched_by_default['PLNT_CD'] = 'Not Found in ERP'
-        unmatched_by_default['SRC_SYS_CD'] = 'Not Found in ERP'
-        unmatched_by_default[UNIFIED_MC_COL] = unmatched_by_default[TRU_MAT_NUM]
-        unmatched_by_default['Matching Reason'] = 'Off Spec Code not found in ERP'
-        unmatched = pd.concat([unmatched, unmatched_by_default], ignore_index=True)
-
-        # Step 6: Append ERP-only
-        erp_only_df = erp_discarded[erp_discarded[ERP_MAT_NUM].isin(erp_only_codes)].copy()
-        missing_cols = list(set(unmatched.columns) - set(erp_only_df.columns))
-        for col in missing_cols:
-            erp_only_df[col] = None
-        erp_only_df = erp_only_df[unmatched.columns]
-        erp_only_df['is_matched'] = False
-        erp_only_df[UNIFIED_MC_COL] = erp_only_df[ERP_MAT_NUM]
-        erp_only_df['Matching Reason'] = 'Off Spec Non Match'
-        unmatched = pd.concat([unmatched, erp_only_df], ignore_index=True)
-
-        # Export for review
-        df_check = erp_only_df
-        user_logs_path = os.path.join(os.getcwd(), "user_logs")
-        os.makedirs(user_logs_path, exist_ok=True)
-        df_check.to_csv(os.path.join(user_logs_path, "missing_mat_data.csv"), index=False)
-
-    except Exception as e:
-        print('Attaching not common TRU coming from off specs did not work')
-except Exception as e:
-    print('Matching off-specs did not work')
-    print(e)
-    error_details = traceback.format_exc()
-    print("Exception details:\n", error_details)
-    exit(1)
+    return merged_results['PREDICTION']
