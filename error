@@ -1,7 +1,14 @@
-
-match_erp_part_vs_rm_spec
-# Ensure merge keys are all strings
-erp['extracted_rm_erp'] = erp['extracted_rm_erp'].astype(str)
-tru['extracted_rm_tru'] = tru['extracted_rm_tru'].astype(str)
-erp[ERP_MAT_NUM] = erp[ERP_MAT_NUM].astype(str)
-tru[TRU_MAT_NUM] = tru[TRU_MAT_NUM].astype(str)
+Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
+  File "cross_hound/matcher.py", line 1468, in <module>
+    main(input_dir=args.get('input_dir'),
+  File "cross_hound/matcher.py", line 1293, in main
+    matched, unmatched = full_matching_routine(data_version, db_style, device,
+  File "cross_hound/matcher.py", line 818, in full_matching_routine
+    matches_per_title, erp_to_match, tru_to_match, previous_round = match_erp_part_vs_rm_title(erp_to_match,
+  File "cross_hound/matcher.py", line 232, in match_erp_part_vs_rm_title
+    matches = pd.concat(list_df_matches, ignore_index=True)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/reshape/concat.py", line 372, in concat
+    op = _Concatenator(
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/reshape/concat.py", line 429, in __init__
+    raise ValueError("No objects to concatenate")
+ValueError: No objects to concatenate
