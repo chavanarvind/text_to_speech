@@ -1,7 +1,12 @@
-
-check_for_alternates
+check_for_alternates_tru
 if not list_res:
-        print(f"No alternate matches found in round {round_name}")
-        return all_matches, erp_not_matched, tru_not_matched
+    print(f"No alternate TRU matches found in round {round_name}")
+    return all_matches, tru_not_matched
 
-    collected = pd.concat(list_res, ignore_index=True, axis=0)
+
+match_by_reference_table
+
+if matched_per_id.empty and matched_per_desc.empty:
+    print(f"No reference table matches found in round {match_round_name}")
+    return pd.DataFrame(), erp, tru, last_match_round + 1
+matches = pd.concat([matched_per_id, matched_per_desc], ignore_index=True)
