@@ -1,8 +1,18 @@
+Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
+  File "cross_hound/matcher.py", line 1474, in <module>
+    main(input_dir=args.get('input_dir'),
+  File "cross_hound/matcher.py", line 1299, in main
+    matched, unmatched = full_matching_routine(data_version, db_style, device,
+  File "cross_hound/matcher.py", line 1247, in full_matching_routine
+    current_full_matches.drop(columns=['embedding_tru', 'embedding_erp'], inplace=True)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/frame.py", line 5266, in drop
+    return super().drop(
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/generic.py", line 4549, in drop
+    obj = obj._drop_axis(labels, axis, level=level, errors=errors)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/generic.py", line 4591, in _drop_axis
+    new_axis = axis.drop(labels, errors=errors)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 6696, in drop
+    raise KeyError(f"{list(labels[mask])} not found in axis")
+KeyError: "['embedding_tru', 'embedding_erp'] not found in axis"
 
-match_erp_desc_vs_rm_spec
-matches = pd.concat(list_df_matches, ignore_index=True)
 
-# ✅ Safeguard against empty list
-if not list_df_matches:
-    print(f"No ERP Desc vs RM Spec matches found for round {match_round_name}")
-    return pd.DataFrame(), erp, tru, last_match_round + 1
