@@ -1,14 +1,56 @@
-Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
-  File "cross_hound/matcher.py", line 1468, in <module>
-    main(input_dir=args.get('input_dir'),
-  File "cross_hound/matcher.py", line 1293, in main
-    matched, unmatched = full_matching_routine(data_version, db_style, device,
-  File "cross_hound/matcher.py", line 818, in full_matching_routine
-    matches_per_title, erp_to_match, tru_to_match, previous_round = match_erp_part_vs_rm_title(erp_to_match,
-  File "cross_hound/matcher.py", line 232, in match_erp_part_vs_rm_title
+def match_erp_part_vs_rm_title(erp: pd.DataFrame,
+                               tru: pd.DataFrame,
+                               last_match_round: int,
+                               bundles) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, int]:
+    match_round_name = f'{last_match_round + 1}: ERP Part vs RM Title'
+    print(f'MATCH ROUND {match_round_name}')
+    start = time.time()
+
+    list_df_matches = []
+
+    for material_number_src_sys_plant, sub_df_erp in erp[ERP_MATCH_COLS].groupby(
+            [ERP_MAT_NUM, 'SRC_SYS_CD', 'PLNT_CD']):
+        material_number, src_sys, plant = material_number_src_sys_plant
+
+        sub_df_tru = tru.query(f'{TRU_MAT_NUM}=="{material_number}" and '
+                               f'PLNT_CD=="{plant}" and '
+                               f'SRC_SYS_CD=="{src_sys}"').reset_index(drop=True)[TRU_MATCH_COLS]
+        if sub_df_tru.empty:
+            continue
+
+        for i, row_erp in sub_df_erp.iterrows():
+            erp_part_id = row_erp[ERP_PART_ID]
+            if len(erp_part_id) < 4:
+                continue
+            is_match = custom_contains(sub_df_tru[TRU_SPEC_DESC], erp_part_id)
+
+            if not any(is_match):
+                continue
+
+            tru_cols = TRU_MATCH_COLS.copy()
+            tru_cols = list(set(tru_cols) - {'SRC_SYS_CD', 'PLNT_CD'})
+            tru_section = sub_df_tru[is_match][tru_cols]
+
+            erp_section = pd.DataFrame(data=[row_erp for i in tru_section.index], index=tru_section.index)
+
+            partial_matches = pd.concat([erp_section, tru_section], axis=1)
+            partial_matches.reset_index(drop=True, inplace=True)
+            list_df_matches.append(partial_matches)
+
+    # ✅ Safeguard against empty list
+    if not list_df_matches:
+        print(f"No matches found in round {match_round_name}")
+        return pd.DataFrame(), erp, tru, last_match_round + 1
+
     matches = pd.concat(list_df_matches, ignore_index=True)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/reshape/concat.py", line 372, in concat
-    op = _Concatenator(
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/reshape/concat.py", line 429, in __init__
-    raise ValueError("No objects to concatenate")
-ValueError: No objects to concatenate
+
+    matches[SCORE_COL] = 1
+    matches[UNIFIED_MC_COL] = matches[f'{ERP_MAT_NUM}_original'].copy()
+    matches['is_matched'] = True
+    matches['Matching Reason'] = 'The ERP Part ID is mentioned in the Tru Title'
+    matches['confidence'] = 'high'
+
+    matches = add_matches_bundles(matches, bundles, tru)
+    assign_round_name_and_report_time(matches, match_round_name, start)
+    df_erp_to_match, df_tru_to_match = get_data_yet_to_match(matches, erp, tru)
+    return matches, df_erp_to_match, df_tru_to_match, last_match_round + 1
