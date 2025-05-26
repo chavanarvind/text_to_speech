@@ -1,6 +1,22 @@
-processed_desc_tmp = (
-    df_copy[f'processed_desc_{source}']
-    .fillna('')
-    .astype(str)
-    .str.replace(pattern, '', regex=True)
-)
+MATCH ROUND 1: ERP Part vs RM Spec
+Cleaning up all outstanding Run operations, waiting 300.0 seconds
+1 items cleaning up...
+Cleanup took 0.10155177116394043 seconds
+Traceback (most recent call last):
+  File "cross_hound/matcher.py", line 1463, in <module>
+    main(input_dir=args.get('input_dir'),
+  File "cross_hound/matcher.py", line 1288, in main
+    matched, unmatched = full_matching_routine(data_version, db_style, device,
+  File "cross_hound/matcher.py", line 807, in full_matching_routine
+    matches_per_id, erp_to_match, tru_to_match, previous_round = match_erp_part_vs_rm_spec(erp,
+  File "cross_hound/matcher.py", line 155, in match_erp_part_vs_rm_spec
+    matches = (erp[ERP_MATCH_COLS][erp['extracted_rm_erp'].notna()]
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/frame.py", line 9843, in merge
+    return merge(
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/reshape/merge.py", line 142, in merge
+    op = _MergeOperation(
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/reshape/merge.py", line 735, in __init__
+    self._maybe_coerce_merge_keys()
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/reshape/merge.py", line 1387, in _maybe_coerce_merge_keys
+    raise ValueError(msg)
+ValueError: You are trying to merge on float64 and object columns. If you wish to proceed you should use pd.concat
