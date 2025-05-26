@@ -1,44 +1,18 @@
-MATCH ROUND 3: ERP Desc vs RM Spec
-Matching off-specs did not work
-No objects to concatenate
-Exception details:
- Traceback (most recent call last):
-  File "cross_hound/matcher.py", line 1336, in main
-    matched_off_specs, unmatched_off_specs = full_matching_routine(data_version, db_style, device,
-  File "cross_hound/matcher.py", line 819, in full_matching_routine
-    matches_per_erp_desc, erp_to_match, tru_to_match, previous_round = match_erp_desc_vs_rm_spec(erp_to_match,
-  File "cross_hound/matcher.py", line 288, in match_erp_desc_vs_rm_spec
-    matches = pd.concat(list_df_matches, ignore_index=True)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/reshape/concat.py", line 372, in concat
-    op = _Concatenator(
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/reshape/concat.py", line 429, in __init__
-    raise ValueError("No objects to concatenate")
-ValueError: No objects to concatenate
-
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.19706058502197266 seconds
-Traceback (most recent call last):
-  File "cross_hound/matcher.py", line 1336, in main
-    matched_off_specs, unmatched_off_specs = full_matching_routine(data_version, db_style, device,
-  File "cross_hound/matcher.py", line 819, in full_matching_routine
-    matches_per_erp_desc, erp_to_match, tru_to_match, previous_round = match_erp_desc_vs_rm_spec(erp_to_match,
-  File "cross_hound/matcher.py", line 288, in match_erp_desc_vs_rm_spec
-    matches = pd.concat(list_df_matches, ignore_index=True)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/reshape/concat.py", line 372, in concat
-    op = _Concatenator(
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/reshape/concat.py", line 429, in __init__
-    raise ValueError("No objects to concatenate")
-ValueError: No objects to concatenate
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
+Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
   File "cross_hound/matcher.py", line 1463, in <module>
     main(input_dir=args.get('input_dir'),
-  File "cross_hound/matcher.py", line 1387, in main
-    exit(1)
-  File "/opt/conda/envs/ptca/lib/python3.8/_sitebuiltins.py", line 26, in __call__
-    raise SystemExit(code)
-SystemExit: 1
-
+  File "cross_hound/matcher.py", line 1288, in main
+    matched, unmatched = full_matching_routine(data_version, db_style, device,
+  File "cross_hound/matcher.py", line 760, in full_matching_routine
+    erp = create_features(erp, 'erp')
+  File "/mnt/azureml/cr/j/1f27aca1b8984b698a11d70ad37b223f/exe/wd/cross_hound/feature_engineering.py", line 69, in create_features
+    processed_desc_tmp = df_copy[f'processed_desc_{source}'].str.replace(pattern, '', regex=True)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/generic.py", line 5989, in __getattr__
+    return object.__getattribute__(self, name)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/accessor.py", line 224, in __get__
+    accessor_obj = self._accessor(obj)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/strings/accessor.py", line 180, in __init__
+    self._inferred_dtype = self._validate(data)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/strings/accessor.py", line 234, in _validate
+    raise AttributeError("Can only use .str accessor with string values!")
+AttributeError: Can only use .str accessor with string values!
