@@ -1,3 +1,8 @@
+print('Merging ERP datasets')
+erp = pd.concat([erp_im.reset_index(drop=True), erp_em.reset_index(drop=True)], ignore_index=True)
+erp = erp[erp["CMPNT_MATL_NUM"].isin(check_list)]  # <-- Add this here
+
+
 import time
 import os
 from typing import Union, Any
