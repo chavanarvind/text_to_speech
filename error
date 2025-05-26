@@ -1,8 +1,8 @@
 check_for_alternates_tru
 check_for_alternates
 if not list_res:
-    print(f"No alternate TRU matches found in round {round_name}")
-    return all_matches, tru_not_matched
+    print(f"No alternate matches found in round {round_name}")
+    return all_matches, erp_not_matched, tru_not_matched
 
 
 match_by_reference_table
