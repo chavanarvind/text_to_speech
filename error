@@ -1,100 +1,64 @@
 import os
-import glob
+import argparse
 import pandas as pd
-from multiprocessing import Pool, cpu_count
+import numpy as np
+import torch
+import joblib
+from azureml.core import Run, Model
+from sentence_transformers import SentenceTransformer
 
-# --- UNIT_GROUP mapping ---
-unit_group_map = {
-    'KG': 'CHM', 'KGS': 'CHM', 'KGA': 'CHM', 'KGW': 'CHM', 'G': 'CHM', 'GR': 'CHM', 'GM': 'CHM', 'MG': 'CHM',
-    'LB': 'CHM', 'LBS': 'CHM', 'OZ': 'CHM', 'OZA': 'CHM', 'GW': 'CHM', 'TON': 'CHM', 'DR': 'CHM',
-    'L': 'Liquid', 'LT': 'Liquid', 'ML': 'Liquid', 'CC': 'Liquid', 'CL': 'Liquid', 'CCM': 'Liquid', 'GLL': 'Liquid',
-    'EA': 'Discrete', 'PC': 'Discrete', 'PCS': 'Discrete', 'Pcs': 'Discrete', 'PKT': 'Discrete', 'PK': 'Discrete',
-    'PAK': 'Discrete', 'PCK': 'Discrete', 'CS': 'Discrete', 'CSE': 'Discrete', 'CT': 'Discrete', 'CA': 'Discrete',
-    'ST': 'Discrete', 'GRO': 'Discrete', 'BX': 'Discrete',
-    'BOT': 'Containers', 'BOTTLE': 'Containers', 'ROLL': 'Containers', 'ROL': 'Containers', 'REEL': 'Containers', 'KAR': 'Containers',
-    'FT': 'Dimensional', 'YD': 'Dimensional', 'KM': 'Dimensional', 'DM': 'Dimensional', 'M': 'Dimensional',
-    'M1': 'Dimensional', 'M2': 'Dimensional', 'KM2': 'Dimensional', 'YD2': 'Dimensional', 'FT3': 'Dimensional',
-    'SQM': 'Dimensional', 'sqm': 'Dimensional', 'MYD': 'Dimensional', 'MI': 'Dimensional', 'SM': 'Dimensional',
-    'LM': 'Dimensional', 'LF': 'Dimensional', 'MH': 'Dimensional', 'KN': 'Dimensional', 'CH': 'Dimensional',
-    'TH': 'Unclassified', 'THU': 'Unclassified', 'IM': 'Unclassified', 'NOS': 'Unclassified', 'NO': 'Unclassified',
-    'TS': 'Unclassified', 'KA': 'Unclassified', 'ZPC': 'Unclassified', 'ZCT': 'Unclassified', '0%': 'Unclassified',
-    'KP': 'Unclassified', 'GP': 'Unclassified', 'KAI': 'Unclassified', 'SY': 'Unclassified', 'UN': 'Unclassified',
-    'MU': 'Unclassified', 'UM': 'Unclassified', 'HU': 'Unclassified'
-}
+def main(input_path):
+    run = Run.get_context()
+    ws = run.experiment.workspace
 
-# --- CMPNT_MATL_TYPE_CATEGORY logic ---
-def map_cmpnt_type_category(val):
-    if pd.isna(val):
-        return 'OTHER'
+    # Load registered model folder (contains model + encoder + scaler)
+    model_dir = Model.get_model_path("lightgbm_combined_model", _workspace=ws)
+    model = joblib.load(os.path.join(model_dir, "final_model.joblib"))
+    ordinal = joblib.load(os.path.join(model_dir, "ordinal_encoder.pkl"))
+    scaler = joblib.load(os.path.join(model_dir, "scaler.pkl"))
 
-    val_clean = str(val).strip()
-    val_lower = val_clean.lower()
-    val_upper = val_clean.upper()
-
-    erp_type_map = {
-        'FERT': 'FINISHED_PRODUCT',
-        'HALB': 'SEMI_FINISHED',
-        'ROH': 'RAW_MATERIAL',
-        'VERP': 'PACKAGING_MATERIAL',
-        'TRAD': 'TRADED_GOOD',
-        'ERSA': 'SUBCONTRACT_COMPONENT',
-        'API': 'API',
-        'TPF': 'TRADE_PRODUCT',
-        'PACK': 'PACKAGING',
-        'ZHBG': 'INTERMEDIATE',
-        'EPC': 'EXCIPIENT',
-        'EPF': 'FINISHED_PRODUCT',
-        'HAWA': 'TRADING_GOOD',
-        'ZEXI': 'EXCIPIENT',
-        'ZROH': 'RAW_MATERIAL',
-        'SAPR': 'PACKAGING',
-        'IM': 'INTERMEDIATE',
-        'UNBW': 'NON_VALUATED',
-        'IG': 'INTERMEDIATE_GOOD'
-    }
-
-    if val_upper in erp_type_map:
-        return erp_type_map[val_upper]
-    if any(x in val_lower for x in ['packaging', 'bottle', 'jar', 'cap', 'carton', 'tube', 'pouch', 'closure']):
-        return 'PACKAGING'
-    if any(x in val_lower for x in ['chemical', 'solvent', 'alcohol', 'acid', 'buffer', 'salt', 'preservative']):
-        return 'CHEMICAL'
-    if any(x in val_lower for x in ['actives', 'naturals', 'flavor', 'fragrance', 'api']):
-        return 'ACTIVES_NATURALS'
-    if any(x in val_lower for x in ['film', 'foil', 'label', 'sleeve']):
-        return 'FILMS_LABELS'
-    if any(x in val_lower for x in ['soap', 'conditioner', 'emulsifier', 'thickener', 'talc', 'sunscreen']):
-        return 'COSMETIC_BASE'
-    if any(x in val_lower for x in ['glass', 'pump', 'puff']):
-        return 'CONTAINERS'
-    if len(val_clean) <= 5 and val_clean.isalnum():
-        return 'ERP_CODE'
-    return 'OTHER'
-
-# --- Process one file ---
-def process_file(file_path):
-    try:
+    # Load all parquet files
+    files = [f for f in os.listdir(input_path) if f.endswith(".parquet")]
+    for f in files:
+        file_path = os.path.join(input_path, f)
         df = pd.read_parquet(file_path)
 
-        df['MATL_SHRT_DESC_LEN'] = df['MATL_SHRT_DESC'].astype(str).str.len()
-        df['CMPNT_MATL_DESC_LEN'] = df['CMPNT_MATL_DESC'].astype(str).str.len()
+        # BERT encoder
+        encoder = SentenceTransformer('pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb',
+                                      device='cuda' if torch.cuda.is_available() else 'cpu')
+        encoder.max_seq_length = 128
 
-        df['UNIT_GROUP'] = df['CMPNT_UOM_CD'].fillna('').str.upper().map(unit_group_map).fillna('Unclassified')
-        df['CMPNT_MATL_TYPE_CATEGORY'] = df['CMPNT_MATL_TYPE_CD'].apply(map_cmpnt_type_category)
+        # Embed descriptions
+        desc_emb = encoder.encode(
+            df['CMPNT_MATL_DESC'].astype(str).tolist(),
+            batch_size=256,
+            show_progress_bar=True,
+            convert_to_numpy=True,
+            num_workers=4
+        )
 
-        df.to_parquet(file_path, index=False)
-        print(f"✅ Features updated: {os.path.basename(file_path)}")
-    except Exception as e:
-        print(f"❌ Failed: {os.path.basename(file_path)} -> {e}")
+        # Transform other features
+        length_scaled = scaler.transform(df[['CMPNT_MATL_DESC_LEN']])
+        cat_encoded = ordinal.transform(df[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+        X_pred = np.hstack([desc_emb, length_scaled, cat_encoded])
 
-# --- Main ---
-if __name__ == '__main__':
-    import argparse
+        # Predict
+        y_proba = model.predict_proba(X_pred)
+        y_score = np.max(y_proba, axis=1)
+        y_pred = model.predict(X_pred)
+
+        df['Score'] = y_score
+        df['Predicted'] = y_pred
+        df['Final_Prediction'] = np.where(y_score < 0.6, 'Other', y_pred)
+
+        # Save results
+        output_path = os.path.join("outputs", f"predicted_{f}")
+        os.makedirs("outputs", exist_ok=True)
+        df.to_parquet(output_path, index=False)
+        print(f" Inference done: {output_path}")
+
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_path', required=True)
-    parser.add_argument('--output_path')  # not needed
+    parser.add_argument("--input_path", type=str, required=True)
     args = parser.parse_args()
-
-    files = glob.glob(os.path.join(args.input_path, '*.parquet'))
-    with Pool(cpu_count()) as pool:
-        pool.map(process_file, files)
+    main(args.input_path)
