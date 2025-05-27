@@ -1,96 +1,26 @@
-# pipeline_runner.py
+# scripts/step_1_data_pull.py
 
-from azureml.core import Workspace, Environment, Experiment, Dataset
-from azureml.pipeline.core import Pipeline, PipelineData
-from azureml.pipeline.steps import PythonScriptStep
-from azureml.core.runconfig import RunConfiguration
 import os
+import argparse
+from azureml.core import Run, Dataset
 
-# === Load workspace ===
-ws = Workspace.from_config(path=".azureml/dev_config.json")
-compute_name = "llm-gpu-cluster-2"
-env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
+def main(output_path):
+    # Get run context and workspace
+    run = Run.get_context()
+    ws = run.experiment.workspace
 
-run_config = RunConfiguration()
-run_config.target = compute_name
-run_config.environment = env
+    # Get dataset by name
+    dataset = Dataset.get_by_name(ws, name='harmonized_bom_data_asset')
 
-# === Output and input shared folders ===
-data_dir = PipelineData(name="processed_data", is_directory=True)
+    # Ensure output directory exists and download dataset
+    os.makedirs(output_path, exist_ok=True)
+    dataset.download(target_path=output_path, overwrite=True)
 
-# === Step 1: Data Pull ===
-data_pull_step = PythonScriptStep(
-    name="Step 1 - Pull Dataset",
-    script_name="step_1_data_pull.py",
-    source_directory="scripts",
-    arguments=["--output_path", data_dir],
-    outputs=[data_dir],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
+    print(f"✅ Dataset downloaded to: {output_path}")
 
-# === Step 2: Clean Text ===
-clean_text_step = PythonScriptStep(
-    name="Step 2 - Text Cleaning",
-    script_name="step_2_clean_text.py",
-    source_directory="scripts",
-    inputs=[data_dir],
-    arguments=["--input_path", data_dir, "--output_path", data_dir],
-    outputs=[data_dir],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output_path", type=str, required=True)
+    args = parser.parse_args()
 
-# === Step 3: Abbreviation Expansion ===
-abbrev_expand_step = PythonScriptStep(
-    name="Step 3 - Expand Abbreviations",
-    script_name="step_3_expand_abbreviation.py",
-    source_directory="scripts",
-    inputs=[data_dir],
-    arguments=["--input_path", data_dir, "--output_path", data_dir],
-    outputs=[data_dir],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Step 4: Feature Engineering ===
-feature_eng_step = PythonScriptStep(
-    name="Step 4 - Feature Engineering",
-    script_name="step_4_feature_engineering.py",
-    source_directory="scripts",
-    inputs=[data_dir],
-    arguments=["--input_path", data_dir, "--output_path", data_dir],
-    outputs=[data_dir],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Step 5: Run Inference ===
-inference_step = PythonScriptStep(
-    name="Step 5 - Run Inference",
-    script_name="step_5_run_inference.py",
-    source_directory="scripts",
-    inputs=[data_dir],
-    arguments=["--input_path", data_dir],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Build pipeline ===
-pipeline = Pipeline(workspace=ws, steps=[
-    data_pull_step, clean_text_step,
-    abbrev_expand_step, feature_eng_step,
-    inference_step
-])
-
-pipeline.validate()
-
-# === Submit pipeline ===
-experiment = Experiment(ws, "full_inference_pipeline")
-pipeline_run = experiment.submit(pipeline)
-pipeline_run.wait_for_completion(show_output=True)
+    main(args.output_path)
