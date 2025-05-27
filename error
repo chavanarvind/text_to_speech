@@ -1,3 +1,4 @@
+We have PC-0005147 spec in NLP input P360 table and component material 000000000000153931 in NLP input IM BOM table. So, we expect to see a match in BOM_TRU_XREF. With manual file as an additional input, we expect to see a high confidence match for component material 000000000000153931 and PC-0005147 combination. But why don’t we see a PC spec associated with component material 000000000000153931 in BOM_TRU_XREF?--this records in alredy in off spec csv file too
 import time
 import os
 from typing import Union, Any
