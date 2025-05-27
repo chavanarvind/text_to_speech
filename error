@@ -1,26 +1,55 @@
-# scripts/step_1_data_pull.py
-
 import os
+import re
+import glob
 import argparse
-from azureml.core import Run, Dataset
+import pandas as pd
+from multiprocessing import Pool, cpu_count
 
-def main(output_path):
-    # Get run context and workspace
-    run = Run.get_context()
-    ws = run.experiment.workspace
+# --- Precompiled regex patterns ---
+patterns = {
+    'non_alphanumeric': re.compile(r'[^A-Za-z0-9&% ]+'),
+    'percent_space': re.compile(r"\s*%\s*"),
+    'remove_canada': re.compile(r'canada\s*\d*|can\s*\d*|ca\s*\d*|ca$|can$|ca\s'),
+    'units': re.compile(r"(\D)(\d+)(\s*)(ml|l|gr|gm|g|ct)"),
+    'spf_space': re.compile(r"(\s)(spf)\s*([\d+])"),
+    'units_no_space': re.compile(r'(\d+)\s*(ml|l|gr|gm|g|ct)(?: |$)'),
+    'spf_number': re.compile(r"(\D)(spf\d+)")
+}
 
-    # Get dataset by name
-    dataset = Dataset.get_by_name(ws, name='harmonized_bom_data_asset')
+def clean_series(series):
+    return (series.str.lower()
+        .str.replace(patterns['non_alphanumeric'], '', regex=True)
+        .str.replace(patterns['percent_space'], '% ', regex=True)
+        .str.replace(patterns['remove_canada'], '', regex=True)
+        .str.replace(patterns['units'], r'\1 \2\3\4 ', regex=True)
+        .str.replace(patterns['spf_space'], r'\1\2\3', regex=True)
+        .str.replace(patterns['units_no_space'], lambda z: z.group().replace(" ", ""), regex=True)
+        .str.replace(patterns['spf_number'], r'\1 \2 ', regex=True))
 
-    # Ensure output directory exists and download dataset
-    os.makedirs(output_path, exist_ok=True)
-    dataset.download(target_path=output_path, overwrite=True)
+def process_file(file):
+    try:
+        df = pd.read_parquet(file)
 
-    print(f"✅ Dataset downloaded to: {output_path}")
+        df['MATL_SHRT_DESC'] = clean_series(df['MATL_SHRT_DESC'].fillna(''))
+        df['CMPNT_MATL_DESC'] = clean_series(df['CMPNT_MATL_DESC'].fillna(''))
 
-if __name__ == "__main__":
+        df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'] = (
+            df['MATL_SHRT_DESC'] + ' ' + df['CMPNT_MATL_DESC']
+        ).str.strip()
+
+        df.to_parquet(file, index=False)
+        print(f"✅ Cleaned: {os.path.basename(file)}")
+    except Exception as e:
+        print(f"❌ Failed: {os.path.basename(file)} -> {e}")
+
+def main(input_path):
+    files = glob.glob(os.path.join(input_path, '*.parquet'))
+    with Pool(cpu_count()) as pool:
+        pool.map(process_file, files)
+
+if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output_path", type=str, required=True)
+    parser.add_argument('--input_path', required=True)
+    parser.add_argument('--output_path')  # unused; processing in-place
     args = parser.parse_args()
-
-    main(args.output_path)
+    main(args.input_path)
