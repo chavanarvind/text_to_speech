@@ -1,64 +1,49 @@
 import os
-import argparse
+from typing import List
+
 import pandas as pd
-import numpy as np
-import torch
-import joblib
-from azureml.core import Run, Model
-from sentence_transformers import SentenceTransformer
 
-def main(input_path):
-    run = Run.get_context()
-    ws = run.experiment.workspace
+from cross_hound.config import IRRELEVANT_MATERIALS
 
-    # Load registered model folder (contains model + encoder + scaler)
-    model_dir = Model.get_model_path("lightgbm_combined_model", _workspace=ws)
-    model = joblib.load(os.path.join(model_dir, "final_model.joblib"))
-    ordinal = joblib.load(os.path.join(model_dir, "ordinal_encoder.pkl"))
-    scaler = joblib.load(os.path.join(model_dir, "scaler.pkl"))
+xhound_folder = os.path.dirname(os.path.realpath(__file__))
+src_folder = os.path.abspath(os.path.join(xhound_folder, os.pardir))
 
-    # Load all parquet files
-    files = [f for f in os.listdir(input_path) if f.endswith(".parquet")]
-    for f in files:
-        file_path = os.path.join(input_path, f)
-        df = pd.read_parquet(file_path)
+OFF_SPEC_LIST = pd.read_csv(f'{src_folder}/reference_tables/off_spec_items.csv', dtype=str)
 
-        # BERT encoder
-        encoder = SentenceTransformer('pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb',
-                                      device='cuda' if torch.cuda.is_available() else 'cpu')
-        encoder.max_seq_length = 128
 
-        # Embed descriptions
-        desc_emb = encoder.encode(
-            df['CMPNT_MATL_DESC'].astype(str).tolist(),
-            batch_size=256,
-            show_progress_bar=True,
-            convert_to_numpy=True,
-            num_workers=4
-        )
+def classify_as_off_spec(df: pd.DataFrame) -> List:
+    '''
+    df should have as first column the id and as second column the description
 
-        # Transform other features
-        length_scaled = scaler.transform(df[['CMPNT_MATL_DESC_LEN']])
-        cat_encoded = ordinal.transform(df[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
-        X_pred = np.hstack([desc_emb, length_scaled, cat_encoded])
+    Data can be either ERP or TRU as the OFF_SPEC_LIST includes both
+    '''
 
-        # Predict
-        y_proba = model.predict_proba(X_pred)
-        y_score = np.max(y_proba, axis=1)
-        y_pred = model.predict(X_pred)
+    n = len(df)
+    col_id = df.columns[0]
+    col_desc = df.columns[1]
 
-        df['Score'] = y_score
-        df['Predicted'] = y_pred
-        df['Final_Prediction'] = np.where(y_score < 0.6, 'Other', y_pred)
+    df_reference = df.merge(OFF_SPEC_LIST[['id']].drop_duplicates(),
+                            left_on=col_id,
+                            right_on='id',
+                            how='left')
 
-        # Save results
-        output_path = os.path.join("outputs", f"predicted_{f}")
-        os.makedirs("outputs", exist_ok=True)
-        df.to_parquet(output_path, index=False)
-        print(f" Inference done: {output_path}")
+    assert n == len(df_reference), 'duplicates produced after inspecting ids'
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input_path", type=str, required=True)
-    args = parser.parse_args()
-    main(args.input_path)
+    df_reference = df_reference.merge(OFF_SPEC_LIST[['description']].drop_duplicates(),
+                                      left_on=col_desc,
+                                      right_on='description',
+                                      how='left')
+
+    # If either id or description are found in the off spec list, mark it as off spec
+    based_on_list = df_reference[['id', 'description']].notna().any(axis=1)
+
+    keyword_match = (df[col_desc]
+                     .str
+                     .lower()
+                     .str
+                     .contains('|'.join(IRRELEVANT_MATERIALS), case=False)
+                     )
+    keyword_match = (keyword_match | df[col_desc].str.lower().isin(['agua', 'aqua']))
+
+    final_result = (based_on_list | keyword_match)
+    return final_result
