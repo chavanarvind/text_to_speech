@@ -1,4 +1,99 @@
-File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\pipeline\steps\python_script_step.py", line 243, in create_node
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\pipeline\core\_python_script_step_base.py", line 108, in create_node
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\pipeline\core\builder.py", line 990, in create_input_output_bindings
-ValueError: Step output processed_data can not be used as an output for step Step 1 - Pull Dataset, as it is already an output of step Step 4 - Feature Engineering.
+# pipeline_runner.py
+
+from azureml.core import Workspace, Environment, Experiment, Dataset
+from azureml.pipeline.core import Pipeline, PipelineData
+from azureml.pipeline.steps import PythonScriptStep
+from azureml.core.runconfig import RunConfiguration
+import os
+
+# === Load workspace ===
+ws = Workspace.from_config(path=".azureml/dev_config.json")
+compute_name = "llm-gpu-cluster-2"
+env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
+
+run_config = RunConfiguration()
+run_config.target = compute_name
+run_config.environment = env
+
+# === Output and input shared folders ===
+data_step1_out = PipelineData(name="data_step1_out", is_directory=True)
+data_step2_out = PipelineData(name="data_step2_out", is_directory=True)
+data_step3_out = PipelineData(name="data_step3_out", is_directory=True)
+data_step4_out = PipelineData(name="data_step4_out", is_directory=True)
+
+# === Step 1: Data Pull ===
+data_pull_step = PythonScriptStep(
+    name="Step 1 - Pull Dataset",
+    script_name="step_1_data_pull.py",
+    source_directory="scripts",
+    arguments=["--output_path", data_step1_out],
+    outputs=[data_step1_out],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
+
+# === Step 2: Clean Text ===
+clean_text_step = PythonScriptStep(
+    name="Step 2 - Text Cleaning",
+    script_name="step_2_clean_text.py",
+    source_directory="scripts",
+    inputs=[data_step1_out],
+    arguments=["--input_path", data_step1_out, "--output_path", data_step2_out],
+    outputs=[data_step2_out],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
+
+# === Step 3: Abbreviation Expansion ===
+abbrev_expand_step = PythonScriptStep(
+    name="Step 3 - Expand Abbreviations",
+    script_name="step_3_expand_abbreviation.py",
+    source_directory="scripts",
+    inputs=[data_step2_out],
+    arguments=["--input_path", data_step2_out, "--output_path", data_step3_out],
+    outputs=[data_step3_out],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
+
+# === Step 4: Feature Engineering ===
+feature_eng_step = PythonScriptStep(
+    name="Step 4 - Feature Engineering",
+    script_name="step_4_feature_engineering.py",
+    source_directory="scripts",
+    inputs=[data_step3_out],
+    arguments=["--input_path", data_step3_out, "--output_path", data_step4_out],
+    outputs=[data_step4_out],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
+
+# === Step 5: Run Inference ===
+inference_step = PythonScriptStep(
+    name="Step 5 - Run Inference",
+    script_name="step_5_run_inference.py",
+    source_directory="scripts",
+    inputs=[data_step4_out],
+    arguments=["--input_path", data_step4_out],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
+
+# === Build pipeline ===
+pipeline = Pipeline(workspace=ws, steps=[
+    data_pull_step, clean_text_step,
+    abbrev_expand_step, feature_eng_step,
+    inference_step
+])
+
+pipeline.validate()
+
+# === Submit pipeline ===
+experiment = Experiment(ws, "full_inference_pipeline")
+pipeline_run = experiment.submit(pipeline)
+pipeline_run.wait_for_completion(show_output=True)
