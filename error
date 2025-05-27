@@ -1,1 +1,4 @@
-match_erp_part_vs_rm_spec
+    #erp['extracted_rm_erp'] = erp['extracted_rm_erp'].astype(str)
+    #tru['extracted_rm_tru'] = tru['extracted_rm_tru'].astype(str)
+    #erp[ERP_MAT_NUM] = erp[ERP_MAT_NUM].astype(str)
+    #tru[TRU_MAT_NUM] = tru[TRU_MAT_NUM].astype(str)
