@@ -1,13 +1,122 @@
+import os
+from typing import List
+
 import pandas as pd
-from cross_hound.off_spec import classify_as_off_spec
-from cross_hound.constants import ERP_PART_ID, ERP_PART_DESC, TRU_SPEC_ID, TRU_SPEC_DESC
 
-# Choose file: 'test_input_erp.csv' or 'test_input_tru.csv'
-df = pd.read_csv('test_input_erp.csv', dtype=str)
+IRRELEVANT_MATERIALS = ['sfilm',
+                        'pallet',
+                        'shp&stor',
+                        'purified water',
+                        'water, demineralized',
+                        'ionized water',
+                        'gua purificada',
+                        'qua purificada',
+                        'tote liner',
+                        'storage',
+                        'tape',
+                        ' seal ',
+                        'sleeve',
+                        'conversion',
+                        ' ink ',
+                        'tinta',
+                        'fita ades',
+                        'bulk bag',
+                        'printing ribbon',
+                        'wrap shrink',
+                        'shrink wrap',
+                        'wrapper',
+                        'bopp film',
+                        'bundle film',
+                        'inkjet',
+                        'slip sheet',
+                        'bulkpack',
+                        'bulk pack',
+                        'partition',
+                        'sshet',
+                        'bag tie',
+                        'city water',
+                        'dust cover',
+                        'slpsht',
+                        ' shrink ',
+                        'stretch wrap',
+                        'outer cases',
+                        'glue',
+                        'adhesive',
+                        'adesivo']
 
+xhound_folder = os.path.dirname(os.path.realpath(__file__))
+src_folder = os.path.abspath(os.path.join(xhound_folder, os.pardir))
+
+OFF_SPEC_LIST = pd.read_csv('./src/reference_tables/off_spec_items.csv', dtype=str)
+off=OFF_SPEC_LIST[OFF_SPEC_LIST['id']=='PC-0005147']
+print(off)
+
+
+
+
+
+def classify_as_off_spec(df: pd.DataFrame) -> List:
+    '''
+    df should have as first column the id and as second column the description
+
+    Data can be either ERP or TRU as the OFF_SPEC_LIST includes both
+    '''
+
+    n = len(df)
+    col_id = df.columns[0]
+    print(col_id)
+    
+    col_desc = df.columns[1]
+    print(col_desc)
+
+    print(f"\n[DEBUG] Checking row → ID: {df[col_id].iloc[0]}, DESC: {df[col_desc].iloc[0]}")
+
+    df_reference = df.merge(OFF_SPEC_LIST[['id']].drop_duplicates(),
+                            left_on=col_id,
+                            right_on='id',
+                            how='left')
+
+    if df_reference['id'].notna().any():
+        print(f"[DEBUG] Matched by ID: {df_reference['id'].dropna().tolist()}")
+
+    df_reference = df_reference.merge(OFF_SPEC_LIST[['description']].drop_duplicates(),
+                                      left_on=col_desc,
+                                      right_on='description',
+                                      how='left')
+
+    if df_reference['description'].notna().any():
+        print(f"[DEBUG] Matched by Description: {df_reference['description'].dropna().tolist()}")
+
+    based_on_list = df_reference[['id', 'description']].notna().any(axis=1)
+
+    keyword_match = (df[col_desc]
+                     .str
+                     .lower()
+                     .str
+                     .contains('|'.join(IRRELEVANT_MATERIALS), case=False)
+                     )
+    keyword_match = (keyword_match | df[col_desc].str.lower().isin(['agua', 'aqua']))
+
+    if keyword_match.any():
+        print(f"[DEBUG] Matched by Keyword: {df.loc[keyword_match, col_desc].tolist()}")
+
+    final_result = (based_on_list | keyword_match)
+
+    print(f"[DEBUG] Final result: {final_result.tolist()}\n")
+
+    return final_result
+
+
+
+
+
+df = pd.read_csv(f'{src_folder}/reference_tables/tru_no_common_after_offspec.csv', dtype=str)
+df=df[['CHILD_NM', 'CHILD_TITLE_DESC']]
+df=df[df['CHILD_NM']=='PC-0005147']
 # If testing ERP
-result = classify_as_off_spec(df[[ERP_PART_ID, ERP_PART_DESC]])
-df['is_off_spec_erp'] = result
+#result = classify_as_off_spec(df[['CHILD_NM', 'CHILD_TITLE_DESC']])
+df['is_off_spec_tru'] = classify_as_off_spec(df[['CHILD_NM', 'CHILD_TITLE_DESC']])
+
 
 # If testing TRU (uncomment and change file above)
 # result = classify_as_off_spec(df[[TRU_SPEC_ID, TRU_SPEC_DESC]])
@@ -15,4 +124,34 @@ df['is_off_spec_erp'] = result
 
 # Print or save results
 print(df)
-df.to_csv("classified_output.csv", index=False)
+#df.to_csv("classified_output.csv", index=False)
+
+
+
+
+----prints
+           source          id                                    description
+832  Final nlp list  PC-0005147  Guelph, 2.5" LDPE Carton Bundle Wrap - 153931
+CHILD_NM
+CHILD_TITLE_DESC
+
+[DEBUG] Checking row → ID: PC-0005147, DESC: "Guelph, 2.5"" LDPE Carton Bundle Wrap - 153931"
+[DEBUG] Matched by ID: ['PC-0005147', 'PC-0005147', 'PC-0005147', 'PC-0005147', 'PC-0005147', 'PC-0005147', 'PC-0005147', 'PC-0005147', 'PC-0005147', 'PC-0005147', 'PC-0005147', 'PC-0005147', 'PC-0005147', 'PC-0005147', 'PC-0005147']
+[DEBUG] Final result: [True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False]
+
+          CHILD_NM                                  CHILD_TITLE_DESC  is_off_spec_tru
+36067   PC-0005147  "Guelph, 2.5"" LDPE Carton Bundle Wrap - 153931"            False
+38010   PC-0005147  "Guelph, 2.5"" LDPE Carton Bundle Wrap - 153931"            False
+67800   PC-0005147  "Guelph, 2.5"" LDPE Carton Bundle Wrap - 153931"            False
+90216   PC-0005147  "Guelph, 2.5"" LDPE Carton Bundle Wrap - 153931"            False
+103010  PC-0005147  "Guelph, 2.5"" LDPE Carton Bundle Wrap - 153931"            False
+163004  PC-0005147  "Guelph, 2.5"" LDPE Carton Bundle Wrap - 153931"            False
+173411  PC-0005147  "Guelph, 2.5"" LDPE Carton Bundle Wrap - 153931"            False
+197142  PC-0005147  "Guelph, 2.5"" LDPE Carton Bundle Wrap - 153931"            False
+210634  PC-0005147  "Guelph, 2.5"" LDPE Carton Bundle Wrap - 153931"            False
+250624  PC-0005147  "Guelph, 2.5"" LDPE Carton Bundle Wrap - 153931"            False
+262997  PC-0005147  "Guelph, 2.5"" LDPE Carton Bundle Wrap - 153931"            False
+313233  PC-0005147  "Guelph, 2.5"" LDPE Carton Bundle Wrap - 153931"            False
+321761  PC-0005147  "Guelph, 2.5"" LDPE Carton Bundle Wrap - 153931"            False
+336816  PC-0005147  "Guelph, 2.5"" LDPE Carton Bundle Wrap - 153931"            False
+411607  PC-0005147  "Guelph, 2.5"" LDPE Carton Bundle Wrap - 153931"            False
