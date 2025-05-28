@@ -1,99 +1,22 @@
-# pipeline_runner.py
+ Save BEFORE Off-Spec Classification
+user_logs_path = os.path.join(os.getcwd(), "user_logs")
+os.makedirs(user_logs_path, exist_ok=True)
 
-from azureml.core import Workspace, Environment, Experiment, Dataset
-from azureml.pipeline.core import Pipeline, PipelineData
-from azureml.pipeline.steps import PythonScriptStep
-from azureml.core.runconfig import RunConfiguration
-import os
+erp_before_offspec_path = os.path.join(user_logs_path, "erp_before_offspec.csv")
+tru_before_offspec_path = os.path.join(user_logs_path, "tru_before_offspec.csv")
 
-# === Load workspace ===
-ws = Workspace.from_config(path=".azureml/dev_config.json")
-compute_name = "llm-gpu-cluster-2"
-env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
+erp[[ERP_PART_ID, ERP_PART_DESC]].to_csv(erp_before_offspec_path, index=False)
+tru[[TRU_SPEC_ID, TRU_SPEC_DESC]].to_csv(tru_before_offspec_path, index=False)
+ Save BEFORE Off-Spec Classification
+erp_after_path = os.path.join(user_logs_path, "erp_after_offspec.csv")
+tru_after_path = os.path.join(user_logs_path, "tru_after_offspec.csv")
+tru_no_common_path = os.path.join(user_logs_path, "tru_no_common_after_offspec.csv")
 
-run_config = RunConfiguration()
-run_config.target = compute_name
-run_config.environment = env
+erp.to_csv(erp_after_path, index=False)
+tru.to_csv(tru_after_path, index=False)
+tru_no_common.to_csv(tru_no_common_path, index=False)
 
-# === Output and input shared folders ===
-data_step1_out = PipelineData(name="data_step1_out", is_directory=True)
-data_step2_out = PipelineData(name="data_step2_out", is_directory=True)
-data_step3_out = PipelineData(name="data_step3_out", is_directory=True)
-data_step4_out = PipelineData(name="data_step4_out", is_directory=True)
-
-# === Step 1: Data Pull ===
-data_pull_step = PythonScriptStep(
-    name="Step 1 - Pull Dataset",
-    script_name="step_1_data_pull.py",
-    source_directory="scripts",
-    arguments=["--output_path", data_step1_out],
-    outputs=[data_step1_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Step 2: Clean Text ===
-clean_text_step = PythonScriptStep(
-    name="Step 2 - Text Cleaning",
-    script_name="step_2_clean_text.py",
-    source_directory="scripts",
-    inputs=[data_step1_out],
-    arguments=["--input_path", data_step1_out, "--output_path", data_step2_out],
-    outputs=[data_step2_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Step 3: Abbreviation Expansion ===
-abbrev_expand_step = PythonScriptStep(
-    name="Step 3 - Expand Abbreviations",
-    script_name="step_3_expand_abbreviation.py",
-    source_directory="scripts",
-    inputs=[data_step2_out],
-    arguments=["--input_path", data_step2_out, "--output_path", data_step3_out],
-    outputs=[data_step3_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Step 4: Feature Engineering ===
-feature_eng_step = PythonScriptStep(
-    name="Step 4 - Feature Engineering",
-    script_name="step_4_feature_engineering.py",
-    source_directory="scripts",
-    inputs=[data_step3_out],
-    arguments=["--input_path", data_step3_out, "--output_path", data_step4_out],
-    outputs=[data_step4_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Step 5: Run Inference ===
-inference_step = PythonScriptStep(
-    name="Step 5 - Run Inference",
-    script_name="step_5_run_inference.py",
-    source_directory="scripts",
-    inputs=[data_step4_out],
-    arguments=["--input_path", data_step4_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Build pipeline ===
-pipeline = Pipeline(workspace=ws, steps=[
-    data_pull_step, clean_text_step,
-    abbrev_expand_step, feature_eng_step,
-    inference_step
-])
-
-pipeline.validate()
-
-# === Submit pipeline ===
-experiment = Experiment(ws, "full_inference_pipeline")
-pipeline_run = experiment.submit(pipeline)
-pipeline_run.wait_for_completion(show_output=True)
+Save Discarded ERP and TRU
+erp_discarded.to_csv(os.path.join(user_logs_path, "erp_discarded_offspec.csv"), index=False)
+tru_discarded.to_csv(os.path.join(user_logs_path, "tru_discarded_offspec.csv"), index=False)
+tru_off_specs_no_common.to_csv(os.path.join(user_logs_path, "tru_offspecs_no_common.csv"), index=False)
