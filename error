@@ -1,2 +1,18 @@
-    erp['is_off_spec_erp'] = classify_as_off_spec(erp[[ERP_PART_ID, ERP_PART_DESC]])
-    tru['is_off_spec_tru'] = classify_as_off_spec(tru[[TRU_SPEC_ID, TRU_SPEC_DESC]])
+import pandas as pd
+from cross_hound.off_spec import classify_as_off_spec
+from cross_hound.constants import ERP_PART_ID, ERP_PART_DESC, TRU_SPEC_ID, TRU_SPEC_DESC
+
+# Choose file: 'test_input_erp.csv' or 'test_input_tru.csv'
+df = pd.read_csv('test_input_erp.csv', dtype=str)
+
+# If testing ERP
+result = classify_as_off_spec(df[[ERP_PART_ID, ERP_PART_DESC]])
+df['is_off_spec_erp'] = result
+
+# If testing TRU (uncomment and change file above)
+# result = classify_as_off_spec(df[[TRU_SPEC_ID, TRU_SPEC_DESC]])
+# df['is_off_spec_tru'] = result
+
+# Print or save results
+print(df)
+df.to_csv("classified_output.csv", index=False)
