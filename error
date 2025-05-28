@@ -1,8 +1,1 @@
-erp = erp[erp[ERP_MAT_NUM].isin(common_codes)].reset_index(drop=True)
-
-
-erp_discarded = erp.query('is_off_spec_erp').reset_index(drop=True)
-tru_discarded = tru.query('is_off_spec_tru').reset_index(drop=True)
-erp_discarded.to_csv(os.path.join(user_logs_path, "erp_discarded_offspec.csv"), index=False)
-tru_discarded.to_csv(os.path.join(user_logs_path, "tru_discarded_offspec.csv"), index=False)
-tru_off_specs_no_common.to_csv(os.path.join(user_logs_path, "tru_offspecs_no_common.csv"), index=False)
+tru_no_common = tru[~tru[TRU_MAT_NUM].isin(common_codes)]
