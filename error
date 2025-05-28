@@ -1,28 +1,55 @@
-             source          id                                     description
-832  Final nlp list  PC-0005147  Guelph, 2.5"" LDPE Carton Bundle Wrap - 153931
-CHILD_NM
-CHILD_TITLE_DESC
+from typing import List
+import pandas as pd
 
-[DEBUG] Checking row → ID: PC-0005147, DESC: "Guelph, 2.5"" LDPE Carton Bundle Wrap - 153931"
-[DEBUG] Matched by ID: ['PC-0005147', 'PC-0005147', 'PC-0005147', 'PC-0005147', 'PC-0005147', 'PC-0005147', 'PC-0005147', 'PC-0005147', 'PC-0005147', 'PC-0005147', 'PC-0005147', 'PC-0005147', 'PC-0005147', 'PC-0005147', 'PC-0005147']
-[DEBUG] Final result: [True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False]
+# Use your own import
+# from cross_hound.config import IRRELEVANT_MATERIALS
 
-                   mat_num                                  ERP_DESC RGN_CD RGN2_CD  ... ERP_PART_NUM TRD_NM_CONCAT TRD_NM_FULL is_off_spec_tru
-36067   000000000100042477     TYLENOL MASTERBRAND 186PC LG H-PLT-WM    NaN      CA  ...          NaN           NaN         NaN           False    
-38010   000000000100065560                TYL NHL PAIN CCFS 48PC PDQ    NaN      CA  ...          NaN           NaN         NaN           False    
-67800   000000000100024496                           Tylenol RRG PDQ    NaN      CA  ...          NaN           NaN         NaN           False    
-90216   000000000100065447          TYLENOL C&S 40S+10BONUS 32PC PDQ    NaN      CA  ...          NaN           NaN         NaN           False    
-103010  000000000100065432           TYLENOL PEDS/CCFS MB 224PC-HPLT    NaN      CA  ...          NaN           NaN         NaN           False    
-163004  000000000100037184         TYLENOL Premium Specialty PDQ NAT    NaN      CA  ...          NaN           NaN         NaN           False    
-173411  000000000305182900  CH TYLENOL CHEW GRAPE3-24S ECM X8CLBSHPR    NaN     USA  ...          NaN           NaN         NaN           False    
-197142  000000000100026364   TYL CH Chewable Grape 2x20ct Value Pack    NaN      CA  ...          NaN           NaN         NaN           False    
-210634  000000000305182701       CH TYLENOL CHEW 24 GRAPE UNIQUE UPC    NaN     USA  ...          NaN           NaN         NaN           False    
-250624  000000000302961302  CH TYLENOL 4Z W/CHEW 24 GRP HOME/AWAY PK    NaN     USA  ...          NaN           NaN         NaN           False    
-262997  000000000099282770         TYLENOL Premium Specialty PDQ NAT    NaN      CA  ...          NaN           NaN         NaN           False    
-313233  000000000100065425              TYLENOL NHL PREMIUM 52PC FLS    NaN      CA  ...          NaN           NaN         NaN           False    
-321761  000000000100042476     TYLENOL MASTERBRAND 134PC SM H-PLT-WM    NaN      CA  ...          NaN           NaN         NaN           False    
-336816  000000000100037530       Tyl Cold ES 40day+40 night Tray - C    NaN      CA  ...          NaN           NaN         NaN           False    
-411607  000000000305182700       CH TYLENOL CHEW 24 GRAPE UNIQUE UPC    NaN     USA  ...          NaN           NaN         NaN           False    
+def classify_as_off_spec(df: pd.DataFrame) -> List[bool]:
+    '''
+    Classify rows as off-spec based on:
+    - Exact ID match
+    - Exact normalized description match
+    - Keyword match
 
-[15 rows x 39 columns]
-(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline> 
+    Expects:
+    df.columns[0] = ID
+    df.columns[1] = Description
+    '''
+
+    col_id = df.columns[0]
+    col_desc = df.columns[1]
+
+    print(f"[DEBUG] Processing {len(df)} rows")
+    print(f"[DEBUG] Sample row: ID={df[col_id].iloc[0]}, DESC={df[col_desc].iloc[0]}")
+
+    # Normalize input
+    df_id = df[col_id].astype(str).str.strip()
+    df_desc = df[col_desc].astype(str).str.strip().str.lower()
+
+    # Normalize reference list
+    offspec_ids = OFF_SPEC_LIST['id'].astype(str).str.strip().unique()
+    offspec_descs = OFF_SPEC_LIST['description'].astype(str).str.strip().str.lower().unique()
+
+    # Match by ID
+    match_by_id = df_id.isin(offspec_ids)
+    if match_by_id.any():
+        print(f"[DEBUG] Matched by ID: {df.loc[match_by_id, col_id].tolist()}")
+
+    # Match by description
+    match_by_desc = df_desc.isin(offspec_descs)
+    if match_by_desc.any():
+        print(f"[DEBUG] Matched by Description: {df.loc[match_by_desc, col_desc].tolist()}")
+
+    # Keyword match
+    keyword_pattern = '|'.join(IRRELEVANT_MATERIALS)
+    match_by_keyword = (
+        df_desc.str.contains(keyword_pattern, case=False, na=False) |
+        df_desc.isin(['agua', 'aqua'])
+    )
+    if match_by_keyword.any():
+        print(f"[DEBUG] Matched by Keyword: {df.loc[match_by_keyword, col_desc].tolist()}")
+
+    final_result = (match_by_id | match_by_desc | match_by_keyword)
+
+    print(f"[DEBUG] Final result: {final_result.tolist()}")
+    return final_result.tolist()
