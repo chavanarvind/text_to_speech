@@ -1,2 +1,1 @@
-mapping_path = os.path.join(args.mapping_csv, "high_conf_direct_mapping.csv")
-mapping_df = pd.read_csv(mapping_path)
+from azureml.core import Dataset
