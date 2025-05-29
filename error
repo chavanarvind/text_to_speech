@@ -1,21 +1,20 @@
-high_conf_merge_step = PythonScriptStep(
-    name="Step 1a - High Confidence Merge",
-    script_name="step_1a_extract_and_merge.py",
-    source_directory="scripts",
-    inputs=[data_step1_out, high_conf_csv_path],  # <-- add it to inputs!
-    arguments=[
-        "--input_path", data_step1_out,
-        "--mapping_csv", high_conf_csv_path,  # <-- pass as is
-        "--mapped_output", data_step1a_mapped,
-        "--unmapped_output", data_step1a_unmapped
-    ],
-    outputs=[data_step1a_mapped, data_step1a_unmapped],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-
-
-mapping_path = os.path.join(args.mapping_csv, "high_conf_direct_mapping.csv")
-mapping_df = pd.read_csv(mapping_path)
+exception (msrestazure 0.6.4.post1 (c:\users\achava05\onedrive - kenvue\achava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages), Requirement.parse('msrestazure<=0.6.4,>=0.4.33'), {'azureml-core'}).
+Failure while loading azureml_run_type_providers. Failed to load entrypoint automl = azureml.train.automl.run:AutoMLRun._from_run_dto with exception (msrestazure 0.6.4.post1 (c:\users\achava05\onedrive - kenvue\achava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages), Requirement.parse('msrestazure<=0.6.4,>=0.4.33'), {'azureml-core'}).
+Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.PipelineRun = azureml.pipeline.core.run:PipelineRun._from_dto with exception (msrestazure 0.6.4.post1 (c:\users\achava05\onedrive - kenvue\achava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages), Requirement.parse('msrestazure<=0.6.4,>=0.4.33'), {'azureml-core'}).
+Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.ReusedStepRun = azureml.pipeline.core.run:StepRun._from_reused_dto with exception (msrestazure 0.6.4.post1 (c:\users\achava05\onedrive - kenvue\achava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages), Requirement.parse('msrestazure<=0.6.4,>=0.4.33'), {'azureml-core'}).
+Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.StepRun = azureml.pipeline.core.run:StepRun._from_dto with exception (msrestazure 0.6.4.post1 (c:\users\achava05\onedrive - kenvue\achava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages), Requirement.parse('msrestazure<=0.6.4,>=0.4.33'), {'azureml-core'}).
+Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.scriptrun = azureml.core.script_run:ScriptRun._from_run_dto with exception (msrestazure 0.6.4.post1 (c:\users\achava05\onedrive - kenvue\achava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages), Requirement.parse('msrestazure<=0.6.4,>=0.4.33')).
+"datastore.upload_files" is deprecated after version 1.0.69. Please use "FileDatasetFactory.upload_directory" instead. See Dataset API change notice at https://aka.ms/dataset-deprecation.
+Uploading an estimated of 1 files
+Uploading ./local_data/high_conf_direct_mapping.csv
+Uploaded ./local_data/high_conf_direct_mapping.csv, 1 files out of an estimated total of 1
+Uploaded 1 files
+Traceback (most recent call last):
+  File ".\pipeline_runner.py", line 58, in <module>
+    high_conf_merge_step = PythonScriptStep(
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\pipeline\steps\python_script_step.py", line 218, in __init__
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\pipeline\core\_python_script_step_base.py", line 86, in __init__
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\pipeline\core\builder.py", line 143, in __init__
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\pipeline\core\builder.py", line 227, in _validate_io_types
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\pipeline\core\builder.py", line 214, in validate_input_type
+ValueError: Unexpected input type: <class 'azureml.data.datapath.DataPath'>
