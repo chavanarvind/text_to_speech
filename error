@@ -1,3 +1,32 @@
-from azureml.data import OutputFileDatasetConfig
+import os
+import argparse
+import pandas as pd
+from azureml.core import Run
 
-high_conf_csv_path = high_conf_csv_path.as_mount()  # Mount it so it's readable in the step
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_path", type=str, required=True)
+    parser.add_argument("--mapping_csv", type=str, required=True)
+    parser.add_argument("--mapped_output", type=str, required=True)
+    parser.add_argument("--unmapped_output", type=str, required=True)
+    args = parser.parse_args()
+
+    # === Setup Azure ML context ===
+    run = Run.get_context()
+    print(f"Input path: {args.input_path}")
+    print(f"Mapping CSV mount path: {args.mapping_csv}")
+
+    # === Correctly read the mounted CSV ===
+    mapping_path = os.path.join(args.mapping_csv, "high_conf_mapping.csv")
+    print(f"Resolved CSV path: {mapping_path}")
+    mapping_df = pd.read_csv(mapping_path)
+    print(f"Mapping loaded: {mapping_df.shape}")
+
+    # You can now continue with your logic...
+    # For example:
+    # - Iterate over parquet files in args.input_path
+    # - Compare against mapping_df
+    # - Save mapped/unmapped to args.mapped_output and args.unmapped_output
+
+if __name__ == "__main__":
+    main()
