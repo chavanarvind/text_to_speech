@@ -1,138 +1,86 @@
-CMPNT_CAT_CD_DESC
-
-SRC_SYS_CD|^MATL_NUM|^PLNT_CD|^CMPNT_MATL_NUM|^BOM_LVL_NBR_DTLS|^TRU_MATL_NUM|^CMPNT_RM_SPEC_CD|^CMPNT_PC_SPEC_CD|^CMPNT_DC_SPEC_CD|^RAW_MATL_TITLE_NM
-
-
-# pipeline_runner.py
-
-from azureml.core import Workspace, Environment, Experiment, Dataset
-from azureml.pipeline.core import Pipeline, PipelineData
-from azureml.pipeline.steps import PythonScriptStep
-from azureml.core.runconfig import RunConfiguration
-import os
-
-# === Load workspace ===
-ws = Workspace.from_config(path=".azureml/dev_config.json")
-compute_name = "llm-gpu-cluster-2"
-env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
-
-run_config = RunConfiguration()
-run_config.target = compute_name
-run_config.environment = env
-
-# === Output and input shared folders ===
-data_step1_out = PipelineData(name="data_step1_out", is_directory=True)
-data_step2_out = PipelineData(name="data_step2_out", is_directory=True)
-data_step3_out = PipelineData(name="data_step3_out", is_directory=True)
-data_step4_out = PipelineData(name="data_step4_out", is_directory=True)
-
-# === Step 1: Data Pull ===
-data_pull_step = PythonScriptStep(
-    name="Step 1 - Pull Dataset",
-    script_name="step_1_data_pull.py",
-    source_directory="scripts",
-    arguments=["--output_path", data_step1_out],
-    outputs=[data_step1_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Step 2: Clean Text ===
-clean_text_step = PythonScriptStep(
-    name="Step 2 - Text Cleaning",
-    script_name="step_2_clean_text.py",
-    source_directory="scripts",
-    inputs=[data_step1_out],
-    arguments=["--input_path", data_step1_out, "--output_path", data_step2_out],
-    outputs=[data_step2_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Step 3: Abbreviation Expansion ===
-abbrev_expand_step = PythonScriptStep(
-    name="Step 3 - Expand Abbreviations",
-    script_name="step_3_expand_abbreviation.py",
-    source_directory="scripts",
-    inputs=[data_step2_out],
-    arguments=["--input_path", data_step2_out, "--output_path", data_step3_out],
-    outputs=[data_step3_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Step 4: Feature Engineering ===
-feature_eng_step = PythonScriptStep(
-    name="Step 4 - Feature Engineering",
-    script_name="step_4_feature_engineering.py",
-    source_directory="scripts",
-    inputs=[data_step3_out],
-    arguments=["--input_path", data_step3_out, "--output_path", data_step4_out],
-    outputs=[data_step4_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Step 5: Run Inference ===
-inference_step = PythonScriptStep(
-    name="Step 5 - Run Inference",
-    script_name="step_5_run_inference.py",
-    source_directory="scripts",
-    inputs=[data_step4_out],
-    arguments=["--input_path", data_step4_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Build pipeline ===
-pipeline = Pipeline(workspace=ws, steps=[
-    data_pull_step, clean_text_step,
-    abbrev_expand_step, feature_eng_step,
-    inference_step
-])
-
-pipeline.validate()
-
-# === Submit pipeline ===
-experiment = Experiment(ws, "full_inference_pipeline")
-pipeline_run = experiment.submit(pipeline)
-pipeline_run.wait_for_completion(show_output=True)
-
-
-# scripts/step_1_data_pull.py
+# scripts/step_1a_extract_and_merge.py
 
 import os
 import argparse
-from azureml.core import Run, Dataset
+import pandas as pd
+import glob
+from azureml.core import Run
 
-def main(output_path):
-    # Get run context and workspace
-    run = Run.get_context()
-    ws = run.experiment.workspace
+# === Parse arguments ===
+parser = argparse.ArgumentParser()
+parser.add_argument("--input_path", type=str, required=True)
+parser.add_argument("--mapping_csv", type=str, required=True)
+parser.add_argument("--mapped_output", type=str, required=True)
+parser.add_argument("--unmapped_output", type=str, required=True)
+args = parser.parse_args()
 
-    # Get dataset by name
-    dataset = Dataset.get_by_name(ws, name='harmonized_bom_data_asset')
+# === Setup ===
+run = Run.get_context()
+input_path = args.input_path
+mapping_csv = args.mapping_csv
+mapped_output = args.mapped_output
+unmapped_output = args.unmapped_output
 
-    # Ensure output directory exists and download dataset
-    os.makedirs(output_path, exist_ok=True)
-    dataset.download(target_path=output_path, overwrite=True)
+os.makedirs(mapped_output, exist_ok=True)
+os.makedirs(unmapped_output, exist_ok=True)
 
-    print(f" Dataset downloaded to: {output_path}")
+# === Load Mapping CSV ===
+print("🔹 Loading high confidence mapping...")
+mapping_df = pd.read_csv(mapping_csv)
+print(f"✅ Loaded {len(mapping_df)} mapping rows.")
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--output_path", type=str, required=True)
-    args = parser.parse_args()
+# === Process Each File Individually ===
+all_files = glob.glob(os.path.join(input_path, "*.parquet"))
+print(f"🔹 Found {len(all_files)} parquet files to process.")
 
-    main(args.output_path)
+mapped_total, unmapped_total = 0, 0
 
+for file_path in all_files:
+    fname = os.path.basename(file_path)
+    print(f"\n➡️ Processing {fname}...")
 
+    try:
+        df = pd.read_parquet(file_path)
+        original_count = len(df)
 
+        # Filter out rows where CMPNT_CAT_CD_DESC is null
+        df = df[df['CMPNT_CAT_CD_DESC'].notna()]
+        filtered_count = len(df)
 
+        # Deduplicate based on component
+        df = df.drop_duplicates(subset=['CMPNT_MATL_NUM'])
+        deduped_count = len(df)
 
+        # Merge with high confidence mapping
+        merged = df.merge(
+            mapping_df,
+            left_on='CMPNT_CAT_CD_DESC',
+            right_on='Direct Mapping',
+            how='left'
+        )
 
+        # Add matching metadata
+        merged['Matching Reason'] = merged['Final Category'].notna().map(lambda x: 'Direct Map' if x else None)
+        merged['Confidence Score'] = merged['Final Category'].notna().map(lambda x: 1.0 if x else None)
+
+        mapped = merged[merged['Final Category'].notna()].copy()
+        unmapped = merged[merged['Final Category'].isna()].copy()
+
+        # Save mapped/unmapped separately
+        if not mapped.empty:
+            mapped.to_parquet(os.path.join(mapped_output, f"mapped_{fname}"), index=False)
+            mapped_total += len(mapped)
+
+        if not unmapped.empty:
+            unmapped.to_parquet(os.path.join(unmapped_output, f"unmapped_{fname}"), index=False)
+            unmapped_total += len(unmapped)
+
+        print(f"  🧹 Original: {original_count}, Filtered: {filtered_count}, Deduped: {deduped_count}")
+        print(f"  ✅ Mapped: {len(mapped)}, ❌ Unmapped: {len(unmapped)}")
+
+    except Exception as e:
+        print(f"  ⚠️ Failed to process {fname}: {e}")
+
+print("\n✅ Done processing all files.")
+print(f"Total mapped records: {mapped_total}")
+print(f"Total unmapped records: {unmapped_total}")
