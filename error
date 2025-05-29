@@ -1,5 +1,16 @@
-from azureml.data import Dataset
-
-# Create Dataset and mount it
-high_conf_dataset = Dataset.File.from_files((default_ds, 'high_conf_map'))
-high_conf_mount = high_conf_dataset.as_named_input('high_conf_map').as_mount()
+high_conf_merge_step = PythonScriptStep(
+    name="Step 1a - High Confidence Merge",
+    script_name="step_1a_extract_and_merge.py",
+    source_directory="scripts",
+    inputs=[data_step1_out, high_conf_mount],  # ✅ both datasets
+    arguments=[
+        "--input_path", data_step1_out,
+        "--mapping_csv", high_conf_mount,        # ✅ mount path object
+        "--mapped_output", data_step1a_mapped,
+        "--unmapped_output", data_step1a_unmapped
+    ],
+    outputs=[data_step1a_mapped, data_step1a_unmapped],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
