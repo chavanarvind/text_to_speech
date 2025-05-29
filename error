@@ -1,43 +1,18 @@
-      "code": "UserError",
-        "message": "Pipeline has failed child jobs. For more details and logs, please go to the job detail page and check the child jobs.",        
-        "messageFormat": "Pipeline has failed child jobs. {0}",
-        "messageParameters": {},
-        "referenceCode": "PipelineHasStepJobFailed",
-        "details": []
-    },
-    "environment": "eastus",
-    "location": "eastus",
-    "time": "2025-05-29T08:57:27.279455Z",
-    "componentName": ""
-}
-        InnerException None
-        ErrorResponse
-{
-    "error": {
-        "message": "Activity Failed:\n{\n    \"error\": {\n        \"code\": \"UserError\",\n        \"message\": \"Pipeline has failed child jobs. For more details and logs, please go to the job detail page and check the child jobs.\",\n        \"messageFormat\": \"Pipeline has failed child jobs. {0}\",\n        \"messageParameters\": {},\n        \"referenceCode\": \"PipelineHasStepJobFailed\",\n        \"details\": []\n    },\n    \"environment\": \"eastus\",\n    \"location\": \"eastus\",\n    \"time\": \"2025-05-29T08:57:27.279455Z\",\n    \"componentName\": \"\"\n}"
-    }
-}
-(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\RPM_Claasification_Pipeline> py .\pipeline_runner.py
-Failure while loading azureml_run_type_providers. Failed to load entrypoint hyperdrive = azureml.train.hyperdrive:HyperDriveRun._from_run_dto with exception (msrestazure 0.6.4.post1 (c:\users\achava05\onedrive - kenvue\achava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages), Requirement.parse('msrestazure<=0.6.4,>=0.4.33'), {'azureml-core'}).
-Failure while loading azureml_run_type_providers. Failed to load entrypoint automl = azureml.train.automl.run:AutoMLRun._from_run_dto with exception (numpy 1.24.4 (c:\users\achava05\onedrive - kenvue\achava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages), Requirement.parse('numpy!=1.19.4,<1.24; sys_platform == "win32"'), {'azureml-dataset-runtime'}).
-Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.PipelineRun = azureml.pipeline.core.run:PipelineRun._from_dto with exception (msrestazure 0.6.4.post1 (c:\users\achava05\onedrive - kenvue\achava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages), Requirement.parse('msrestazure<=0.6.4,>=0.4.33'), {'azureml-core'}).
-Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.ReusedStepRun = azureml.pipeline.core.run:StepRun._from_reused_dto with exception (msrestazure 0.6.4.post1 (c:\users\achava05\onedrive - kenvue\achava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages), Requirement.parse('msrestazure<=0.6.4,>=0.4.33'), {'azureml-core'}).
-Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.StepRun = azureml.pipeline.core.run:StepRun._from_dto with exception (msrestazure 0.6.4.post1 (c:\users\achava05\onedrive - kenvue\achava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages), Requirement.parse('msrestazure<=0.6.4,>=0.4.33'), {'azureml-core'}).
-Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.scriptrun = azureml.core.script_run:ScriptRun._from_run_dto with exception (msrestazure 0.6.4.post1 (c:\users\achava05\onedrive - kenvue\achava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages), Requirement.parse('msrestazure<=0.6.4,>=0.4.33')).
-"datastore.upload_files" is deprecated after version 1.0.69. Please use "FileDatasetFactory.upload_directory" instead. See Dataset API change notice at https://aka.ms/dataset-deprecation.
-Traceback (most recent call last):
-  File ".\pipeline_runner.py", line 28, in <module>
-    ws.get_default_datastore().upload_files(
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\data\_dataset_deprecation.py", line 26, in wrapper
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\data\azure_storage_datastore.py", line 978, in upload_files
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\data\azure_storage_datastore.py", line 293, in _get_upload_from_files
-azureml.exceptions._azureml_exception.UserErrorException: UserErrorException:
-        Message: './local data/high_conf_mapping.csv' does not point to a file. Please upload the file to cloud first if running in a cloud notebook.
-        InnerException None
-        ErrorResponse
-{
-    "error": {
-        "code": "UserError",
-        "message": "'./local data/high_conf_mapping.csv' does not point to a file. Please upload the file to cloud first if running in a cloud notebook."
-    }
-}
+from azureml.data.datapath import DataPath
+
+# === Upload high_conf_mapping.csv from local folder to datastore ===
+default_ds = ws.get_default_datastore()
+
+# Path to local file (make sure folder name has no spaces)
+files = ['./local_data/high_conf_mapping.csv']
+
+# Upload it to datastore under the "inputs" path
+default_ds.upload_files(
+    files=files,
+    target_path='inputs',  # folder name in datastore
+    overwrite=True,
+    show_progress=True
+)
+
+# Create a DataPath reference to pass to your step
+high_conf_csv_path = DataPath(datastore=default_ds, path_on_datastore='inputs/high_conf_mapping.csv')
