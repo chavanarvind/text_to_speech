@@ -1,18 +1,8 @@
+import glob
 
-# === Step 1a: High Confidence Merge ===
-high_conf_merge_step = PythonScriptStep(
-    name="Step 1a - High Confidence Merge",
-    script_name="step_1a_extract_and_merge.py",
-    source_directory="scripts",
-    inputs=[data_step1_out, high_conf_dataset.as_named_input('high_conf_map').as_mount()], 
-    arguments=[
-        "--input_path", data_step1_out,
-        "--mapping_csv", 'high_conf_map',
-        "--mapped_output", data_step1a_mapped,
-        "--unmapped_output", data_step1a_unmapped
-    ],
-    outputs=[data_step1a_mapped, data_step1a_unmapped],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
+csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
+if not csv_files:
+    raise FileNotFoundError(f"No CSV found in mapped directory: {args.mapping_csv}")
+mapping_path = csv_files[0]
+print(f"📥 Reading mapping from: {mapping_path}")
+mapping_df = pd.read_csv(mapping_path)
