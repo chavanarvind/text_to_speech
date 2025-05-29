@@ -1,9 +1,1 @@
-Uploading an estimated of 1 files
-Uploading ./local_data/high_conf_direct_mapping.csv
-Uploaded ./local_data/high_conf_direct_mapping.csv, 1 files out of an estimated total of 1
-Uploaded 1 files
-Traceback (most recent call last):
-  File ".\pipeline_runner.py", line 44, in <module>
-    high_conf_csv_path = high_conf_csv_path.as_mount()  # Mount it so it's readable in the step
-AttributeError: 'DataPath' object has no attribute 'as_mount'
-(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\RPM_Claasification_Pipeline> 
+high_conf_csv_path = DataPath(datastore=default_ds, path_on_datastore='inputs/high_conf_direct_mapping.csv')
