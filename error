@@ -1,1 +1,16 @@
-from azureml.core import Dataset
+Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 73, in <module>
+    main()
+  File "step_1a_extract_and_merge.py", line 61, in main
+    mapping_df = pd.read_csv(mapping_path)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 912, in read_csv
+    return _read(filepath_or_buffer, kwds)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 577, in _read
+    parser = TextFileReader(filepath_or_buffer, **kwds)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 1407, in __init__
+    self._engine = self._make_engine(f, self.engine)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 1661, in _make_engine
+    self.handles = get_handle(
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/io/common.py", line 859, in get_handle
+    handle = open(
+FileNotFoundError: [Errno 2] No such file or directory: 'high_conf_map/high_conf_direct_mapping.csv'
