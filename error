@@ -1,504 +1,94 @@
-Direct Mapping	Final Category	Final Subcategory
-Acetaminophen or par	CHM	
-Acetaminophen/aspiri	CHM	
-Acetaminophen/diphen	CHM	
-Acetylsalicylic Acid	CHM	CHM - Acids / Buffers / Salts
-Acids / Buffers / Sa	CHM	CHM - Acids / Buffers / Salts
-Acids/Buffers/Salts	CHM	CHM - Acids / Buffers / Salts
-ACTIVE INGREDIENTS            	CHM	CHM - Actives
-Active Substances	CHM	CHM - Actives
-Actives	CHM	CHM - Actives
-ACTIVES                       	CHM	CHM - Actives
-Adhesive dry bandage	FNW	FNW - Adhesives
-ADVERT/PROMO ITEMS	PKG	PKG - Promotional Materials
-Airlaid	FNW	FNW - Airlaid
-Alcohol/benzoic acid	CHM	CHM - Alcohols / Solvents
-ALCOHOLS                      	CHM	CHM - Alcohols / Solvents
-Alcohols/Solvent	CHM	CHM - Alcohols / Solvents
-Aluminium Foil	PKG	PKG - Foils
-Alu-tubes	PKG	PKG - Tubes
-Anthelmintic benzimi	CHM	
-ANTIPERSPIRANTS AND	CHM	
-ANTISEPTICS	CHM	
-Apertured Films	FNW	FNW - Apertured Films (including PE/PP)
-API	API	API - API
-API - generic	API	API - API
-API-Generic	API	API - API
-Ascorbic acid	CHM	CHM - Acids / Buffers / Salts
-Baby Lotion and Cream         	Liquids and Creams	Liquids and Creams
-Baby Oil                      	Liquids and Creams	Liquids and Creams
-BARRIER FILM LPDE 30my-40my   	FNW	FNW - Barrier & Pouch Films
-Barrier&Pouch Films	FNW	FNW - Barrier & Pouch Films
-BEBE YC MOISTURIZER LOTION    	Liquids and Creams	Liquids and Creams
-BENYLIN	CHM	
-BENYLIN                       	CHM	
-BENYLIN SCHEDULE 0            	CHM	
-Benzocaine/camphor/e	CHM	
-Blsters/ThermPlastic	PKG	
-Bonded NW	FNW	FNW - Bonded NW
-Booklets	PKG	
-BORRACHAS, PLASTICOS	PKG	
-Bottles	PKG	PKG - Bottles (PP)
-Bottles (HDPE) DM	PKG	PKG - Bottles (HDPE)
-Bottles (PET) DM	PKG	PKG - Bottles (PET)
-Bottles (PP)	PKG	PKG - Bottles (PP)
-BOTTLES HDPE                  	PKG	PKG - Bottles (HDPE)
-Bottles HPDE	PKG	PKG - Bottles (HDPE)
-Bottles PET	PKG	PKG - Bottles (PET)
-BOTTLES PET                   	PKG	PKG - Bottles (PET)
-BOTTLES PVC                   	PKG	PKG - Bottles (PP)
-BULK SUNCARE                  	CHM	CHM - Sunscreens
-Caffeine/sodium benz	CHM	
-Caixa Papelão	PKG	
-Cane sugar	CHM	
-CAP SLEEVES                   	PKG	PKG - Caps/Closures/Lids
-Caps	PKG	PKG - Caps/Closures/Lids
-CAPS PP                       	PKG	PKG - Caps/Closures/Lids
-Caps/Closures/Lids	PKG	PKG - Caps/Closures/Lids
-Caps/Closures/Lids D	PKG	PKG - Caps/Closures/Lids
-Card Leaflets	PKG	PKG - Leaflets
-Cartons	PKG	PKG - Cartons
-Cetirizine hydrochlo	CHM	CHM - Capsules
-Chem Flavor,Dye,Frag	CHM	CHM - Flavors / Fragrances
-Chem, Other	CHM	CHM - Other Chemicals (waxes & new items)
-Chem, Surfactants	CHM	CHM - Surfactants (Commodity) or CHM - Surfactants (Specialty)
-Chewing Gum Base	CHM	CHM - Gum Base
-Child Resistant Caps	PKG	PKG - Caps/Closures/Lids
-Chlorpheniramine mal	CHM	CHM - Capsules
-CHM – Soapchips–Veg	CHM	CHM - Soap Chips Vegetable Base
-CHM - Sweeteners	CHM	CHM - Corn Derivatives and Sweeteners
-CHM - Talc	CHM	CHM - Talc
-CHM-Acids/Buffers/Sa	CHM	CHM - Acids / Buffers / Salts
-CHM-Acids/Buffers/Salts       	CHM	CHM - Acids / Buffers / Salts
-CHM-Actives	CHM	CHM - Actives
-CHM-Actives/Naturals          	CHM	CHM - Actives
-CHM-Alcohols/Solvent	CHM	CHM - Alcohols / Solvents
-CHM-Alcohoms/solvents         	CHM	CHM - Alcohols / Solvents
-CHM-API	API	API - API
-CHM-API-Generic	API	API - API
-CHM-Conditioners/Emo	CHM	CHM - Conditioners / Emollients
-CHM-Dyes/Colorants	CHM	CHM - Dyes / Colorants
-CHM-Dyes/Colorants            	CHM	CHM - Dyes / Colorants
-CHM-Emulsifiers	CHM	CHM - Emulsifiers
-CHM-Exfolients	CHM	CHM - Exfolients
-CHM-Exfolients                	CHM	CHM - Exfolients
-CHM-Fatty Acids/Fatt	CHM	CHM - Fatty Acids & Fatty Alcohols
-CHM-Fatty Acids/Fatty Alcohols	CHM	CHM - Fatty Acids & Fatty Alcohols
-CHM-Flavors/Fragranc	CHM	CHM - Flavors / Fragrances
-CHM-Flavors/Fragrances        	CHM	CHM - Flavors / Fragrances
-CHM-Glycerin	CHM	CHM - Glycerin
-CHM-Inorganic	CHM	CHM - Inorganic
-CHM-Mineral Oil/Petr	CHM	CHM - Mineral Oil / Petrolatum
-CHM-Mineral Oil/Petrolatum    	CHM	CHM - Mineral Oil / Petrolatum
-CHM-Naturals	CHM	CHM - Naturals
-CHM–Naturals/Actives	CHM	CHM - Naturals
-CHM-Other Chemicals	CHM	CHM - Other Chemicals (waxes & new items)
-CHM-Other Chemicals (waxes)   	CHM	CHM - Other Chemicals (waxes & new items)
-CHM-Preservatives	CHM	CHM - Preservatives
-CHM-Preservatives             	CHM	CHM - Preservatives
-CHM-Silicones	CHM	CHM - Silicones & Hydrogels
-CHM-Silicones                 	CHM	CHM - Silicones & Hydrogels
-CHM-Sunscreens	CHM	CHM - Sunscreens
-CHM-Surfactant(Com)	CHM	CHM - Surfactants (Commodity)
-CHM-Surfactants	CHM	CHM - Surfactants (Specialty)
-CHM-Surfactants (Commodity)   	CHM	CHM - Surfactants (Commodity)
-CHM-Sweeteners	CHM	CHM - Corn Derivatives and Sweeteners
-CHM-Talc	CHM	CHM - Talc
-CHM-Thickeners	CHM	CHM - Thickeners
-CHM-Vitamins	CHM	CHM - Vitamins
-Closures/Caps/Pumps	PKG	PKG - Caps/Closures/Lids
-Cobert.Plástica/Film	PKG	PKG - Films (Other Plastic)
-COLORANTS                     	CHM	CHM - Dyes / Colorants
-Colouring Agent	CHM	CHM - Dyes / Colorants
-Combination antacid,	CHM	CHM - Acids / Buffers / Salts
-Condition/Emollients	CHM	CHM - Conditioners / Emollients
-Conditioner / Emolli	CHM	CHM - Conditioners / Emollients
-CONDITIONERS                  	CHM	CHM - Conditioners / Emollients
-Conditioners/Emolnts	CHM	CHM - Conditioners / Emollients
-CONSTRUCTION ADHESIVES        	FNW	FNW - Adhesives or CHM - Adhesives
-Corn Derivatives	CHM	CHM - Corn Derivatives and Sweeteners
-Corn starch or corn	CHM	CHM - Corn Derivatives and Sweeteners
-Cornstarch	CHM	CHM - Corn Derivatives and Sweeteners
-Corrugated	PKG	PKG - Corrugated
-Corrugated and other	PKG	PKG - Corrugated
-CORRUGATED BOARD DIE-CUT BOXES	PKG	PKG - Corrugated
-Corrugated Boxes	PKG	PKG - Corrugated
-Corrugated Packaging Material	PKG	PKG - Corrugated
-Cosm Saleable Samp	PKG	PKG - Cosmetics
-Cosmetics	PKG	PKG - Cosmetics
-COSMETICS - LIPS	PKG	PKG - Cosmetics
-Cosmetics Open Stock	PKG	PKG - Cosmetics
-Cosmetics Promo	PKG	PKG - Cosmetics
-Cosmetics Promo-acct	PKG	PKG - Cosmetics
-Cotton	FNW	FNW - Cotton
-COTTON WOOL PRODUCTS	FNW	FNW - Cotton
-Cover                         	PKG	
-CT Packaging Materials        	PKG	
-Dairy/Eggs and Subs	CHM	
-Dental Floss                  	FNW	
-Dextran 70/hydroxypr	CHM	
-Dextromethorphan/qui	CHM	
-Dimethicone + metocl	CHM	
-Dyes / Colorants	CHM	CHM - Dyes / Colorants
-Dyes/Colorants	CHM	CHM - Dyes / Colorants
-Edta/sodium chloride	CHM	CHM - Acids / Buffers / Salts
-Embalagens Rígidas	PKG	
-EMOLLIENTS                    	CHM	CHM - Conditioners / Emollients
-Emulsifiers	CHM	CHM - Emulsifiers
-EMULSIFIERS                   	CHM	CHM - Emulsifiers
-Enzymes	CHM	
-Ethyl alcohol antise	CHM	CHM - Alcohols / Solvents
-EXFOLIANTS/MASKS	CHM	CHM - Exfolients
-Exfolients	CHM	CHM - Exfolients
-Exp Packaging HALB	PKG	
-Faltschachteln                	PKG	
-Famotidine	CHM	
-Fat Acids/Fat Alchls	CHM	CHM - Fatty Acids & Fatty Alcohols
-FATS                          	CHM	CHM - Fatty Acids & Fatty Alcohols
-Fats and Fat Derivatives	CHM	CHM - Fatty Acids & Fatty Alcohols
-Fatty Acids/Alcohols	CHM	CHM - Fatty Acids & Fatty Alcohols
-Fiber(ex Pulp&Rayon)	FNW	FNW - Fiber (Excluding pulp & Rayon)
-Fibers                        	FNW	FNW - Fiber (Excluding pulp & Rayon)
-Fibers (T.B./Floss)	FNW	FNW - Fiber (Excluding pulp & Rayon)
-Film Barex	FNW	FNW - Barrier & Pouch Films
-Film, Tape	PKG	
-Filme PVC	PKG	PKG - Films (PVC)
-FILME/EMB/PAPEL/ LAM	PKG	
-Films (Flow Wrap)	PKG	PKG - Films (Other Plastic)
-Films (Other)	PKG	PKG - Films (Other Plastic)
-Films (Paper)	PKG	PKG - Films (Paper)
-Films (Plastic)	PKG	PKG - Films (Other Plastic)
-Films (Polybags)	PKG	PKG - Films (Polybags)
-Films (PVC)	PKG	PKG - Films (PVC)
-Films and Foils	PKG	PKG - Foils
-Flavors / Fragrances	CHM	CHM - Flavors / Fragrances
-Flavors/Fragrances	CHM	CHM - Flavors / Fragrances
-Flavouring Agent	CHM	CHM - Flavors / Fragrances
-Flavours and Colours	CHM	CHM - Flavors / Fragrances or CHM - Dyes / Colorants
-Flavours or extracts	CHM	CHM - Flavors / Fragrances
-Fluid nicotine	CHM	
-FNW	FNW	
-FNW-Adhesives	FNW	FNW - Adhesives
-FNW-Airlaid	FNW	FNW - Airlaid
-FNW-Apertured Films	FNW	FNW - Apertured Films (including PE/PP)
-FNW-Barrier & Pouch	FNW	FNW - Barrier & Pouch Films
-FNW-Bonded NW	FNW	FNW - Bonded NW
-FNW-Cotton	FNW	FNW - Cotton
-FNW-Films (PE/PP)	FNW	FNW - Apertured Films (including PE/PP)
-FNW-Needlepunch/Pads	FNW	FNW - Needlepunch/Padstock
-FNW-Other Nonwovens	FNW	FNW - Other nonwovens
-FNW-Pulp	FNW	FNW - Pulp
-FNW-Rayon	FNW	FNW - Rayon
-FNW-Release Paper	FNW	FNW - Release Paper
-FNW-Spunlace/Airlace	FNW	FNW - Spunlace/Airlace
-FNW-Superabsorbents	FNW	FNW - Superabsorbents (SAP)
-FNW-Wovens	FNW	FNW - Wovens
-Foam Products	FNW	FNW - Foams
-Foil Bags	PKG	PKG - Foils
-Foil Bulk Gum	PKG	PKG - Foils
-Foils	PKG	PKG - Foils
-Fold Ctns,Pboard,Bxs	PKG	PKG - Cartons
-Folded Labels	PKG	PKG - Labels
-Folding Cartons	PKG	PKG - Cartons
-FRAGRANCES	CHM	CHM - Flavors / Fragrances
-FRAGRANCES AND FLAVORS        	CHM	CHM - Flavors / Fragrances
-Free Standing Insert	PKG	
-Glass	PKG	PKG - Other Rigid Packaging (Glass packaging)
-Glass Packaging	PKG	PKG - Other Rigid Packaging (Glass packaging)
-Glycerin	CHM	CHM - Glycerin
-GLYCERINE                     	CHM	CHM - Glycerin
-HAIR - CONDITIONER/T	CHM	CHM - Conditioners / Emollients
-HAIR - STYLING - NON	PKG	PKG - Cosmetics
-Hand or body lotions	CHM	CHM - Conditioners / Emollients
-Hydroxyethyl cellulo	CHM	CHM - Acids / Buffers / Salts
-Ibuprofen	CHM	
-Imodium                       	CHM	
-Inject Molded Comps	PKG	PKG - Injection Molded Components
-Injection Molded	PKG	PKG - Injection Molded Components
-Inorganic	CHM	CHM - Inorganic
-Inorganic Substances	CHM	CHM - Inorganic
-Jars	PKG	PKG - Jars
-JH BABY COTTON BUDS           	FNW	FNW - Cotton
-JH BABY MOISTURIZER LOTION    	CHM	CHM - Conditioners / Emollients
-JH BABY MOISTURIZER OIL       	Liquids and Creams	Liquids and Creams
-Kartons                       	PKG	PKG - Cartons
-KETOPROFEN	CHM	
-Label                         	PKG	PKG - Labels
-Label/Insert/Leaflet	PKG	PKG - Labels or PKG - Leaflets
-Label/Printed Insert	PKG	PKG - Labels
-Labels	PKG	PKG - Labels
-LABELS PAPER                  	PKG	PKG - Labels
-LABELS PAPER GENERIC          	PKG	PKG - Labels
-LABELS PLAST. FLEXO-SILK+FOIL 	PKG	PKG - Labels
-LABELS PLAST. FLEXO-SILKSCREEN	PKG	PKG - Labels
-LABELS PLASTIC LETTER PRES    	PKG	PKG - Labels
-LABELS PLASTIC OFFSET         	PKG	PKG - Labels
-LABELS PLASTIC SILKSCREEN     	PKG	PKG - Labels
-Laminate Tubes	PKG	PKG - Films (Laminates) or PKG - Tubes
-Laminates and Filters	PKG	PKG - Films (Laminates)
-Laminates for Patch	PKG	PKG - Films (Laminates)
-Leaflet                       	PKG	PKG - Leaflets
-Leaflets	PKG	PKG - Leaflets
-LIDS PP                       	PKG	
-Local & import. Caps	PKG	PKG - Caps/Closures/Lids
-Loperamide	CHM	CHM - Capsules
-LPM LIQUID SOAP               	Liquids and Creams	Liquids and Creams
-MAN_OTHER LABELS              	PKG	PKG - Labels
-MAN_PRINTED CARTONS           	PKG	PKG - Cartons
-MAN-ACTIVE MODIFIER           	CHM	CHM - Actives
-MAN-ACTIVE NATURAL            	CHM	CHM - Actives or CHM - Naturals
-MAN-BOTTLES HDPE              	PKG	PKG - Bottles (HDPE)
-MAN-BOTTLES PETG              	PKG	PKG - Bottles (PET)
-MAN-BOTTLES PP                	PKG	PKG - Bottles (PP)
-MAN-BUFFER                    	CHM	CHM - Acids / Buffers / Salts
-MAN-CLOSURES LDPE CAP (ACT)   	PKG	PKG - Caps/Closures/Lids
-MAN-CLOSURES PP               	PKG	PKG - Caps/Closures/Lids
-MAN-COLORANT                  	CHM	CHM - Dyes / Colorants
-MAN-CONDITIONERS              	CHM	CHM - Conditioners / Emollients
-MAN-CORRUGATED BOARD DIE-CUT  	PKG	PKG - Corrugated
-MAN-CORRUGATED BOARD FEFCO    	PKG	PKG - Corrugated
-MAN-DIP TUBES BOTTLE INSERTS  	PKG	PKG - Inserts
-MAN-DRUG ACTIVE               	CHM	CHM - Actives
-MAN-EMOLIENT                  	CHM	CHM - Conditioners / Emollients
-MAN-EMULSIFIERS               	CHM	CHM - Emulsifiers
-MAN-EXFOLIENTS                	CHM	CHM - Exfolients
-MAN-FATTY ACID                	CHM	CHM - Fatty Acids & Fatty Alcohols
-MAN-FLAVORS & FRAGRANCES      	CHM	CHM - Flavors / Fragrances
-MAN-GLYCERINE                 	CHM	CHM - Glycerin
-MAN-INORGANIC                 	CHM	CHM - Inorganic
-MAN-LOTION                    	CHM	CHM - Conditioners / Emollients
-MAN-MINERAL OIL               	CHM	CHM - Mineral Oil / Petrolatum
-MAN-MISC PACKAGING            	PKG	PKG - Other Packaging
-MAN-NATURALS                  	CHM	CHM - Naturals
-MAN-OTHER CHEMICALS           	CHM	CHM - Other Chemicals (waxes & new items)
-MAN-PB SUN PROTECTION         	CHM	CHM - Sunscreens
-MAN-PH 5.5 FACIAL WASH        	Liquids and Creams	Liquids and Creams
-MAN-PH 5.5 SHOWER GEL         	CHM	CHM - Silicones & Hydrogels
-MAN-PLASTIC LABELS OFFSET     	PKG	PKG - Labels
-MAN-PLASTIC LABELS SILK SCREEN	PKG	PKG - Labels
-MAN-PRESERVATIVES ANTI-OXIDANT	CHM	CHM - Preservatives
-MAN-PUMPS                     	PKG	PKG - Pumps
-MAN-SHAMPOO/CONDITIONER       	CHM	CHM - Conditioners / Emollients
-MAN-SILICONES                 	CHM	CHM - Silicones & Hydrogels
-MAN-SOLVENT                   	CHM	CHM - Alcohols / Solvents
-MAN-SRINK WRAP FILM           	PKG	
-MAN-SUNSCREENS                	CHM	CHM - Sunscreens
-MAN-SURFACTANTS               	CHM	CHM - Surfactants (Specialty)
-MAN-TAPES                     	PKG	
-MAN-THICKENER                 	CHM	CHM - Thickeners
-MAN-VITAMINS                  	CHM	CHM - Vitamins
-MAN-WAX                       	CHM	CHM - Other Chemicals (waxes & new items)
-Metal Foils	PKG	PKG - Foils
-Metals/Tin	PKG	PKG - Metals (Tins and Cans)
-Microlax Tubes	PKG	PKG - Tubes
-Min Oil/Petrolatum	CHM	CHM - Mineral Oil / Petrolatum
-MINERAL OIL                   	CHM	CHM - Mineral Oil / Petrolatum
-Mineral oil/oatmeal,	CHM	CHM - Mineral Oil / Petrolatum
-Mineral Oil/Petrolat	CHM	CHM - Mineral Oil / Petrolatum
-Misc, Packaging	PKG	PKG - Other Packaging
-MISC.PACKAGING                	PKG	PKG - Other Packaging
-Molded Parts, Custom	PKG	PKG - Injection Molded Components
-Mouthwash	Liquids and Creams	Liquids and Creams
-Narcotinum or noscap	CHM	
-Naturals	CHM	CHM - Naturals
-NATURALS                      	CHM	CHM - Naturals
-Needlepunch/Padstock	FNW	FNW - Needlepunch/Padstock
-Nicotine	CHM	
-Nicotine Resin	CHM	
-Non Printed Pack Mat	PKG	
-Non-potable water	CHM	
-NONWOVEN BREATHABLE BACKSHEET 	FNW	FNW - Other nonwovens
-Nonwoven Covers	FNW	FNW - Other nonwovens
-NONWOVEN FFP                  	FNW	FNW - Other nonwovens
-NONWOVEN RETICULON            	FNW	FNW - Other nonwovens
-OGX CONDITIONER               	CHM	CHM - Conditioners / Emollients
-OGX SHAMPOO                   	CHM	
-OPP Film	PKG	
-Other Active Substances	CHM	CHM - Actives
-Other Chemicals	CHM	
-OTHER CHEMICALS               	CHM	
-Other Corrugated	PKG	PKG - Corrugated
-Other Nonwovens	FNW	FNW - Other nonwovens
-Other Pack Material           	PKG	PKG - Other Packaging
-Other Packaging	PKG	PKG - Other Packaging
-OTH-Paper/Tissues	PKG	
-OTH-Promotional Mate	PKG	PKG - Promotional Materials
-Pack Films, Paper	PKG	PKG - Films (Paper)
-Pack Films, Plastics	PKG	
-Packaging	PKG	
-Packaging boxes and	PKG	PKG - Cartons
-Packaging Labels	PKG	PKG - Labels
-Packaging Materials           	PKG	
-Packer Boxes	PKG	PKG - Cartons
-Pallets	PKG	
-PALLETS                       	PKG	
-Paper, Copy	PKG	
-Paper/Tissues	PKG	
-Paper/Tissues(Other)	PKG	
-PAPER-UNCOATD O/WRAP	PKG	
-PH 5.5 SHOWER GEL             	Liquids and Creams	Liquids and Creams
-PH5.5 Body Moisturising       	Liquids and Creams	Liquids and Creams
-Pharmaceutical - Liq	Liquids and Creams	Liquids and Creams
-PIGMENTS                      	CHM	
-PK CORRUGATED BOARD           	PKG	PKG - Corrugated
-PK LABELS                     	PKG	PKG - Labels
-PK LEAFLET INSERT             	PKG	PKG - Leaflets
-PK pallet                     	PKG	
-PK PRIMARY PACKAGING          	PKG	PKG - Other Packaging
-PK SHRINKWRAP FILM            	PKG	
-PKG	PKG	PKG - Other Packaging
-PKG-Bottle(Gls&Almn)	PKG	PKG - Other Rigid Packaging (Glass packaging)
-PKG-Bottle(HDPE)DBuy	PKG	PKG - Bottles (HDPE)
-PKG-Bottles (HDPE)	PKG	PKG - Bottles (HDPE)
-PKG-Bottles (HDPE)            	PKG	PKG - Bottles (HDPE)
-PKG-Bottles (PET)	PKG	PKG - Bottles (PET)
-PKG-Bottles (PET)             	PKG	PKG - Bottles (PET)
-PKG-Bottles (PP)	PKG	PKG - Bottles (PP)
-PKG-Bottles(PET)DBuy	PKG	PKG - Bottles (PET)
-PKG-Cap/Closure DBuy	PKG	PKG - Caps/Closures/Lids
-PKG-Caps/Closures/Li	PKG	PKG - Caps/Closures/Lids
-PKG-Caps/Closures/Lids DM     	PKG	PKG - Caps/Closures/Lids
-PKG-Cartons	PKG	PKG - Cartons
-PKG-Corrugated	PKG	PKG - Corrugated
-PKG-Corrugated                	PKG	PKG - Corrugated
-PKG-Films (Paper)	PKG	PKG - Films (Paper)
-PKG-Films (Plastic)	PKG	PKG - Films (Other Plastic)
-PKG-Films (Polybags)	PKG	PKG - Films (Polybags)
-PKG-Films (Primary)	PKG	
-PKG-Films(Secondary)	PKG	
-PKG-Foils	PKG	PKG - Foils
-PKG-Foils                     	PKG	PKG - Foils
-PKG-Injection Molded	PKG	PKG - Injection Molded Components
-PKG-Inserts	PKG	PKG - Inserts
-PKG-Jars	PKG	PKG - Jars
-PKG-Jars                      	PKG	PKG - Jars
-PKG-Labels	PKG	PKG - Labels
-PKG-Labels                    	PKG	PKG - Labels
-PKG-Labels/Inserts/L	PKG	PKG - Labels
-PKG-Leaflets	PKG	PKG - Leaflets
-PKG-Other Packaging	PKG	PKG - Other Packaging
-PKG-Polybags	PKG	PKG - Films (Polybags)
-PKG-Pumps	PKG	PKG - Pumps
-PKG-Pumps Direct Buy	PKG	PKG - Pumps
-PKG-Pumps-DM                  	PKG	PKG - Pumps
-PKG-Sleeves	PKG	PKG - Sleeves
-PKG-Thermoformed Pac	PKG	PKG - Thermoformed (All other)
-PKG-Tins	PKG	PKG - Metals (Tins and Cans)
-PKG-Tubes	PKG	PKG - Tubes
-PKG-Tubes (Aluminum)	PKG	PKG - Tubes
-PKG-Tubes (Plastic)	PKG	PKG - Tubes
-PKG-Tubes(Plastic)            	PKG	PKG - Tubes
-PKG-Wrapper	PKG	PKG - Other Packaging
-Plastic Bottles	PKG	PKG - Bottles (PET) or PKG - Bottles (HDPE) or PKG - Bottles (PP)
-Plastic Film	PKG	PKG - Films (Other Plastic)
-Plastic Ind Wrapper	PKG	
-Polybags	PKG	PKG - Films (Polybags)
-Polymer Syringes	PKG	
-Potassium chloride/s	CHM	CHM - Acids / Buffers / Salts
-Potassium sulphate	CHM	CHM - Acids / Buffers / Salts
-POUCH FILM                    	FNW	FNW - Barrier & Pouch Films
-PP Tubes	PKG	PKG - Tubes
-Preservatives	CHM	CHM - Preservatives
-PRESERVATIVES / ANTI-OXIDANTS 	CHM	CHM - Preservatives
-Printed	PKG	
-PRINTED CARTONS               	PKG	PKG - Cartons
-Printed Packaging Material	PKG	PKG - Other Packaging
-PRINTING,B CARDS	PKG	
-Promo Cut and Sew	PKG	PKG - Promotional Materials
-Promo Giftables	PKG	PKG - Promotional Materials
-Promo-Brand Preprice	PKG	PKG - Promotional Materials
-PROMOTIONAL DISPLAYS	PKG	PKG - Promotional Materials
-Promotional Material	PKG	PKG - Promotional Materials
-PROMOTIONS                    	PKG	PKG - Promotional Materials
-Pulp	FNW	FNW - Pulp
-Pump Can	PKG	PKG - Metals (Tins and Cans) or PKG - Pumps
-Pumps	PKG	PKG - Pumps
-PUMPS                         	PKG	PKG - Pumps
-Pumps-DM	PKG	PKG - Pumps
-PVC Film	PKG	PKG - Films (PVC)
-Rayon	FNW	FNW - Rayon
-Release Paper	FNW	FNW - Release Paper
-RELEASE PAPER                 	FNW	FNW - Release Paper
-Resins & Plastics	PKG	PKG - Films (Other Plastic)
-RM APERTURED FILM             	FNW	FNW - Apertured Films (including PE/PP)
-RM FIBERS                     	FNW	FNW - Fiber (Excluding pulp & Rayon)
-RM NON WOVEN                  	FNW	FNW - Other nonwovens
-RM OTHER CHEMICAL             	CHM	
-RM PULP                       	FNW	FNW - Pulp
-RM WRAPPER                    	PKG	
-RM YARN                       	FNW	
-RoC* Facial Moisturizer       	Liquids and Creams	Liquids and Creams
-Savlon                        	Liquids and Creams	Liquids and Creams
-Shampoos	Liquids and Creams	Liquids and Creams
-Shrink Foil                   	PKG	PKG - Foils
-Shrinking film	PKG	
-Silicones	CHM	CHM - Silicones & Hydrogels
-SILICONES                     	CHM	CHM - Silicones & Hydrogels
-Sleeves	PKG	PKG - Sleeves
-SLEEVES                       	PKG	PKG - Sleeves
-Slipsheets	PKG	
-Soap Chips	CHM	CHM - Soap Chips
-Sodium citrate	CHM	CHM - Acids / Buffers / Salts
-Sodium hydroxide	CHM	CHM - Acids / Buffers / Salts
-Spunlace/Airlace	FNW	FNW - Spunlace/Airlace
-SRINK WRAP FILM               	PKG	
-Sugar or sugar subst	CHM	
-Sugers, Suger Derivatives and Polyls	CHM	
-SUN PROTECTION PRODU	CHM	CHM - Sunscreens
-SUNLESS TAN.-NPOWERE	CHM	CHM - Sunscreens
-Sunscreens	CHM	CHM - Sunscreens
-Superabsorbents	FNW	FNW - Superabsorbents (SAP)
-Superabsorbents(SAP)	FNW	FNW - Superabsorbents (SAP)
-Surfactants	CHM	CHM - Surfactants (Commodity) or CHM - Surfactants (Specialty)
-SURFACTANTS                   	CHM	CHM - Surfactants (Commodity) or CHM - Surfactants (Specialty)
-Sweeteners	CHM	CHM - Corn Derivatives and Sweeteners
-Sweets/Sweeteners	CHM	CHM - Corn Derivatives and Sweeteners
-SYNTHETIC POLYMERS            	CHM	
-Talc	CHM	CHM - Talc
-Talco	CHM	CHM - Talc
-TE Label	PKG	
-Thermoform Packaging	PKG	PKG - Thermoformed (All other)
-Thickeners	CHM	CHM - Thickeners
-THICKENERS                    	CHM	CHM - Thickeners
-Tins	PKG	PKG - Metals (Tins and Cans)
-Titanium dioxide	CHM	
-TITANOREINE	CHM	
-Tray	PKG	
-Tubes	PKG	PKG - Tubes
-Tubes (Aluminum)	PKG	PKG - Tubes
-Tubes (Plastic)	PKG	PKG - Tubes
-Tubetes / Tarugos	PKG	PKG - Tubes
-UDI LABELS PLASTIC LETTER PRES	PKG	PKG - Labels
-Vitamins	CHM	CHM - Vitamins
-VITAMINS                      	CHM	CHM - Vitamins
-VITAMINS AND MINERAL	CHM	CHM - Vitamins
-Water (chemicals)	CHM	CHM - Alcohols / Solvents
-Wax	CHM	CHM - Other Chemicals (waxes & new items)
-WIP COSMETIC                  	PKG	PKG - Cosmetics
-WIP COTTON BUDS               	FNW	FNW - Cotton
-WIP LISTERINE ALCOHOL         	CHM	CHM - Alcohols / Solvents
-WIP OIL                       	Liquids and Creams	Liquids and Creams
-WIP PH 5.5 SHOWER GEL         	Liquids and Creams	Liquids and Creams
-WIP PREMIX COSMETIC           	PKG	PKG - Cosmetics
-WIP SHAMPOO                   	Liquids and Creams	Liquids and Creams
-Wovens	FNW	FNW - Wovens
-Wrapping Film	PKG	
-Yarn                          	FNW	
-Chemicals	CHM	
-Chemicals-Actives/Naturals	CHM	
-Chemicals-Alcohol/Solvent	CHM	
-Chemicals-Corn Derivatives/Sweeteners	CHM	
-Chemicals-Dyes/Colorants	CHM	
-Chemicals-Flavors/Fragrances	CHM	
-Chemicals-Preservatives	CHM	
-Chemicals-Surfactant	CHM	
-Chemicals-Surfactants	CHM	
-Other Chemicals (waxes & new items)	CHM	
-PACK	PKG	
-Packaging-Labels	PKG	
-Packaging-Corrugated	PKG	
-Packaging-Others	PKG	
-Packaging-Sleeves	PKG	
-Packaging-Bottles (PET)	PKG	
-Packaging-Caps/Closures/Li	PKG	
-KANBAN CHEMICALS 	CHM	
+# step_1a_extract_and_merge.py
+
+import os
+import glob
+import argparse
+import pandas as pd
+from azureml.core import Run
+from multiprocessing import Pool, cpu_count
+
+# === Column to match ===
+JOIN_COL_1 = "CMPNT_CAT_CD_DESC"
+JOIN_COL_2 = "CMPNT_MATL_TYPE_CD"
+DIRECT_MAP_KEY_1 = "Direct Mapping"
+DIRECT_MAP_KEY_2 = "Material Type"
+
+# === Merge one file ===
+def process_file(file_path, mapping_df, mapped_dir, needs_model_dir):
+    try:
+        df = pd.read_parquet(file_path, columns=["CMPNT_MATL_NUM", JOIN_COL_1, JOIN_COL_2])
+        df.drop_duplicates(inplace=True)
+
+        df[JOIN_COL_1] = df[JOIN_COL_1].fillna("").astype(str).str.strip()
+        df[JOIN_COL_2] = df[JOIN_COL_2].fillna("").astype(str).str.strip()
+        mapping_df[DIRECT_MAP_KEY_1] = mapping_df[DIRECT_MAP_KEY_1].astype(str).str.strip()
+        mapping_df[DIRECT_MAP_KEY_2] = mapping_df[DIRECT_MAP_KEY_2].astype(str).str.strip()
+
+        # Stage 1 mapping: based on CMPNT_CAT_CD_DESC only
+        stage1_df = df.merge(mapping_df, how="inner", left_on=[JOIN_COL_1], right_on=[DIRECT_MAP_KEY_1])
+        stage1_df['matching_reason'] = 'direct_mapping_category'
+        stage1_df['confidence_score'] = 1.0
+
+        # Stage 2 mapping: based on CMPNT_MATL_TYPE_CD only (excluding already mapped)
+        df_not_mapped_in_stage1 = df[~df['CMPNT_MATL_NUM'].isin(stage1_df['CMPNT_MATL_NUM'])]
+        stage2_df = df_not_mapped_in_stage1.merge(mapping_df, how="inner", left_on=[JOIN_COL_2], right_on=[DIRECT_MAP_KEY_2])
+        stage2_df['matching_reason'] = 'direct_mapping_type_only'
+        stage2_df['confidence_score'] = 1.0
+
+        # Combine both mappings
+        mapped_df = pd.concat([stage1_df, stage2_df], ignore_index=True)
+
+        # Add mapping flags
+        mapped_df['Final Category Filled'] = mapped_df['Final Category'].notna() & mapped_df['Final Category'].str.strip().ne("")
+        mapped_df['Final Subcategory Filled'] = mapped_df['Final Subcategory'].notna() & mapped_df['Final Subcategory'].str.strip().ne("")
+        mapped_df['needs_model'] = ~mapped_df['Final Category Filled'] | ~mapped_df['Final Subcategory Filled']
+
+        # Split into mapped and needing model
+        mapped_only_df = mapped_df[~mapped_df['needs_model']].copy()
+        needs_model_df = mapped_df[mapped_df['needs_model']].copy()
+
+        print(f"✅ Fully mapped: {file_path}, records: {len(mapped_only_df)}")
+        print(f"🔮 Needs model (either cat/subcat): {file_path}, records: {len(needs_model_df)}")
+
+        # Output path
+        base_name = os.path.basename(file_path)
+        os.makedirs(mapped_dir, exist_ok=True)
+        os.makedirs(needs_model_dir, exist_ok=True)
+
+        mapped_only_df.to_parquet(os.path.join(mapped_dir, base_name), index=False)
+        needs_model_df.to_parquet(os.path.join(needs_model_dir, base_name), index=False)
+
+    except Exception as e:
+        print(f"❌ Failed to process {file_path}: {e}")
+
+# === Main script ===
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_path", type=str, required=True)
+    parser.add_argument("--mapping_csv", type=str, required=True)
+    parser.add_argument("--mapped_output", type=str, required=True)
+    parser.add_argument("--needs_model_output", type=str, required=True)
+    args = parser.parse_args()
+
+    run = Run.get_context()
+
+    # === Locate CSV inside mounted directory ===
+    csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
+    if not csv_files:
+        raise FileNotFoundError(f"No CSV file found in mapped directory: {args.mapping_csv}")
+
+    mapping_path = csv_files[0]
+    print(f"📥 Reading mapping from: {mapping_path}")
+    mapping_df = pd.read_csv(mapping_path)
+    mapping_df = mapping_df.drop_duplicates()
+    print(f"📊 Mapping rows: {len(mapping_df)}")
+
+    # === Process input parquet files ===
+    all_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
+    print(f"📁 Total input parquet files found: {len(all_files)}")
+
+    for file_path in all_files:
+        process_file(file_path, mapping_df, args.mapped_output, args.needs_model_output)
+
+if __name__ == "__main__":
+    main()
