@@ -1,16 +1,14 @@
-high_conf_merge_step = PythonScriptStep(
-    name="Step 1a - High Confidence Merge",
-    script_name="step_1a_extract_and_merge.py",
-    source_directory="scripts",
-    inputs=[data_step1_out, high_conf_mount],  # ✅ both datasets
-    arguments=[
-        "--input_path", data_step1_out,
-        "--mapping_csv", high_conf_mount,        # ✅ mount path object
-        "--mapped_output", data_step1a_mapped,
-        "--unmapped_output", data_step1a_unmapped
-    ],
-    outputs=[data_step1a_mapped, data_step1a_unmapped],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
+Mapped: /mnt/azureml/cr/j/35bc60f7f35949d8a1f4aead45bd43e6/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/51d65f48-52bc-4a4a-a191-7b1e6815cc64/data_step1_out/part-00000-0a3f7de5-8212-48c1-8a9c-9accf3e6cf99-c000.snappy.parquet, records: 5142416
+ Unmapped: /mnt/azureml/cr/j/35bc60f7f35949d8a1f4aead45bd43e6/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/51d65f48-52bc-4a4a-a191-7b1e6815cc64/data_step1_out/part-00000-0a3f7de5-8212-48c1-8a9c-9accf3e6cf99-c000.snappy.parquet, records: 2876140
+ Failed to process /mnt/azureml/cr/j/35bc60f7f35949d8a1f4aead45bd43e6/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/51d65f48-52bc-4a4a-a191-7b1e6815cc64/data_step1_out/part-00000-0a3f7de5-8212-48c1-8a9c-9accf3e6cf99-c000.snappy.parquet: Casting from timestamp[ns] to timestamp[us] would lose data: 6475421128654848
+ Mapped: /mnt/azureml/cr/j/35bc60f7f35949d8a1f4aead45bd43e6/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/51d65f48-52bc-4a4a-a191-7b1e6815cc64/data_step1_out/part-00000-0acb84f9-1b48-4ee6-8fe9-7e625ffc601f-c000.snappy.parquet, records: 5168236
+ Unmapped: /mnt/azureml/cr/j/35bc60f7f35949d8a1f4aead45bd43e6/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/51d65f48-52bc-4a4a-a191-7b1e6815cc64/data_step1_out/part-00000-0acb84f9-1b48-4ee6-8fe9-7e625ffc601f-c000.snappy.parquet, records: 2881630
+ Failed to process /mnt/azureml/cr/j/35bc60f7f35949d8a1f4aead45bd43e6/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/51d65f48-52bc-4a4a-a191-7b1e6815cc64/data_step1_out/part-00000-0acb84f9-1b48-4ee6-8fe9-7e625ffc601f-c000.snappy.parquet: Casting from timestamp[ns] to timestamp[us] would lose data: 6475421128654848
+ Mapped: /mnt/azureml/cr/j/35bc60f7f35949d8a1f4aead45bd43e6/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/51d65f48-52bc-4a4a-a191-7b1e6815cc64/data_step1_out/part-00000-0b70f680-3c85-408e-a034-1f0ab4f5ec83-c000.snappy.parquet, records: 5172391
+ Unmapped: /mnt/azureml/cr/j/35bc60f7f35949d8a1f4aead45bd43e6/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/51d65f48-52bc-4a4a-a191-7b1e6815cc64/data_step1_out/part-00000-0b70f680-3c85-408e-a034-1f0ab4f5ec83-c000.snappy.parquet, records: 2884384
+ Failed to process /mnt/azureml/cr/j/35bc60f7f35949d8a1f4aead45bd43e6/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/51d65f48-52bc-4a4a-a191-7b1e6815cc64/data_step1_out/part-00000-0b70f680-3c85-408e-a034-1f0ab4f5ec83-c000.snappy.parquet: Casting from timestamp[ns] to timestamp[us] would lose data: 6475421128654848
+ Mapped: /mnt/azureml/cr/j/35bc60f7f35949d8a1f4aead45bd43e6/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/51d65f48-52bc-4a4a-a191-7b1e6815cc64/data_step1_out/part-00000-0be776b6-9a0f-4e0d-a585-f25e2f4fcd20-c000.snappy.parquet, records: 4141597
+ Unmapped: /mnt/azureml/cr/j/35bc60f7f35949d8a1f4aead45bd43e6/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/51d65f48-52bc-4a4a-a191-7b1e6815cc64/data_step1_out/part-00000-0be776b6-9a0f-4e0d-a585-f25e2f4fcd20-c000.snappy.parquet, records: 3887992
+ Failed to process /mnt/azureml/cr/j/35bc60f7f35949d8a1f4aead45bd43e6/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/51d65f48-52bc-4a4a-a191-7b1e6815cc64/data_step1_out/part-00000-0be776b6-9a0f-4e0d-a585-f25e2f4fcd20-c000.snappy.parquet: Casting from timestamp[ns] to timestamp[us] would lose data: 6475421128654848
+ Mapped: /mnt/azureml/cr/j/35bc60f7f35949d8a1f4aead45bd43e6/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/51d65f48-52bc-4a4a-a191-7b1e6815cc64/data_step1_out/part-00000-0c91e0f7-982f-41d6-b1d2-5284c612530e-c000.snappy.parquet, records: 5203253
+ Unmapped: /mnt/azureml/cr/j/35bc60f7f35949d8a1f4aead45bd43e6/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/51d65f48-52bc-4a4a-a191-7b1e6815cc64/data_step1_out/part-00000-0c91e0f7-982f-41d6-b1d2-5284c612530e-c000.snappy.parquet, records: 2699348
