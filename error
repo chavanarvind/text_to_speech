@@ -1,6 +1,6 @@
 # pipeline_runner.py
 
-from azureml.core import Workspace, Environment, Experiment, Dataset
+from azureml.core import Workspace, Environment, Experiment
 from azureml.pipeline.core import Pipeline, PipelineData
 from azureml.pipeline.steps import PythonScriptStep
 from azureml.core.runconfig import RunConfiguration
@@ -17,6 +17,8 @@ run_config.environment = env
 
 # === Output and input shared folders ===
 data_step1_out = PipelineData(name="data_step1_out", is_directory=True)
+data_step1a_mapped = PipelineData(name="data_step1a_mapped", is_directory=True)
+data_step1a_unmapped = PipelineData(name="data_step1a_unmapped", is_directory=True)
 data_step2_out = PipelineData(name="data_step2_out", is_directory=True)
 data_step3_out = PipelineData(name="data_step3_out", is_directory=True)
 data_step4_out = PipelineData(name="data_step4_out", is_directory=True)
@@ -33,13 +35,31 @@ data_pull_step = PythonScriptStep(
     allow_reuse=False
 )
 
+# === Step 1a: High Confidence Merge ===
+high_conf_merge_step = PythonScriptStep(
+    name="Step 1a - High Confidence Merge",
+    script_name="step_1a_extract_and_merge.py",
+    source_directory="scripts",
+    inputs=[data_step1_out],
+    arguments=[
+        "--input_path", data_step1_out,
+        "--mapping_csv", "data/high_conf_mapping.csv",
+        "--mapped_output", data_step1a_mapped,
+        "--unmapped_output", data_step1a_unmapped
+    ],
+    outputs=[data_step1a_mapped, data_step1a_unmapped],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
+
 # === Step 2: Clean Text ===
 clean_text_step = PythonScriptStep(
     name="Step 2 - Text Cleaning",
     script_name="step_2_clean_text.py",
     source_directory="scripts",
-    inputs=[data_step1_out],
-    arguments=["--input_path", data_step1_out, "--output_path", data_step2_out],
+    inputs=[data_step1a_unmapped],
+    arguments=["--input_path", data_step1a_unmapped, "--output_path", data_step2_out],
     outputs=[data_step2_out],
     runconfig=run_config,
     compute_target=compute_name,
@@ -86,8 +106,11 @@ inference_step = PythonScriptStep(
 
 # === Build pipeline ===
 pipeline = Pipeline(workspace=ws, steps=[
-    data_pull_step, clean_text_step,
-    abbrev_expand_step, feature_eng_step,
+    data_pull_step,
+    high_conf_merge_step,
+    clean_text_step,
+    abbrev_expand_step,
+    feature_eng_step,
     inference_step
 ])
 
