@@ -1,8 +1,51 @@
+# step_1a_extract_and_merge.py
+
 import os
+import glob
 import argparse
 import pandas as pd
 from azureml.core import Run
+from multiprocessing import Pool, cpu_count
 
+# === Column to match ===
+JOIN_COL_1 = "CMPNT_CAT_CD_DESC"
+JOIN_COL_2 = "CMPNT_MATL_TYPE_CD"
+DIRECT_MAP_KEY = "Direct Mapping"
+
+# === Merge one file ===
+def process_file(file_path, mapping_df, mapped_dir, unmapped_dir):
+    try:
+        df = pd.read_parquet(file_path)
+        original_len = len(df)
+
+        df[JOIN_COL_1] = df[JOIN_COL_1].fillna("").astype(str).str.strip()
+        df[JOIN_COL_2] = df[JOIN_COL_2].fillna("").astype(str).str.strip()
+        mapping_df[DIRECT_MAP_KEY] = mapping_df[DIRECT_MAP_KEY].astype(str).str.strip()
+
+        # Merge for mapped rows
+        mapped_df = df.merge(mapping_df, how="inner", left_on=[JOIN_COL_1], right_on=[DIRECT_MAP_KEY])
+        mapped_df['matching_reason'] = 'direct_mapping'
+        mapped_df['confidence_score'] = 1.0
+        print(f" Mapped: {file_path}, records: {len(mapped_df)}")
+
+        # Unmapped rows
+        mapped_keys = mapped_df['CMPNT_MATL_NUM'].unique()
+        unmapped_df = df[~df['CMPNT_MATL_NUM'].isin(mapped_keys)]
+        print(f" Unmapped: {file_path}, records: {len(unmapped_df)}")
+
+        # Output path
+        mapped_out_file = os.path.join(mapped_dir, os.path.basename(file_path))
+        unmapped_out_file = os.path.join(unmapped_dir, os.path.basename(file_path))
+        os.makedirs(os.path.dirname(mapped_out_file), exist_ok=True)
+        os.makedirs(os.path.dirname(unmapped_out_file), exist_ok=True)
+
+        mapped_df.to_parquet(mapped_out_file, index=False)
+        unmapped_df.to_parquet(unmapped_out_file, index=False)
+
+    except Exception as e:
+        print(f" Failed to process {file_path}: {e}")
+
+# === Main script ===
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_path", type=str, required=True)
@@ -11,22 +54,20 @@ def main():
     parser.add_argument("--unmapped_output", type=str, required=True)
     args = parser.parse_args()
 
-    # === Setup Azure ML context ===
     run = Run.get_context()
-    print(f"Input path: {args.input_path}")
-    print(f"Mapping CSV mount path: {args.mapping_csv}")
 
-    # === Correctly read the mounted CSV ===
+    # Read mapping CSV
     mapping_path = os.path.join(args.mapping_csv, "high_conf_mapping.csv")
-    print(f"Resolved CSV path: {mapping_path}")
+    print(f" Reading mapping from: {mapping_path}")
     mapping_df = pd.read_csv(mapping_path)
-    print(f"Mapping loaded: {mapping_df.shape}")
+    print(f" Mapping rows: {len(mapping_df)}")
 
-    # You can now continue with your logic...
-    # For example:
-    # - Iterate over parquet files in args.input_path
-    # - Compare against mapping_df
-    # - Save mapped/unmapped to args.mapped_output and args.unmapped_output
+    # Process each file
+    all_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
+    print(f" Total files found: {len(all_files)}")
+
+    for file_path in all_files:
+        process_file(file_path, mapping_df, args.mapped_output, args.unmapped_output)
 
 if __name__ == "__main__":
     main()
