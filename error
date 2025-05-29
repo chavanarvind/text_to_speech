@@ -1,22 +1,3 @@
-Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.scriptrun = azureml.core.script_run:ScriptRun._from_run_dto with exception (packaging 23.2 (/opt/conda/envs/ptca/lib/python3.8/site-packages), Requirement.parse('packaging<=23.0,>=20.0')).
- Reading mapping from: <azureml.data.datapath.DataPath object at 0x000001898E453D30>
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.11945366859436035 seconds
-Traceback (most recent call last):
-  File "step_1a_extract_and_merge.py", line 73, in <module>
-    main()
-  File "step_1a_extract_and_merge.py", line 62, in main
-    mapping_df = pd.read_csv(mapping_path)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 912, in read_csv
-    return _read(filepath_or_buffer, kwds)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 577, in _read
-    parser = TextFileReader(filepath_or_buffer, **kwds)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 1407, in __init__
-    self._engine = self._make_engine(f, self.engine)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 1661, in _make_engine
-    self.handles = get_handle(
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/io/common.py", line 859, in get_handle
-    handle = open(
-FileNotFoundError: [Errno 2] No such file or directory: '<azureml.data.datapath.DataPath object at 0x000001898E453D30>'
+mapping_path = os.path.join(args.mapping_csv, "high_conf_mapping.csv")
 
+mapping_path = args.mapping_csv
