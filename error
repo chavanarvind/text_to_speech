@@ -1,3 +1,6 @@
+SRC_SYS_CD|^MATL_NUM|^PLNT_CD|^CMPNT_MATL_NUM|^BOM_LVL_NBR_DTLS|^TRU_MATL_NUM|^CMPNT_RM_SPEC_CD|^CMPNT_PC_SPEC_CD|^CMPNT_DC_SPEC_CD|^RAW_MATL_TITLE_NM
+
+
 # pipeline_runner.py
 
 from azureml.core import Workspace, Environment, Experiment, Dataset
