@@ -1,73 +1,141 @@
-# step_1a_extract_and_merge.py
+# pipeline_runner.py
 
+from azureml.core import Workspace, Environment, Experiment
+from azureml.pipeline.core import Pipeline, PipelineData
+from azureml.pipeline.steps import PythonScriptStep
+from azureml.core.runconfig import RunConfiguration
+from azureml.data.datapath import DataPath
+from azureml.data import OutputFileDatasetConfig
 import os
-import glob
-import argparse
-import pandas as pd
-from azureml.core import Run
-from multiprocessing import Pool, cpu_count
 
-# === Column to match ===
-JOIN_COL_1 = "CMPNT_CAT_CD_DESC"
-JOIN_COL_2 = "CMPNT_MATL_TYPE_CD"
-DIRECT_MAP_KEY = "Direct Mapping"
+# === Load workspace ===
+ws = Workspace.from_config(path=".azureml/dev_config.json")
+compute_name = "llm-gpu-cluster-2"
+env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
 
-# === Merge one file ===
-def process_file(file_path, mapping_df, mapped_dir, unmapped_dir):
-    try:
-        df = pd.read_parquet(file_path)
-        original_len = len(df)
+run_config = RunConfiguration()
+run_config.target = compute_name
+run_config.environment = env
 
-        df[JOIN_COL_1] = df[JOIN_COL_1].fillna("").astype(str).str.strip()
-        df[JOIN_COL_2] = df[JOIN_COL_2].fillna("").astype(str).str.strip()
-        mapping_df[DIRECT_MAP_KEY] = mapping_df[DIRECT_MAP_KEY].astype(str).str.strip()
+# === Output and input shared folders ===
+data_step1_out = PipelineData(name="data_step1_out", is_directory=True)
+data_step1a_mapped = PipelineData(name="data_step1a_mapped", is_directory=True)
+data_step1a_unmapped = PipelineData(name="data_step1a_unmapped", is_directory=True)
+data_step2_out = PipelineData(name="data_step2_out", is_directory=True)
+data_step3_out = PipelineData(name="data_step3_out", is_directory=True)
+data_step4_out = PipelineData(name="data_step4_out", is_directory=True)
 
-        # Merge for mapped rows
-        mapped_df = df.merge(mapping_df, how="inner", left_on=[JOIN_COL_1], right_on=[DIRECT_MAP_KEY])
-        mapped_df['matching_reason'] = 'direct_mapping'
-        mapped_df['confidence_score'] = 1.0
-        print(f" Mapped: {file_path}, records: {len(mapped_df)}")
+# === Upload high_conf_mapping.csv from local folder to datastore ===
+default_ds = ws.get_default_datastore()
 
-        # Unmapped rows
-        mapped_keys = mapped_df['CMPNT_MATL_NUM'].unique()
-        unmapped_df = df[~df['CMPNT_MATL_NUM'].isin(mapped_keys)]
-        print(f" Unmapped: {file_path}, records: {len(unmapped_df)}")
+# Path to local file (make sure folder name has no spaces)
+files = ['./local_data/high_conf_direct_mapping.csv']
 
-        # Output path
-        mapped_out_file = os.path.join(mapped_dir, os.path.basename(file_path))
-        unmapped_out_file = os.path.join(unmapped_dir, os.path.basename(file_path))
-        os.makedirs(os.path.dirname(mapped_out_file), exist_ok=True)
-        os.makedirs(os.path.dirname(unmapped_out_file), exist_ok=True)
+# Upload it to datastore under the "inputs" path
+default_ds.upload_files(
+    files=files,
+    target_path='inputs',  # folder name in datastore
+    overwrite=True,
+    show_progress=True
+)
 
-        mapped_df.to_parquet(mapped_out_file, index=False)
-        unmapped_df.to_parquet(unmapped_out_file, index=False)
+# Create a DataPath reference to pass to your step
+high_conf_csv_path = DataPath(datastore=default_ds, path_on_datastore='inputs/high_conf_direct_mapping.csv')
 
-    except Exception as e:
-        print(f" Failed to process {file_path}: {e}")
+# === Step 1: Data Pull ===
+data_pull_step = PythonScriptStep(
+    name="Step 1 - Pull Dataset",
+    script_name="step_1_data_pull.py",
+    source_directory="scripts",
+    arguments=["--output_path", data_step1_out],
+    outputs=[data_step1_out],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
 
-# === Main script ===
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input_path", type=str, required=True)
-    parser.add_argument("--mapping_csv", type=str, required=True)
-    parser.add_argument("--mapped_output", type=str, required=True)
-    parser.add_argument("--unmapped_output", type=str, required=True)
-    args = parser.parse_args()
+# === Step 1a: High Confidence Merge ===
+high_conf_merge_step = PythonScriptStep(
+    name="Step 1a - High Confidence Merge",
+    script_name="step_1a_extract_and_merge.py",
+    source_directory="scripts",
+    inputs=[data_step1_out],
+    arguments=[
+        "--input_path", data_step1_out,
+        "--mapping_csv", high_conf_csv_path,
+        "--mapped_output", data_step1a_mapped,
+        "--unmapped_output", data_step1a_unmapped
+    ],
+    outputs=[data_step1a_mapped, data_step1a_unmapped],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
 
-    run = Run.get_context()
+# === Step 2: Clean Text ===
+clean_text_step = PythonScriptStep(
+    name="Step 2 - Text Cleaning",
+    script_name="step_2_clean_text.py",
+    source_directory="scripts",
+    inputs=[data_step1a_unmapped],
+    arguments=["--input_path", data_step1a_unmapped, "--output_path", data_step2_out],
+    outputs=[data_step2_out],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
 
-    # Read mapping CSV
-    mapping_path = args.mapping_csv
-    print(f" Reading mapping from: {mapping_path}")
-    mapping_df = pd.read_csv(mapping_path)
-    print(f" Mapping rows: {len(mapping_df)}")
+# === Step 3: Abbreviation Expansion ===
+abbrev_expand_step = PythonScriptStep(
+    name="Step 3 - Expand Abbreviations",
+    script_name="step_3_expand_abbreviation.py",
+    source_directory="scripts",
+    inputs=[data_step2_out],
+    arguments=["--input_path", data_step2_out, "--output_path", data_step3_out],
+    outputs=[data_step3_out],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
 
-    # Process each file
-    all_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
-    print(f" Total files found: {len(all_files)}")
+# === Step 4: Feature Engineering ===
+feature_eng_step = PythonScriptStep(
+    name="Step 4 - Feature Engineering",
+    script_name="step_4_feature_engineering.py",
+    source_directory="scripts",
+    inputs=[data_step3_out],
+    arguments=["--input_path", data_step3_out, "--output_path", data_step4_out],
+    outputs=[data_step4_out],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
 
-    for file_path in all_files:
-        process_file(file_path, mapping_df, args.mapped_output, args.unmapped_output)
+# === Step 5: Run Inference ===
+inference_step = PythonScriptStep(
+    name="Step 5 - Run Inference",
+    script_name="step_5_run_inference.py",
+    source_directory="scripts",
+    inputs=[data_step4_out],
+    arguments=["--input_path", data_step4_out],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
 
-if __name__ == "__main__":
-    main()
+# === Build pipeline ===
+pipeline = Pipeline(workspace=ws, steps=[
+    data_pull_step,
+    high_conf_merge_step,
+    clean_text_step,
+    abbrev_expand_step,
+    feature_eng_step,
+    inference_step
+])
+
+pipeline.validate()
+
+# === Submit pipeline ===
+experiment = Experiment(ws, "full_inference_pipeline")
+pipeline_run = experiment.submit(pipeline)
+pipeline_run.wait_for_completion(show_output=True)
