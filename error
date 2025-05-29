@@ -1,6 +1,6 @@
-default_ds.upload_files(
-    files=['./local_data/high_conf_direct_mapping.csv'],
-    target_path='high_conf_map',   # <== IMPORTANT: Folder name
-    overwrite=True,
-    show_progress=True
-)
+Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 76, in <module>
+    main()
+  File "step_1a_extract_and_merge.py", line 62, in main
+    raise FileNotFoundError(f"No CSV file found in mapped directory: {args.mapping_csv}")
+FileNotFoundError: No CSV file found in mapped directory: high_conf_map
