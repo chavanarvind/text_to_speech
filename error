@@ -1,8 +1,8 @@
-import glob
-
-csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
-if not csv_files:
+Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 79, in <module>
+    main()
+  File "step_1a_extract_and_merge.py", line 65, in main
     raise FileNotFoundError(f"No CSV found in mapped directory: {args.mapping_csv}")
-mapping_path = csv_files[0]
-print(f"📥 Reading mapping from: {mapping_path}")
-mapping_df = pd.read_csv(mapping_path)
+FileNotFoundError: No CSV found in mapped directory: high_conf_map
+
+
