@@ -1,68 +1,11 @@
-# pipeline_runner.py
-
-from azureml.core import Workspace, Environment, Experiment
-from azureml.pipeline.core import Pipeline, PipelineData
-from azureml.pipeline.steps import PythonScriptStep
-from azureml.core.runconfig import RunConfiguration
-from azureml.data.datapath import DataPath
-from azureml.data import OutputFileDatasetConfig
-import os
-
-# === Load workspace ===
-ws = Workspace.from_config(path=".azureml/dev_config.json")
-compute_name = "llm-gpu-cluster-2"
-env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
-
-run_config = RunConfiguration()
-run_config.target = compute_name
-run_config.environment = env
-
-# === Output and input shared folders ===
-data_step1_out = PipelineData(name="data_step1_out", is_directory=True)
-data_step1a_mapped = PipelineData(name="data_step1a_mapped", is_directory=True)
-data_step1a_unmapped = PipelineData(name="data_step1a_unmapped", is_directory=True)
-data_step2_out = PipelineData(name="data_step2_out", is_directory=True)
-data_step3_out = PipelineData(name="data_step3_out", is_directory=True)
-data_step4_out = PipelineData(name="data_step4_out", is_directory=True)
-
-# === Upload high_conf_mapping.csv from local folder to datastore ===
-default_ds = ws.get_default_datastore()
-
-# Path to local file (make sure folder name has no spaces)
-files = ['./local_data/high_conf_direct_mapping.csv']
-
-# Upload it to datastore under the "inputs" path
-default_ds.upload_files(
-    files=files,
-    target_path='inputs',  # folder name in datastore
-    overwrite=True,
-    show_progress=True
-)
-
-# Create a DataPath reference to pass to your step
-high_conf_csv_path = DataPath(datastore=default_ds, path_on_datastore='inputs/high_conf_direct_mapping.csv')
-
-# === Step 1: Data Pull ===
-data_pull_step = PythonScriptStep(
-    name="Step 1 - Pull Dataset",
-    script_name="step_1_data_pull.py",
-    source_directory="scripts",
-    arguments=["--output_path", data_step1_out],
-    outputs=[data_step1_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Step 1a: High Confidence Merge ===
 high_conf_merge_step = PythonScriptStep(
     name="Step 1a - High Confidence Merge",
     script_name="step_1a_extract_and_merge.py",
     source_directory="scripts",
-    inputs=[data_step1_out],
+    inputs=[data_step1_out, high_conf_csv_path],  # <-- add it to inputs!
     arguments=[
         "--input_path", data_step1_out,
-        "--mapping_csv", high_conf_csv_path,
+        "--mapping_csv", high_conf_csv_path,  # <-- pass as is
         "--mapped_output", data_step1a_mapped,
         "--unmapped_output", data_step1a_unmapped
     ],
@@ -72,70 +15,7 @@ high_conf_merge_step = PythonScriptStep(
     allow_reuse=False
 )
 
-# === Step 2: Clean Text ===
-clean_text_step = PythonScriptStep(
-    name="Step 2 - Text Cleaning",
-    script_name="step_2_clean_text.py",
-    source_directory="scripts",
-    inputs=[data_step1a_unmapped],
-    arguments=["--input_path", data_step1a_unmapped, "--output_path", data_step2_out],
-    outputs=[data_step2_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
 
-# === Step 3: Abbreviation Expansion ===
-abbrev_expand_step = PythonScriptStep(
-    name="Step 3 - Expand Abbreviations",
-    script_name="step_3_expand_abbreviation.py",
-    source_directory="scripts",
-    inputs=[data_step2_out],
-    arguments=["--input_path", data_step2_out, "--output_path", data_step3_out],
-    outputs=[data_step3_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
 
-# === Step 4: Feature Engineering ===
-feature_eng_step = PythonScriptStep(
-    name="Step 4 - Feature Engineering",
-    script_name="step_4_feature_engineering.py",
-    source_directory="scripts",
-    inputs=[data_step3_out],
-    arguments=["--input_path", data_step3_out, "--output_path", data_step4_out],
-    outputs=[data_step4_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Step 5: Run Inference ===
-inference_step = PythonScriptStep(
-    name="Step 5 - Run Inference",
-    script_name="step_5_run_inference.py",
-    source_directory="scripts",
-    inputs=[data_step4_out],
-    arguments=["--input_path", data_step4_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Build pipeline ===
-pipeline = Pipeline(workspace=ws, steps=[
-    data_pull_step,
-    high_conf_merge_step,
-    clean_text_step,
-    abbrev_expand_step,
-    feature_eng_step,
-    inference_step
-])
-
-pipeline.validate()
-
-# === Submit pipeline ===
-experiment = Experiment(ws, "full_inference_pipeline")
-pipeline_run = experiment.submit(pipeline)
-pipeline_run.wait_for_completion(show_output=True)
+mapping_path = os.path.join(args.mapping_csv, "high_conf_direct_mapping.csv")
+mapping_df = pd.read_csv(mapping_path)
