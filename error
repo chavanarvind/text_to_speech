@@ -1,18 +1,3 @@
-from azureml.data.datapath import DataPath
+from azureml.data import OutputFileDatasetConfig
 
-# === Upload high_conf_mapping.csv from local folder to datastore ===
-default_ds = ws.get_default_datastore()
-
-# Path to local file (make sure folder name has no spaces)
-files = ['./local_data/high_conf_mapping.csv']
-
-# Upload it to datastore under the "inputs" path
-default_ds.upload_files(
-    files=files,
-    target_path='inputs',  # folder name in datastore
-    overwrite=True,
-    show_progress=True
-)
-
-# Create a DataPath reference to pass to your step
-high_conf_csv_path = DataPath(datastore=default_ds, path_on_datastore='inputs/high_conf_mapping.csv')
+high_conf_csv_path = high_conf_csv_path.as_mount()  # Mount it so it's readable in the step
