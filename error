@@ -1,10 +1,130 @@
-SRC_SYS_CD	MATL_SHRT_DESC	PLNT_CD	CMPNT_MATL_TYPE_CD	CMPNT_MATL_NUM	CMPNT_MATL_DESC	FG_NM	FG_SPEC_NM	FD_SPEC	CHILD_NM	CHILD_TITLE_DESC	CHILD_TYPE_CD	TEMPL_TYPE_CD	TEMPL_TYPE_CD_AI_SUGGESTED	MATL_NUM	IS_MATCHED	CONFIDENCE	MATCHING_REASON	VERIFICATION_STATUS	COMMENTS
-BPA	JH LIGHT FRAG JELLY 100 MENA	ZA01	P	02111779	SHRINKFILM 280MM									000000000003253304	FALSE		Off Spec Non Match		
-BPA	JH FRAG FREE JELLY 100 ML MENA	ZA01	P	02111779	SHRINKFILM 280MM									000000000003256204	FALSE		Off Spec Non Match		
-BPA	JH LIGHT FRAG JELLY 100 ML ZA	ZA01	P	02111779	SHRINKFILM 280MM	FG-0038506	2069805 JOHNSON BABY JELLY L/F BMR 100 MILLILITRE	None	PC-055572	LABEL BARCODE printed shrink wrap generic 40x40mm	Packaging Component	Labels / Leaflets / Booklets	Labels / Leaflets / Booklets	2069805	TRUE	medium	Off Spec Match		
-BPA	JH FRAG FREE JELLY 100 ML ZA	ZA01	P	02111779	SHRINKFILM 280MM	FG-0038556	2070205 JH BABY JELLY F.FREE 100 ZA BMR	None	PC-055572	LABEL BARCODE printed shrink wrap generic 40x40mm	Packaging Component	Labels / Leaflets / Booklets	Labels / Leaflets / Booklets	2070205	TRUE	medium	Off Spec Match		
-BPA	JH BABY OIL 200 ML ZA	ZA01	P	02111779	SHRINKFILM 280MM	FG-0007804	3255003 Johnson's Baby Oil 200ml BMR	None	PC-055572	LABEL BARCODE printed shrink wrap generic 40x40mm	Packaging Component	Labels / Leaflets / Booklets	Labels / Leaflets / Booklets	3255003	TRUE	medium	Off Spec Match		
-BPA	JH BEDTIME OIL 200 ML ZA	ZA01	P	02111779	SHRINKFILM 280MM	FG-0007800	4951303 Johnson's Baby Oil BEDTIME 200ml BMR	None	PC-055572	LABEL BARCODE printed shrink wrap generic 40x40mm	Packaging Component	Labels / Leaflets / Booklets	Labels / Leaflets / Booklets	4951303	TRUE	medium	Off Spec Match		
-BPA	JH LIGHT FRAG JELLY 100 ML TR	ZA01	P	02111779	SHRINKFILM 280MM	FG-0060580	90545100 JOHNSON'S BABY JELLY LIGHTLY FRAGRANCE 100ML TURKEY BMR	None	PC-055572	LABEL BARCODE printed shrink wrap generic 40x40mm	Packaging Component	Labels / Leaflets / Booklets	Labels / Leaflets / Booklets	90545100	TRUE	medium	Off Spec Match		
-BPA	SAVLON A-SEPT LIQUID 125 ZA-EN	ZA01	P	02111779	SHRINKFILM 280MM	FG-0010922	Savlon Antiseptic Liquid 125ml - Dishman 9383800	FD-0003634	RM-017203	Purified water	INGREDIENT	None	None	9383800	TRUE	medium	Off Spec Match		
-BPA	SAVLON A-SEPT LIQUID 75  ZA-EN	ZA01	P	02111779	SHRINKFILM 280MM	FG-0010920	9392300 Savlon Antiseptic Liquid 75ml - Dishman	FD-0003634	RM-017203	Purified water	INGREDIENT	None	None	9392300	TRUE	medium	Off Spec Match		
+# step_1a_extract_and_merge.py
+
+import os
+import glob
+import argparse
+import pandas as pd
+from azureml.core import Run
+from multiprocessing import Pool, cpu_count
+
+# === Column to match ===
+JOIN_COL_1 = "CMPNT_CAT_CD_DESC"
+JOIN_COL_2 = "CMPNT_MATL_TYPE_CD"
+DIRECT_MAP_KEY_1 = "Direct Mapping"
+DIRECT_MAP_KEY_2 = "Material Type"
+
+# === Merge one file ===
+def process_file(file_path, mapping_df, mapped_dir, needs_model_dir):
+   
+
+    try:
+        df = pd.read_parquet(file_path, columns=["CMPNT_MATL_NUM", 'CMPNT_MATL_DESC',
+    'CMPNT_MATL_TYPE_CD',
+    'CMPNT_CAT_CD_DESC',
+    'CMPNT_UOM_CD'])
+        df.drop_duplicates(inplace=True)
+
+        df[JOIN_COL_1] = df[JOIN_COL_1].fillna("").astype(str).str.strip()
+        df[JOIN_COL_2] = df[JOIN_COL_2].fillna("").astype(str).str.strip()
+        mapping_df[DIRECT_MAP_KEY_1] = mapping_df[DIRECT_MAP_KEY_1].astype(str).str.strip()
+        mapping_df[DIRECT_MAP_KEY_2] = mapping_df[DIRECT_MAP_KEY_2].astype(str).str.strip()
+
+        # Stage 1 mapping: based on CMPNT_CAT_CD_DESC only
+        stage1_df = df.merge(mapping_df, how="inner", left_on=[JOIN_COL_1], right_on=[DIRECT_MAP_KEY_1])
+        stage1_df['matching_reason'] = 'direct_mapping_category'
+        stage1_df['confidence_score'] = 1.0
+
+        # Stage 2 mapping: based on CMPNT_MATL_TYPE_CD only (excluding already mapped)
+        df_not_mapped_in_stage1 = df[~df['CMPNT_MATL_NUM'].isin(stage1_df['CMPNT_MATL_NUM'])]
+        stage2_df = df_not_mapped_in_stage1.merge(mapping_df, how="inner", left_on=[JOIN_COL_2], right_on=[DIRECT_MAP_KEY_2])
+        stage2_df['matching_reason'] = 'direct_mapping_type_only'
+        stage2_df['confidence_score'] = 1.0
+
+        # Combine both mappings
+        mapped_df = pd.concat([stage1_df, stage2_df], ignore_index=True)
+        print("Mapped file")
+        print(mapped_df.head(5))
+
+        # Add mapping flags
+        mapped_df['Final Category Filled'] = mapped_df['Final Category'].notna() & mapped_df['Final Category'].str.strip().ne("")
+        mapped_df['Final Subcategory Filled'] = mapped_df['Final Subcategory'].notna() & mapped_df['Final Subcategory'].str.strip().ne("")
+        mapped_df['needs_model'] = ~mapped_df['Final Category Filled'] | ~mapped_df['Final Subcategory Filled']
+
+        # Split into mapped and needing model
+        mapped_only_df = mapped_df[~mapped_df['needs_model']].copy()
+        needs_model_df = mapped_df[mapped_df['needs_model']].copy()
+
+        print(f"✅ Fully mapped: {file_path}, records: {len(mapped_only_df)}")
+        print(f"🔮 Needs model (either cat/subcat): {file_path}, records: {len(needs_model_df)}")
+
+        # Output path
+        base_name = os.path.basename(file_path)
+        os.makedirs(mapped_dir, exist_ok=True)
+        os.makedirs(needs_model_dir, exist_ok=True)
+
+        mapped_only_df.to_parquet(os.path.join(mapped_dir, base_name), index=False)
+        needs_model_df.to_parquet(os.path.join(needs_model_dir, base_name), index=False)
+
+    except Exception as e:
+        print(f"❌ Failed to process {file_path}: {e}")
+
+# === Main script ===
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_path", type=str, required=True)
+    parser.add_argument("--mapping_csv", type=str, required=True)
+    parser.add_argument("--mapped_output", type=str, required=True)
+    parser.add_argument("--needs_model_output", type=str, required=True)
+    args = parser.parse_args()
+
+    run = Run.get_context()
+
+    # === Locate CSV inside mounted directory ===
+    csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
+    if not csv_files:
+        raise FileNotFoundError(f"No CSV file found in mapped directory: {args.mapping_csv}")
+
+    mapping_path = csv_files[0]
+    print(f"📥 Reading mapping from: {mapping_path}")
+    mapping_df = pd.read_csv(mapping_path)
+    mapping_df = mapping_df.drop_duplicates()
+    print(f"📊 Mapping rows: {len(mapping_df)}")
+
+    # === Process input parquet files ===
+    all_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
+    print(f"📁 Total input parquet files found: {len(all_files)}")
+
+    for file_path in all_files:
+        process_file(file_path, mapping_df, args.mapped_output, args.needs_model_output)
+
+if __name__ == "__main__":
+    main()
+
+
+
+error i got 
+Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.scriptrun = azureml.core.script_run:ScriptRun._from_run_dto with exception (packaging 23.2 (/opt/conda/envs/ptca/lib/python3.8/site-packages), Requirement.parse('packaging<=23.0,>=20.0')).
+usage: step_1a_extract_and_merge.py [-h] --input_path INPUT_PATH --mapping_csv
+                                    MAPPING_CSV --mapped_output MAPPED_OUTPUT
+                                    --needs_model_output NEEDS_MODEL_OUTPUT
+step_1a_extract_and_merge.py: error: the following arguments are required: --needs_model_output
+Cleaning up all outstanding Run operations, waiting 300.0 seconds
+1 items cleaning up...
+Cleanup took 0.09643006324768066 seconds
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 101, in <module>
+    main()
+  File "step_1a_extract_and_merge.py", line 78, in main
+    args = parser.parse_args()
+  File "/opt/conda/envs/ptca/lib/python3.8/argparse.py", line 1768, in parse_args
+    args, argv = self.parse_known_args(args, namespace)
+  File "/opt/conda/envs/ptca/lib/python3.8/argparse.py", line 1800, in parse_known_args
+    namespace, args = self._parse_known_args(args, namespace)
+  File "/opt/conda/envs/ptca/lib/python3.8/argparse.py", line 2034, in _parse_known_args
+    self.error(_('the following arguments are required: %s') %
+  File "/opt/conda/envs/ptca/lib/python3.8/argparse.py", line 2521, in error
+    self.exit(2, _('%(prog)s: error: %(message)s\n') % args)
+  File "/opt/conda/envs/ptca/lib/python3.8/argparse.py", line 2508, in exit
+    _sys.exit(status)
+SystemExit: 2
+
