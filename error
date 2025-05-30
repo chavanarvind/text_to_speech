@@ -1,52 +1,10 @@
-import os
-import glob
-import re
-import argparse
-import pandas as pd
-from multiprocessing import Pool, cpu_count
-
-# --- Replacement function ---
-def replace_match(m):
-    return abbrev_map.get(m.group(0).lower(), m.group(0))
-
-# --- Per-file processing ---
-def process_file(file):
-    try:
-        df = pd.read_parquet(file)
-        df['CMPNT_MATL_DESC'] = df['CMPNT_MATL_DESC'].str.replace(
-            abbrev_pattern, replace_match, regex=True
-        )
-        df.to_parquet(file, index=False)
-        print(f"✅ Expanded abbreviations in: {os.path.basename(file)}")
-    except Exception as e:
-        print(f"❌ Failed: {os.path.basename(file)} -> {e}")
-
-# --- Main ---
-def main(input_path, abbrev_map_path):
-    global abbrev_map, abbrev_pattern
-
-    # Locate CSV inside mounted path
-    csv_files = glob.glob(os.path.join(abbrev_map_path, "*.csv"))
-    if not csv_files:
-        raise FileNotFoundError(f"No abbreviation CSV found in: {abbrev_map_path}")
-
-    abbrev_df = pd.read_csv(csv_files[0])
-    abbrev_map = {k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])}
-
-    abbrev_pattern = re.compile(
-        r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b',
-        flags=re.IGNORECASE
-    )
-
-    files = glob.glob(os.path.join(input_path, '*.parquet'))
-    with Pool(processes=cpu_count()) as pool:
-        pool.map(process_file, files)
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--input_path', required=True)
-    parser.add_argument('--abbrev_map', required=True)  # ✅ now required
-    parser.add_argument('--output_path')  # Not used, but kept for compatibility
-    args = parser.parse_args()
-
-    main(args.input_path, args.abbrev_map)
+SRC_SYS_CD	MATL_NUM	MATL_NUM_original	MATL_SHRT_DESC	PLNT_CD	CMPNT_MATL_TYPE_CD	CMPNT_MATL_NUM	CMPNT_MATL_NUM_original	CMPNT_MATL_DESC	text_for_matching_erp	extracted_rm_erp	perc_alpha_char_erp	key_erp	RGN_CD	mat_num	MATL_NUM_original_tru_ref	mat_num_padded	mat_num_original	FG_NM	FG_SPEC_NM	FD_NM	CHILD_NM	CHILD_NM_original	CHILD_TITLE_DESC	spec_type_inferred	TEMPL_TYPE_CD	CHILD_TYPE_CD	ERP_DESC	text_for_matching_tru	text_for_matching_tru_trade_names	extracted_rm_tru	perc_alpha_char_tru	key_tru	SPEC_FLOW_CD	TRD_NM_CONCAT	TRD_NM_FULL	matching_score	unified_mat_code	is_matched	Matching Reason	confidence	match_round	TEMPL_TYPE_CD_AI_SUGGESTED
+BPA	000000000003253304	3253304	JH LIGHT FRAG JELLY 100 MENA	ZA01	P	2111779	02111779	SHRINKFILM 280MM				000000000003253304_2111779_ZA01_BPA																									000000000003253304	FALSE	Off Spec Non Match			
+BPA	000000000003256204	3256204	JH FRAG FREE JELLY 100 ML MENA	ZA01	P	2111779	02111779	SHRINKFILM 280MM				000000000003256204_2111779_ZA01_BPA																									000000000003256204	FALSE	Off Spec Non Match			
+BPA	000000000002069805	2069805	JH LIGHT FRAG JELLY 100 ML ZA	ZA01	P	2111779	02111779	SHRINKFILM 280MM	shrinkfilm		1	000000000002069805_2111779_ZA01_BPA	EMEA	000000000002069805	2069805	000000000002069805	000000000002069805	FG-0038506	2069805 JOHNSON BABY JELLY L/F BMR 100 MILLILITRE	None	PC-055572	PC-055572	LABEL BARCODE printed shrink wrap generic 40x40mm	PC	Labels / Leaflets / Booklets	Packaging Component	JH LIGHT FRAG JELLY 100 ML ZA	label barcode printed shrink wrap generic			1	000000000002069805_PC-055572_ZA01_BPA	FG-0038506>PC-055572			0.45916426181793213	2069805	TRUE	Off Spec Match	medium	18: LLM Embeddings	Labels / Leaflets / Booklets
+BPA	000000000002070205	2070205	JH FRAG FREE JELLY 100 ML ZA	ZA01	P	2111779	02111779	SHRINKFILM 280MM	shrinkfilm		1	000000000002070205_2111779_ZA01_BPA	EMEA	000000000002070205	2070205	000000000002070205	000000000002070205	FG-0038556	2070205 JH BABY JELLY F.FREE 100 ZA BMR	None	PC-055572	PC-055572	LABEL BARCODE printed shrink wrap generic 40x40mm	PC	Labels / Leaflets / Booklets	Packaging Component	JH FRAG FREE JELLY 100 ML ZA	label barcode printed shrink wrap generic			1	000000000002070205_PC-055572_ZA01_BPA	FG-0038556>PC-055572			0.45916423201560974	2070205	TRUE	Off Spec Match	medium	18: LLM Embeddings	Labels / Leaflets / Booklets
+BPA	000000000003255003	3255003	JH BABY OIL 200 ML ZA	ZA01	P	2111779	02111779	SHRINKFILM 280MM	shrinkfilm		1	000000000003255003_2111779_ZA01_BPA	EMEA	000000000003255003	3255003	000000000003255003	000000000003255003	FG-0007804	3255003 Johnson's Baby Oil 200ml BMR	None	PC-055572	PC-055572	LABEL BARCODE printed shrink wrap generic 40x40mm	PC	Labels / Leaflets / Booklets	Packaging Component	JH BABY OIL 200 ML ZA	label barcode printed shrink wrap generic			1	000000000003255003_PC-055572_ZA01_BPA	FG-0007804>PC-055572			0.4591643214225769	3255003	TRUE	Off Spec Match	medium	18: LLM Embeddings	Labels / Leaflets / Booklets
+BPA	000000000004951303	4951303	JH BEDTIME OIL 200 ML ZA	ZA01	P	2111779	02111779	SHRINKFILM 280MM	shrinkfilm		1	000000000004951303_2111779_ZA01_BPA	EMEA	000000000004951303	4951303	000000000004951303	000000000004951303	FG-0007800	4951303 Johnson's Baby Oil BEDTIME 200ml BMR	None	PC-055572	PC-055572	LABEL BARCODE printed shrink wrap generic 40x40mm	PC	Labels / Leaflets / Booklets	Packaging Component	JH BEDTIME OIL 200 ML ZA	label barcode printed shrink wrap generic			1	000000000004951303_PC-055572_ZA01_BPA	FG-0007800>PC-055572			0.4591643214225769	4951303	TRUE	Off Spec Match	medium	18: LLM Embeddings	Labels / Leaflets / Booklets
+BPA	000000000090545100	90545100	JH LIGHT FRAG JELLY 100 ML TR	ZA01	P	2111779	02111779	SHRINKFILM 280MM	shrinkfilm		1	000000000090545100_2111779_ZA01_BPA	EMEA	000000000090545100	90545100	000000000090545100	000000000090545100	FG-0060580	90545100 JOHNSON'S BABY JELLY LIGHTLY FRAGRANCE 100ML TURKEY BMR	None	PC-055572	PC-055572	LABEL BARCODE printed shrink wrap generic 40x40mm	PC	Labels / Leaflets / Booklets	Packaging Component	JH LIGHT FRAG JELLY 100 ML TR	label barcode printed shrink wrap generic			1	000000000090545100_PC-055572_ZA01_BPA	FG-0060580>PC-055572			0.4591643214225769	90545100	TRUE	Off Spec Match	medium	18: LLM Embeddings	Labels / Leaflets / Booklets
+BPA	000000000009383800	9383800	SAVLON A-SEPT LIQUID 125 ZA-EN	ZA01	P	2111779	02111779	SHRINKFILM 280MM	shrinkfilm		1	000000000009383800_2111779_ZA01_BPA	EMEA	000000000009383800	9383800	000000000009383800	000000000009383800	FG-0010922	Savlon Antiseptic Liquid 125ml - Dishman 9383800	FD-0003634	RM-017203	RM-017203	Purified water	RM	None	INGREDIENT	SAVLON A-SEPT LIQUID 125 ZA-EN	purified	purified	rm017203	1	000000000009383800_RM-017203_ZA01_BPA	FG-0010922 > FD-0003634 > RM-017203	purified water usp-	water usp- purified	0.4	9383800	TRUE	Off Spec Match	medium	16: Leven Similarity	None
+BPA	000000000009392300	9392300	SAVLON A-SEPT LIQUID 75  ZA-EN	ZA01	P	2111779	02111779	SHRINKFILM 280MM	shrinkfilm		1	000000000009392300_2111779_ZA01_BPA	EMEA	000000000009392300	9392300	000000000009392300	000000000009392300	FG-0010920	9392300 Savlon Antiseptic Liquid 75ml - Dishman	FD-0003634	RM-017203	RM-017203	Purified water	RM	None	INGREDIENT	SAVLON A-SEPT LIQUID 75  ZA-EN	purified	purified	rm017203	1	000000000009392300_RM-017203_ZA01_BPA	FG-0010920 > FD-0003634 > RM-017203	purified water usp-	water usp- purified	0.4	9392300	TRUE	Off Spec Match	medium	16: Leven Similarity	None
