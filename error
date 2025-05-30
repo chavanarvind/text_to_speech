@@ -1,7 +1,2 @@
-from azureml.core import Workspace
 
-ws = Workspace(
-    subscription_id="your-subscription-id",
-    resource_group="your-resource-group-name",
-    workspace_name="your-workspace-name"
-)
+Failed to pull Docker image jaob-docker.artifactrepo.jnj.com/box_x_pipeline:predev with authentication mode UsernamePassword due to: DockerResponseServerError { status_code: 500, message: "Head \"https://jaob-docker.artifactrepo.jnj.com/v2/box_x_pipeline/manifests/predev\": unknown: Bad credentials" }. There was an issue connecting with the registry. Please verify that the registry is accessible and that the credentials used are correct.
