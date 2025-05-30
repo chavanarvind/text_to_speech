@@ -1,17 +1,16 @@
+from azureml.core import Workspace, Environment
 
-Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
-  File "step_5_run_inference.py", line 96, in <module>
-    main(args.input_path)
-  File "step_5_run_inference.py", line 16, in main
-    model = joblib.load(os.path.join(model_dir, "final_model.joblib"))
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/joblib/numpy_pickle.py", line 658, in load
-    obj = _unpickle(fobj, filename, mmap_mode)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/joblib/numpy_pickle.py", line 577, in _unpickle
-    obj = unpickler.load()
-  File "/opt/conda/envs/ptca/lib/python3.8/pickle.py", line 1212, in load
-    dispatch[key[0]](self)
-  File "/opt/conda/envs/ptca/lib/python3.8/pickle.py", line 1537, in load_stack_global
-    self.append(self.find_class(module, name))
-  File "/opt/conda/envs/ptca/lib/python3.8/pickle.py", line 1579, in find_class
-    __import__(module, level=0)
-ModuleNotFoundError: No module named 'lightgbm'
+# Load your workspace config
+ws = Workspace.from_config(path=".azureml/dev_config.json")
+
+# Load and modify existing environment
+env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
+env.python.conda_dependencies.add_pip_package("lightgbm")
+
+# Optionally rename the environment (only if you want versioning)
+# env.name = "Bom_X_Evaluator_v2"
+
+# Register the updated environment
+env.register(workspace=ws)
+
+print(f"✅ Updated environment: {env.name}")
