@@ -1,16 +1,52 @@
-Traceback (most recent call last):
-  File "step_3_expand_abbreviation.py", line 52, in <module>
-    main(args.input_path)
-  File "step_3_expand_abbreviation.py", line 31, in main
-    abbrev_df = pd.read_csv('./data/abbreviation_expension_updated.csv')
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 912, in read_csv
-    return _read(filepath_or_buffer, kwds)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 577, in _read
-    parser = TextFileReader(filepath_or_buffer, **kwds)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 1407, in __init__
-    self._engine = self._make_engine(f, self.engine)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 1661, in _make_engine
-    self.handles = get_handle(
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/io/common.py", line 859, in get_handle
-    handle = open(
-FileNotFoundError: [Errno 2] No such file or directory: './data/abbreviation_expension_updated.csv'
+import os
+import glob
+import re
+import argparse
+import pandas as pd
+from multiprocessing import Pool, cpu_count
+
+# --- Replacement function ---
+def replace_match(m):
+    return abbrev_map.get(m.group(0).lower(), m.group(0))
+
+# --- Per-file processing ---
+def process_file(file):
+    try:
+        df = pd.read_parquet(file)
+        df['CMPNT_MATL_DESC'] = df['CMPNT_MATL_DESC'].str.replace(
+            abbrev_pattern, replace_match, regex=True
+        )
+        df.to_parquet(file, index=False)
+        print(f"✅ Expanded abbreviations in: {os.path.basename(file)}")
+    except Exception as e:
+        print(f"❌ Failed: {os.path.basename(file)} -> {e}")
+
+# --- Main ---
+def main(input_path, abbrev_map_path):
+    global abbrev_map, abbrev_pattern
+
+    # Locate CSV inside mounted path
+    csv_files = glob.glob(os.path.join(abbrev_map_path, "*.csv"))
+    if not csv_files:
+        raise FileNotFoundError(f"No abbreviation CSV found in: {abbrev_map_path}")
+
+    abbrev_df = pd.read_csv(csv_files[0])
+    abbrev_map = {k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])}
+
+    abbrev_pattern = re.compile(
+        r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b',
+        flags=re.IGNORECASE
+    )
+
+    files = glob.glob(os.path.join(input_path, '*.parquet'))
+    with Pool(processes=cpu_count()) as pool:
+        pool.map(process_file, files)
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input_path', required=True)
+    parser.add_argument('--abbrev_map', required=True)  # ✅ now required
+    parser.add_argument('--output_path')  # Not used, but kept for compatibility
+    args = parser.parse_args()
+
+    main(args.input_path, args.abbrev_map)
