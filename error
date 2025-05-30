@@ -1,130 +1,140 @@
-# step_1a_extract_and_merge.py
+# pipeline_runner.py
 
+from azureml.core import Workspace, Environment, Experiment
+from azureml.pipeline.core import Pipeline, PipelineData
+from azureml.pipeline.steps import PythonScriptStep
+from azureml.core.runconfig import RunConfiguration
+from azureml.data.datapath import DataPath
+from azureml.data import OutputFileDatasetConfig
+from azureml.core import Dataset
 import os
-import glob
-import argparse
-import pandas as pd
-from azureml.core import Run
-from multiprocessing import Pool, cpu_count
 
-# === Column to match ===
-JOIN_COL_1 = "CMPNT_CAT_CD_DESC"
-JOIN_COL_2 = "CMPNT_MATL_TYPE_CD"
-DIRECT_MAP_KEY_1 = "Direct Mapping"
-DIRECT_MAP_KEY_2 = "Material Type"
+# === Load workspace ===
+ws = Workspace.from_config(path=".azureml/dev_config.json")
+compute_name = "llm-gpu-cluster-2"
+env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
 
-# === Merge one file ===
-def process_file(file_path, mapping_df, mapped_dir, needs_model_dir):
-   
+run_config = RunConfiguration()
+run_config.target = compute_name
+run_config.environment = env
 
-    try:
-        df = pd.read_parquet(file_path, columns=["CMPNT_MATL_NUM", 'CMPNT_MATL_DESC',
-    'CMPNT_MATL_TYPE_CD',
-    'CMPNT_CAT_CD_DESC',
-    'CMPNT_UOM_CD'])
-        df.drop_duplicates(inplace=True)
+# === Output and input shared folders ===
+data_step1_out = PipelineData(name="data_step1_out", is_directory=True)
+data_step1a_mapped = PipelineData(name="data_step1a_mapped", is_directory=True)
+data_step1a_unmapped = PipelineData(name="data_step1a_unmapped", is_directory=True)
+data_step2_out = PipelineData(name="data_step2_out", is_directory=True)
+data_step3_out = PipelineData(name="data_step3_out", is_directory=True)
+data_step4_out = PipelineData(name="data_step4_out", is_directory=True)
 
-        df[JOIN_COL_1] = df[JOIN_COL_1].fillna("").astype(str).str.strip()
-        df[JOIN_COL_2] = df[JOIN_COL_2].fillna("").astype(str).str.strip()
-        mapping_df[DIRECT_MAP_KEY_1] = mapping_df[DIRECT_MAP_KEY_1].astype(str).str.strip()
-        mapping_df[DIRECT_MAP_KEY_2] = mapping_df[DIRECT_MAP_KEY_2].astype(str).str.strip()
+# === Upload high_conf_mapping.csv from local folder to datastore ===
+default_ds = ws.get_default_datastore()
 
-        # Stage 1 mapping: based on CMPNT_CAT_CD_DESC only
-        stage1_df = df.merge(mapping_df, how="inner", left_on=[JOIN_COL_1], right_on=[DIRECT_MAP_KEY_1])
-        stage1_df['matching_reason'] = 'direct_mapping_category'
-        stage1_df['confidence_score'] = 1.0
+# Upload file as before
+default_ds.upload_files(
+    files=['./local_data/high_conf_direct_mapping.csv'],
+    target_path='high_conf_map',   # <== IMPORTANT: Folder name
+    overwrite=True,
+    show_progress=True
+)
 
-        # Stage 2 mapping: based on CMPNT_MATL_TYPE_CD only (excluding already mapped)
-        df_not_mapped_in_stage1 = df[~df['CMPNT_MATL_NUM'].isin(stage1_df['CMPNT_MATL_NUM'])]
-        stage2_df = df_not_mapped_in_stage1.merge(mapping_df, how="inner", left_on=[JOIN_COL_2], right_on=[DIRECT_MAP_KEY_2])
-        stage2_df['matching_reason'] = 'direct_mapping_type_only'
-        stage2_df['confidence_score'] = 1.0
+# Register or create file dataset
+high_conf_dataset = Dataset.File.from_files((default_ds, 'high_conf_map'))
+high_conf_mount = high_conf_dataset.as_named_input('high_conf_map').as_mount()
 
-        # Combine both mappings
-        mapped_df = pd.concat([stage1_df, stage2_df], ignore_index=True)
-        print("Mapped file")
-        print(mapped_df.head(5))
+# === Step 1: Data Pull ===
+data_pull_step = PythonScriptStep(
+    name="Step 1 - Pull Dataset",
+    script_name="step_1_data_pull.py",
+    source_directory="scripts",
+    arguments=["--output_path", data_step1_out],
+    outputs=[data_step1_out],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
 
-        # Add mapping flags
-        mapped_df['Final Category Filled'] = mapped_df['Final Category'].notna() & mapped_df['Final Category'].str.strip().ne("")
-        mapped_df['Final Subcategory Filled'] = mapped_df['Final Subcategory'].notna() & mapped_df['Final Subcategory'].str.strip().ne("")
-        mapped_df['needs_model'] = ~mapped_df['Final Category Filled'] | ~mapped_df['Final Subcategory Filled']
+# === Step 1a: High Confidence Merge ===
+high_conf_merge_step = PythonScriptStep(
+    name="Step 1a - High Confidence Merge",
+    script_name="step_1a_extract_and_merge.py",
+    source_directory="scripts",
+    inputs=[data_step1_out, high_conf_mount],
+    arguments=[
+        "--input_path", data_step1_out,
+         "--mapping_csv", high_conf_mount,   
+        "--mapped_output", data_step1a_mapped,
+        "--unmapped_output", data_step1a_unmapped
+    ],
+    outputs=[data_step1a_mapped, data_step1a_unmapped],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
 
-        # Split into mapped and needing model
-        mapped_only_df = mapped_df[~mapped_df['needs_model']].copy()
-        needs_model_df = mapped_df[mapped_df['needs_model']].copy()
+# === Step 2: Clean Text ===
+clean_text_step = PythonScriptStep(
+    name="Step 2 - Text Cleaning",
+    script_name="step_2_clean_text.py",
+    source_directory="scripts",
+    inputs=[data_step1a_unmapped],
+    arguments=["--input_path", data_step1a_unmapped, "--output_path", data_step2_out],
+    outputs=[data_step2_out],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
 
-        print(f"✅ Fully mapped: {file_path}, records: {len(mapped_only_df)}")
-        print(f"🔮 Needs model (either cat/subcat): {file_path}, records: {len(needs_model_df)}")
+# === Step 3: Abbreviation Expansion ===
+abbrev_expand_step = PythonScriptStep(
+    name="Step 3 - Expand Abbreviations",
+    script_name="step_3_expand_abbreviation.py",
+    source_directory="scripts",
+    inputs=[data_step2_out],
+    arguments=["--input_path", data_step2_out, "--output_path", data_step3_out],
+    outputs=[data_step3_out],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
 
-        # Output path
-        base_name = os.path.basename(file_path)
-        os.makedirs(mapped_dir, exist_ok=True)
-        os.makedirs(needs_model_dir, exist_ok=True)
+# === Step 4: Feature Engineering ===
+feature_eng_step = PythonScriptStep(
+    name="Step 4 - Feature Engineering",
+    script_name="step_4_feature_engineering.py",
+    source_directory="scripts",
+    inputs=[data_step3_out],
+    arguments=["--input_path", data_step3_out, "--output_path", data_step4_out],
+    outputs=[data_step4_out],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
 
-        mapped_only_df.to_parquet(os.path.join(mapped_dir, base_name), index=False)
-        needs_model_df.to_parquet(os.path.join(needs_model_dir, base_name), index=False)
+# === Step 5: Run Inference ===
+inference_step = PythonScriptStep(
+    name="Step 5 - Run Inference",
+    script_name="step_5_run_inference.py",
+    source_directory="scripts",
+    inputs=[data_step4_out],
+    arguments=["--input_path", data_step4_out],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
 
-    except Exception as e:
-        print(f"❌ Failed to process {file_path}: {e}")
+# === Build pipeline ===
+pipeline = Pipeline(workspace=ws, steps=[
+    data_pull_step,
+    high_conf_merge_step,
+    clean_text_step,
+    abbrev_expand_step,
+    feature_eng_step,
+    inference_step
+])
 
-# === Main script ===
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input_path", type=str, required=True)
-    parser.add_argument("--mapping_csv", type=str, required=True)
-    parser.add_argument("--mapped_output", type=str, required=True)
-    parser.add_argument("--needs_model_output", type=str, required=True)
-    args = parser.parse_args()
+pipeline.validate()
 
-    run = Run.get_context()
-
-    # === Locate CSV inside mounted directory ===
-    csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
-    if not csv_files:
-        raise FileNotFoundError(f"No CSV file found in mapped directory: {args.mapping_csv}")
-
-    mapping_path = csv_files[0]
-    print(f"📥 Reading mapping from: {mapping_path}")
-    mapping_df = pd.read_csv(mapping_path)
-    mapping_df = mapping_df.drop_duplicates()
-    print(f"📊 Mapping rows: {len(mapping_df)}")
-
-    # === Process input parquet files ===
-    all_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
-    print(f"📁 Total input parquet files found: {len(all_files)}")
-
-    for file_path in all_files:
-        process_file(file_path, mapping_df, args.mapped_output, args.needs_model_output)
-
-if __name__ == "__main__":
-    main()
-
-
-
-error i got 
-Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.scriptrun = azureml.core.script_run:ScriptRun._from_run_dto with exception (packaging 23.2 (/opt/conda/envs/ptca/lib/python3.8/site-packages), Requirement.parse('packaging<=23.0,>=20.0')).
-usage: step_1a_extract_and_merge.py [-h] --input_path INPUT_PATH --mapping_csv
-                                    MAPPING_CSV --mapped_output MAPPED_OUTPUT
-                                    --needs_model_output NEEDS_MODEL_OUTPUT
-step_1a_extract_and_merge.py: error: the following arguments are required: --needs_model_output
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.09643006324768066 seconds
-Traceback (most recent call last):
-  File "step_1a_extract_and_merge.py", line 101, in <module>
-    main()
-  File "step_1a_extract_and_merge.py", line 78, in main
-    args = parser.parse_args()
-  File "/opt/conda/envs/ptca/lib/python3.8/argparse.py", line 1768, in parse_args
-    args, argv = self.parse_known_args(args, namespace)
-  File "/opt/conda/envs/ptca/lib/python3.8/argparse.py", line 1800, in parse_known_args
-    namespace, args = self._parse_known_args(args, namespace)
-  File "/opt/conda/envs/ptca/lib/python3.8/argparse.py", line 2034, in _parse_known_args
-    self.error(_('the following arguments are required: %s') %
-  File "/opt/conda/envs/ptca/lib/python3.8/argparse.py", line 2521, in error
-    self.exit(2, _('%(prog)s: error: %(message)s\n') % args)
-  File "/opt/conda/envs/ptca/lib/python3.8/argparse.py", line 2508, in exit
-    _sys.exit(status)
-SystemExit: 2
-
+# === Submit pipeline ===
+experiment = Experiment(ws, "full_inference_pipeline")
+pipeline_run = experiment.submit(pipeline)
+pipeline_run.wait_for_completion(show_output=True)
