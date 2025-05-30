@@ -1,2 +1,35 @@
-
-Failed to pull Docker image jaob-docker.artifactrepo.jnj.com/box_x_pipeline:predev with authentication mode UsernamePassword due to: DockerResponseServerError { status_code: 500, message: "Head \"https://jaob-docker.artifactrepo.jnj.com/v2/box_x_pipeline/manifests/predev\": unknown: Bad credentials" }. There was an issue connecting with the registry. Please verify that the registry is accessible and that the credentials used are correct.
+Exception: Error registering the environment definition. Code: 409
+: {
+  "error": {
+    "code": "UserError",
+    "severity": null,
+    "message": "Environment Bom_X_Evaluator with version 11 is already registered and cannot be changed.",
+    "messageFormat": "Environment {name} with version {definitionVersion} is already registered and cannot be changed.",
+    "messageParameters": {
+      "name": "Bom_X_Evaluator",
+      "definitionVersion": "11"
+    },
+    "referenceCode": null,
+    "detailsUri": null,
+    "target": null,
+    "details": [],
+    "innerError": {
+      "code": "Conflict",
+      "innerError": {
+        "code": "EnvironmentAlreadyRegistered",
+        "innerError": null
+      }
+    },
+    "debugInfo": null,
+    "additionalInfo": null
+  },
+  "correlation": {
+    "operation": "81553bc1209981968a53f2682cd88719",
+    "request": "7cc5e5e297d58868"
+  },
+  "environment": "eastus",
+  "location": "eastus",
+  "time": "2025-05-30T19:48:24.8919543+00:00",
+  "componentName": "environment-management",
+  "statusCode": 409
+}
