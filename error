@@ -1,10 +1,35 @@
-SRC_SYS_CD	MATL_NUM	MATL_NUM_original	MATL_SHRT_DESC	PLNT_CD	CMPNT_MATL_TYPE_CD	CMPNT_MATL_NUM	CMPNT_MATL_NUM_original	CMPNT_MATL_DESC	text_for_matching_erp	extracted_rm_erp	perc_alpha_char_erp	key_erp	RGN_CD	mat_num	MATL_NUM_original_tru_ref	mat_num_padded	mat_num_original	FG_NM	FG_SPEC_NM	FD_NM	CHILD_NM	CHILD_NM_original	CHILD_TITLE_DESC	spec_type_inferred	TEMPL_TYPE_CD	CHILD_TYPE_CD	ERP_DESC	text_for_matching_tru	text_for_matching_tru_trade_names	extracted_rm_tru	perc_alpha_char_tru	key_tru	SPEC_FLOW_CD	TRD_NM_CONCAT	TRD_NM_FULL	matching_score	unified_mat_code	is_matched	Matching Reason	confidence	match_round	TEMPL_TYPE_CD_AI_SUGGESTED
-BPA	000000000003253304	3253304	JH LIGHT FRAG JELLY 100 MENA	ZA01	P	2111779	02111779	SHRINKFILM 280MM				000000000003253304_2111779_ZA01_BPA																									000000000003253304	FALSE	Off Spec Non Match			
-BPA	000000000003256204	3256204	JH FRAG FREE JELLY 100 ML MENA	ZA01	P	2111779	02111779	SHRINKFILM 280MM				000000000003256204_2111779_ZA01_BPA																									000000000003256204	FALSE	Off Spec Non Match			
-BPA	000000000002069805	2069805	JH LIGHT FRAG JELLY 100 ML ZA	ZA01	P	2111779	02111779	SHRINKFILM 280MM	shrinkfilm		1	000000000002069805_2111779_ZA01_BPA	EMEA	000000000002069805	2069805	000000000002069805	000000000002069805	FG-0038506	2069805 JOHNSON BABY JELLY L/F BMR 100 MILLILITRE	None	PC-055572	PC-055572	LABEL BARCODE printed shrink wrap generic 40x40mm	PC	Labels / Leaflets / Booklets	Packaging Component	JH LIGHT FRAG JELLY 100 ML ZA	label barcode printed shrink wrap generic			1	000000000002069805_PC-055572_ZA01_BPA	FG-0038506>PC-055572			0.45916426181793213	2069805	TRUE	Off Spec Match	medium	18: LLM Embeddings	Labels / Leaflets / Booklets
-BPA	000000000002070205	2070205	JH FRAG FREE JELLY 100 ML ZA	ZA01	P	2111779	02111779	SHRINKFILM 280MM	shrinkfilm		1	000000000002070205_2111779_ZA01_BPA	EMEA	000000000002070205	2070205	000000000002070205	000000000002070205	FG-0038556	2070205 JH BABY JELLY F.FREE 100 ZA BMR	None	PC-055572	PC-055572	LABEL BARCODE printed shrink wrap generic 40x40mm	PC	Labels / Leaflets / Booklets	Packaging Component	JH FRAG FREE JELLY 100 ML ZA	label barcode printed shrink wrap generic			1	000000000002070205_PC-055572_ZA01_BPA	FG-0038556>PC-055572			0.45916423201560974	2070205	TRUE	Off Spec Match	medium	18: LLM Embeddings	Labels / Leaflets / Booklets
-BPA	000000000003255003	3255003	JH BABY OIL 200 ML ZA	ZA01	P	2111779	02111779	SHRINKFILM 280MM	shrinkfilm		1	000000000003255003_2111779_ZA01_BPA	EMEA	000000000003255003	3255003	000000000003255003	000000000003255003	FG-0007804	3255003 Johnson's Baby Oil 200ml BMR	None	PC-055572	PC-055572	LABEL BARCODE printed shrink wrap generic 40x40mm	PC	Labels / Leaflets / Booklets	Packaging Component	JH BABY OIL 200 ML ZA	label barcode printed shrink wrap generic			1	000000000003255003_PC-055572_ZA01_BPA	FG-0007804>PC-055572			0.4591643214225769	3255003	TRUE	Off Spec Match	medium	18: LLM Embeddings	Labels / Leaflets / Booklets
-BPA	000000000004951303	4951303	JH BEDTIME OIL 200 ML ZA	ZA01	P	2111779	02111779	SHRINKFILM 280MM	shrinkfilm		1	000000000004951303_2111779_ZA01_BPA	EMEA	000000000004951303	4951303	000000000004951303	000000000004951303	FG-0007800	4951303 Johnson's Baby Oil BEDTIME 200ml BMR	None	PC-055572	PC-055572	LABEL BARCODE printed shrink wrap generic 40x40mm	PC	Labels / Leaflets / Booklets	Packaging Component	JH BEDTIME OIL 200 ML ZA	label barcode printed shrink wrap generic			1	000000000004951303_PC-055572_ZA01_BPA	FG-0007800>PC-055572			0.4591643214225769	4951303	TRUE	Off Spec Match	medium	18: LLM Embeddings	Labels / Leaflets / Booklets
-BPA	000000000090545100	90545100	JH LIGHT FRAG JELLY 100 ML TR	ZA01	P	2111779	02111779	SHRINKFILM 280MM	shrinkfilm		1	000000000090545100_2111779_ZA01_BPA	EMEA	000000000090545100	90545100	000000000090545100	000000000090545100	FG-0060580	90545100 JOHNSON'S BABY JELLY LIGHTLY FRAGRANCE 100ML TURKEY BMR	None	PC-055572	PC-055572	LABEL BARCODE printed shrink wrap generic 40x40mm	PC	Labels / Leaflets / Booklets	Packaging Component	JH LIGHT FRAG JELLY 100 ML TR	label barcode printed shrink wrap generic			1	000000000090545100_PC-055572_ZA01_BPA	FG-0060580>PC-055572			0.4591643214225769	90545100	TRUE	Off Spec Match	medium	18: LLM Embeddings	Labels / Leaflets / Booklets
-BPA	000000000009383800	9383800	SAVLON A-SEPT LIQUID 125 ZA-EN	ZA01	P	2111779	02111779	SHRINKFILM 280MM	shrinkfilm		1	000000000009383800_2111779_ZA01_BPA	EMEA	000000000009383800	9383800	000000000009383800	000000000009383800	FG-0010922	Savlon Antiseptic Liquid 125ml - Dishman 9383800	FD-0003634	RM-017203	RM-017203	Purified water	RM	None	INGREDIENT	SAVLON A-SEPT LIQUID 125 ZA-EN	purified	purified	rm017203	1	000000000009383800_RM-017203_ZA01_BPA	FG-0010922 > FD-0003634 > RM-017203	purified water usp-	water usp- purified	0.4	9383800	TRUE	Off Spec Match	medium	16: Leven Similarity	None
-BPA	000000000009392300	9392300	SAVLON A-SEPT LIQUID 75  ZA-EN	ZA01	P	2111779	02111779	SHRINKFILM 280MM	shrinkfilm		1	000000000009392300_2111779_ZA01_BPA	EMEA	000000000009392300	9392300	000000000009392300	000000000009392300	FG-0010920	9392300 Savlon Antiseptic Liquid 75ml - Dishman	FD-0003634	RM-017203	RM-017203	Purified water	RM	None	INGREDIENT	SAVLON A-SEPT LIQUID 75  ZA-EN	purified	purified	rm017203	1	000000000009392300_RM-017203_ZA01_BPA	FG-0010920 > FD-0003634 > RM-017203	purified water usp-	water usp- purified	0.4	9392300	TRUE	Off Spec Match	medium	16: Leven Similarity	None
+ ##############NLP_LIST_ERP########
+    print('-' * 60)
+    NLP_list_ERP_folder = os.path.dirname(os.path.realpath(__file__))
+    NLP_list_ERP_folder = os.path.abspath(os.path.join(NLP_list_ERP_folder, os.pardir))
+    xmatches_NLP_list_ERP = pd.read_csv(f'{NLP_list_ERP_folder}/reference_tables/NLP_list_ERP.csv',encoding='latin1',dtype='str')
+    #xmatches_EPR_priority_confidence=xmatches_EPR_priority_confidence.astype(str)
+    print('reading xmatches_EPR_priority_confidence file from folder ')
+    print(xmatches_NLP_list_ERP)
+    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP.merge(
+        erp[['text_for_matching_erp', ERP_PART_ID]].drop_duplicates(),
+        how='left',
+        on=ERP_PART_ID)
+    print('mapping using ERP PART ID')
+    print(xmatches_NLP_list_ERP_with_text)
+    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text.merge(
+        tru[['text_for_matching_tru', TRU_SPEC_ID]].drop_duplicates(),
+        how='left',
+        on=TRU_SPEC_ID)
+    print('mapping using TRU_SPEC_ID')
+    print(xmatches_NLP_list_ERP_with_text)
+    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text[[ERP_PART_ID,
+                                                             TRU_SPEC_ID,
+                                                             'text_for_matching_erp',
+                                                             'text_for_matching_tru']]
+    print('xmatches_NLP_list_ERP_with_text s1',xmatches_NLP_list_ERP_with_text)
+    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text.drop_duplicates()
+    print('xmatches_NLP_list_ERP_with_text s2',xmatches_NLP_list_ERP_with_text)
+    matches_NLP_list_ERP, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
+                                                                                           tru_to_match,
+                                                                                           xmatches_NLP_list_ERP_with_text,
+                                                                                           previous_round,
+                                                                                           'matches_NLP_list_ERP suggested X-match',
+                                                                                           bundles)
+    check_duplicates(matches_NLP_list_ERP)
+    print(matches_NLP_list_ERP)
