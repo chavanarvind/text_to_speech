@@ -1,16 +1,19 @@
-from azureml.core import Workspace, Environment
+Traceback (most recent call last):
+  File ".\download_data.py", line 50, in <module>
+    ws = Workspace.from_config(path=".azureml/dev_config.json")
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\core\workspace.py", line 288, in from_config
+    subscription_id, resource_group, workspace_name = project_info.get_workspace_info(
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\_project\project_info.py", line 43, in get_workspace_info
+  File "C:\Users\AChava05\AppData\Local\Programs\Python\Python38\lib\json\__init__.py", line 293, in load
+    return loads(fp.read(),
+OSError: [Errno 22] Invalid argument
+(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline>
 
-# Load your workspace config
-ws = Workspace.from_config(path=".azureml/dev_config.json")
 
-# Load and modify existing environment
-env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
-env.python.conda_dependencies.add_pip_package("lightgbm")
 
-# Optionally rename the environment (only if you want versioning)
-# env.name = "Bom_X_Evaluator_v2"
 
-# Register the updated environment
-env.register(workspace=ws)
 
-print(f"✅ Updated environment: {env.name}")
+
+
+
+
