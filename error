@@ -1,35 +1,64 @@
- ##############NLP_LIST_ERP########
-    print('-' * 60)
-    NLP_list_ERP_folder = os.path.dirname(os.path.realpath(__file__))
-    NLP_list_ERP_folder = os.path.abspath(os.path.join(NLP_list_ERP_folder, os.pardir))
-    xmatches_NLP_list_ERP = pd.read_csv(f'{NLP_list_ERP_folder}/reference_tables/NLP_list_ERP.csv',encoding='latin1',dtype='str')
-    #xmatches_EPR_priority_confidence=xmatches_EPR_priority_confidence.astype(str)
-    print('reading xmatches_EPR_priority_confidence file from folder ')
-    print(xmatches_NLP_list_ERP)
-    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP.merge(
-        erp[['text_for_matching_erp', ERP_PART_ID]].drop_duplicates(),
-        how='left',
-        on=ERP_PART_ID)
-    print('mapping using ERP PART ID')
-    print(xmatches_NLP_list_ERP_with_text)
-    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text.merge(
-        tru[['text_for_matching_tru', TRU_SPEC_ID]].drop_duplicates(),
-        how='left',
-        on=TRU_SPEC_ID)
-    print('mapping using TRU_SPEC_ID')
-    print(xmatches_NLP_list_ERP_with_text)
-    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text[[ERP_PART_ID,
-                                                             TRU_SPEC_ID,
-                                                             'text_for_matching_erp',
-                                                             'text_for_matching_tru']]
-    print('xmatches_NLP_list_ERP_with_text s1',xmatches_NLP_list_ERP_with_text)
-    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text.drop_duplicates()
-    print('xmatches_NLP_list_ERP_with_text s2',xmatches_NLP_list_ERP_with_text)
-    matches_NLP_list_ERP, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
-                                                                                           tru_to_match,
-                                                                                           xmatches_NLP_list_ERP_with_text,
-                                                                                           previous_round,
-                                                                                           'matches_NLP_list_ERP suggested X-match',
-                                                                                           bundles)
-    check_duplicates(matches_NLP_list_ERP)
-    print(matches_NLP_list_ERP)
+import os
+import argparse
+import pandas as pd
+import numpy as np
+import torch
+import joblib
+from azureml.core import Run, Model
+from sentence_transformers import SentenceTransformer
+
+def main(input_path):
+    run = Run.get_context()
+    ws = run.experiment.workspace
+
+    # Load registered model folder (contains model + encoder + scaler)
+    model_dir = Model.get_model_path("lightgbm_Bert_RPM_Category_model", _workspace=ws)
+    model = joblib.load(os.path.join(model_dir, "final_model.joblib"))
+    ordinal = joblib.load(os.path.join(model_dir, "ordinal_encoder.pkl"))
+    scaler = joblib.load(os.path.join(model_dir, "scaler.pkl"))
+
+    # Load all parquet files
+    files = [f for f in os.listdir(input_path) if f.endswith(".parquet")]
+    for f in files:
+        file_path = os.path.join(input_path, f)
+        df = pd.read_parquet(file_path)
+
+        # BERT encoder
+        encoder = SentenceTransformer('pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb',
+                                      device='cuda' if torch.cuda.is_available() else 'cpu')
+        encoder.max_seq_length = 128
+
+        # Embed descriptions
+        desc_emb = encoder.encode(
+            df['CMPNT_MATL_DESC'].astype(str).tolist(),
+            batch_size=256,
+            show_progress_bar=True,
+            convert_to_numpy=True,
+            num_workers=4
+        )
+
+        # Transform other features
+        length_scaled = scaler.transform(df[['CMPNT_MATL_DESC_LEN']])
+        cat_encoded = ordinal.transform(df[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+        X_pred = np.hstack([desc_emb, length_scaled, cat_encoded])
+
+        # Predict
+        y_proba = model.predict_proba(X_pred)
+        y_score = np.max(y_proba, axis=1)
+        y_pred = model.predict(X_pred)
+
+        df['Score'] = y_score
+        df['Predicted'] = y_pred
+        df['Final_Prediction'] = np.where(y_score < 0.6, 'Other', y_pred)
+
+        # Save results
+        output_path = os.path.join("outputs", f"predicted_{f}")
+        os.makedirs("outputs", exist_ok=True)
+        df.to_parquet(output_path, index=False)
+        print(f" Inference done: {output_path}")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_path", type=str, required=True)
+    args = parser.parse_args()
+    main(args.input_path)
