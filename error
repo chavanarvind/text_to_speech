@@ -1,6 +1,9 @@
-arguments=[
-    "--input_path", data_step1_out,
-    "--mapping_csv", high_conf_mount,
-    "--mapped_output", data_step1a_mapped,
-    "--needs_model_output", data_step1a_unmapped  # ✅ fixed name here
-],
+Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.scriptrun = azureml.core.script_run:ScriptRun._from_run_dto with exception (packaging 23.2 (/opt/conda/envs/ptca/lib/python3.8/site-packages), Requirement.parse('packaging<=23.0,>=20.0')).
+📥 Reading mapping from: /mnt/azureml/cr/j/15739bd472164ddf8bb03bdbb84e3e58/cap/data-capability/wd/INPUT_high_conf_map/high_conf_direct_mapping.csv
+📊 Mapping rows: 503
+📁 Total input parquet files found: 2
+❌ Failed to process /mnt/azureml/cr/j/15739bd472164ddf8bb03bdbb84e3e58/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/047b5c80-3dd9-4835-ac63-ec4a98180ae6/data_step1_out/part-00000-0042fc95-a813-4a78-a5ea-9d565974a2b5-c000.snappy.parquet: 'Material Type'
+❌ Failed to process /mnt/azureml/cr/j/15739bd472164ddf8bb03bdbb84e3e58/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/047b5c80-3dd9-4835-ac63-ec4a98180ae6/data_step1_out/part-00000-00bb3abb-2599-4885-a2cf-085958187528-c000.snappy.parquet: 'Material Type'
+Cleaning up all outstanding Run operations, waiting 300.0 seconds
+1 items cleaning up...
+Cleanup took 0.09987545013427734 seconds
