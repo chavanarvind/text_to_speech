@@ -1,19 +1,15 @@
 Traceback (most recent call last):
   File ".\download_data.py", line 50, in <module>
-    ws = Workspace.from_config(path=".azureml/dev_config.json")
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\core\workspace.py", line 288, in from_config
-    subscription_id, resource_group, workspace_name = project_info.get_workspace_info(
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\_project\project_info.py", line 43, in get_workspace_info
-  File "C:\Users\AChava05\AppData\Local\Programs\Python\Python38\lib\json\__init__.py", line 293, in load
-    return loads(fp.read(),
-OSError: [Errno 22] Invalid argument
-(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline>
-
-
-
-
-
-
-
-
-
+    ws = Workspace.from_config(path="./azureml_bom_work/.azureml/dev_config.json")
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\core\workspace.py", line 280, in from_config
+    raise UserErrorException(
+azureml.exceptions._azureml_exception.UserErrorException: UserErrorException:
+        Message: The workspace configuration file config.json, could not be found in C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\azureml_bom_work\.azureml\dev_config.json or its parent directories. Please check whether the workspace configuration file exists, or provide the full path to the configuration file as an argument. You can download a configuration file for your workspace, via http://ml.azure.com and clicking on the name of your workspace in the right top.
+        InnerException None
+        ErrorResponse
+{
+    "error": {
+        "code": "UserError",
+        "message": "The workspace configuration file config.json, could not be found in C:\\Users\\AChava05\\OneDrive - Kenvue\\AChava05\\azureml_bom_work\\run_pipeline\\azureml_bom_work\\.azureml\\dev_config.json or its parent directories. Please check whether the workspace configuration file exists, or provide the full path to the configuration file as an argument. You can download a configuration file for your workspace, via http://ml.azure.com and clicking on the name of your workspace in the right top."
+    }
+}
