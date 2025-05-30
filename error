@@ -1,14 +1,28 @@
-abbrev_expand_step = PythonScriptStep(
-    name="Step 3 - Expand Abbreviations",
-    script_name="step_3_expand_abbreviation.py",
-    source_directory="scripts",
-    inputs=[data_step2_out, abbrev_mount],
-    arguments=[
-        "--input_path", data_step2_out,
-        "--abbrev_map", abbrev_mount  # ✅ pass abbreviation CSV location
-    ],
-    outputs=[data_step3_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
+def main(input_path, abbrev_map_path):
+    global abbrev_map, abbrev_pattern
+
+    # Find CSV inside mounted path
+    csv_files = glob.glob(os.path.join(abbrev_map_path, "*.csv"))
+    if not csv_files:
+        raise FileNotFoundError(f"No abbreviation CSV found in {abbrev_map_path}")
+    
+    abbrev_df = pd.read_csv(csv_files[0])
+    abbrev_map = {k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])}
+
+    abbrev_pattern = re.compile(
+        r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b',
+        flags=re.IGNORECASE
+    )
+
+    files = glob.glob(os.path.join(input_path, '*.parquet'))
+    with Pool(processes=cpu_count()) as pool:
+        pool.map(process_file, files)
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input_path', required=True)
+    parser.add_argument('--abbrev_map', required=True)  # ✅ new argument
+    parser.add_argument('--output_path')  # Not used
+    args = parser.parse_args()
+
+    main(args.input_path, args.abbrev_map)
