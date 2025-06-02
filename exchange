@@ -1,16 +1,4 @@
-# === Step 3: Abbreviation Expansion ===
-abbrev_expand_step = PythonScriptStep(
-    name="Step 3 - Expand Abbreviations",
-    script_name="step_3_expand_abbreviation.py",
-    source_directory="scripts",
-    inputs=[data_step2_out, abbrev_mount],
-    arguments=[
-        "--input_path", data_step2_out,
-        "--abbrev_map", abbrev_mount,
-        "--output_path", data_step3_out   # ✅ ADD THIS
-    ],
-    outputs=[data_step3_out],            # ✅ INCLUDE output
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
+Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
+  File "step_3_expand_abbreviation.py", line 64, in <module>
+    main(args.input_path, args.abbrev_map)
+TypeError: main() missing 1 required positional argument: 'output_path'
