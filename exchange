@@ -1,12 +1,99 @@
-Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.scriptrun = azureml.core.script_run:ScriptRun._from_run_dto with exception (packaging 23.2 (/opt/conda/envs/ptca/lib/python3.8/site-packages), Requirement.parse('packaging<=23.0,>=20.0')).
-📖 Loaded abbreviation map: /mnt/azureml/cr/j/1de8ec6100f741e19e3fbdfc0cc8b9b0/cap/data-capability/wd/INPUT_abbrev_map/abbreviation_expension_updated.csv (496 entries)
-📁 Found 3 files to process in /mnt/azureml/cr/j/1de8ec6100f741e19e3fbdfc0cc8b9b0/cap/data-capability/wd/INPUT_data_step2_out_workspaceblobstore/azureml/f56f71ee-b84b-42d5-9a7c-088cd45c1c26/data_step2_out
-✅ Expanded abbreviations in: /mnt/azureml/cr/j/1de8ec6100f741e19e3fbdfc0cc8b9b0/cap/data-capability/wd/INPUT_data_step2_out_workspaceblobstore/azureml/f56f71ee-b84b-42d5-9a7c-088cd45c1c26/data_step2_out/part-00000-00bb5c5d-ffa7-4fff-9b9c-7fdfa729ffb8-c000.snappy.parquet
-✅ Expanded abbreviations in: /mnt/azureml/cr/j/1de8ec6100f741e19e3fbdfc0cc8b9b0/cap/data-capability/wd/INPUT_data_step2_out_workspaceblobstore/azureml/f56f71ee-b84b-42d5-9a7c-088cd45c1c26/data_step2_out/part-00000-0042fc95-a813-4a78-a5ea-9d565974a2b5-c000.snappy.parquet
-✅ Expanded abbreviations in: /mnt/azureml/cr/j/1de8ec6100f741e19e3fbdfc0cc8b9b0/cap/data-capability/wd/INPUT_data_step2_out_workspaceblobstore/azureml/f56f71ee-b84b-42d5-9a7c-088cd45c1c26/data_step2_out/part-00000-00bb3abb-2599-4885-a2cf-085958187528-c000.snappy.parquet
-✅ Abbreviation expansion completed.
+import os
+import argparse
+import pandas as pd
+import numpy as np
+import torch
+import joblib
+import subprocess
+subprocess.run(["pip", "install", "lightgbm"], check=True)
+from azureml.core import Run, Model
+from sentence_transformers import SentenceTransformer
 
-feature eng ste4 log is below
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.10665321350097656 seconds
+
+def main(input_path):
+    run = Run.get_context()
+    ws = run.experiment.workspace
+
+    print("🔍 Loading model artifacts...")
+    model_dir = Model.get_model_path("lightgbm_Bert_RPM_Category_model", _workspace=ws)
+    model = joblib.load(os.path.join(model_dir, "final_model.joblib"))
+    ordinal = joblib.load(os.path.join(model_dir, "ordinal_encoder.pkl"))
+    scaler = joblib.load(os.path.join(model_dir, "scaler.pkl"))
+
+    encoder = SentenceTransformer(
+        'pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb',
+        device='cuda' if torch.cuda.is_available() else 'cpu'
+    )
+    encoder.max_seq_length = 128
+
+    print("📁 Scanning input files...")
+    files = [f for f in os.listdir(input_path) if f.endswith(".parquet")]
+    print(f"📦 Found {len(files)} files to process.")
+
+    for f in files:
+        print(f"\n📄 Processing file: {f}")
+        file_path = os.path.join(input_path, f)
+        df_all = pd.read_parquet(file_path)
+
+        df_pred = df_all[df_all.get('needs_model', True)].copy()
+        if df_pred.empty:
+            print("✅ Skipped: No rows needing prediction in this file.")
+            df_out = df_all.copy()
+        else:
+            print(f"🧠 Rows needing prediction: {len(df_pred)}")
+
+            # Generate BERT embeddings
+            print("🔎 Encoding descriptions with BERT...")
+            desc_emb = encoder.encode(
+                df_pred['CMPNT_MATL_DESC'].astype(str).tolist(),
+                batch_size=256,
+                show_progress_bar=True,
+                convert_to_numpy=True,
+                num_workers=4
+            )
+
+            # Transform structured features
+            print("⚙️ Transforming structured features...")
+            length_scaled = scaler.transform(df_pred[['CMPNT_MATL_DESC_LEN']])
+            cat_encoded = ordinal.transform(df_pred[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+            X_pred = np.hstack([desc_emb, length_scaled, cat_encoded])
+
+            print("📈 Predicting categories...")
+            y_proba = model.predict_proba(X_pred)
+            y_score = np.max(y_proba, axis=1)
+            y_pred = model.predict(X_pred)
+
+            df_pred['Score'] = y_score
+            df_pred['Predicted'] = y_pred
+            df_pred['Final_Prediction'] = np.where(y_score < 0.6, 'Other', y_pred)
+            df_pred['prediction_flag'] = np.where(y_score < 0.6, 'Low Confidence', 'High Confidence')
+            df_pred['inferred_category_model'] = 'lightgbm_Bert_RPM_Category_model'
+
+            print(f"✅ Finished prediction. High-confidence rows: {(y_score >= 0.6).sum()}")
+
+            # Merge predictions and input features back
+            merge_cols = [
+                'CMPNT_MATL_NUM', 'Final_Prediction', 'Score',
+                'prediction_flag', 'inferred_category_model',
+                'CMPNT_MATL_DESC_LEN', 'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY'
+            ]
+
+            df_out = df_all.merge(df_pred[merge_cols], on='CMPNT_MATL_NUM', how='left')
+
+        # Fill mapped predictions from Final Category
+        if 'Final Category' in df_out.columns:
+            fill_mask = df_out['Final_Prediction'].isna() & df_out['Final Category'].notna()
+            df_out.loc[fill_mask, 'Final_Prediction'] = df_out.loc[fill_mask, 'Final Category']
+            print(f"🧩 Filled {fill_mask.sum()} predictions from mapped Final Category.")
+
+        # Save output
+        os.makedirs("outputs", exist_ok=True)
+        output_path = os.path.join("outputs", f"predicted_{f}")
+        df_out.to_parquet(output_path, index=False)
+        print(f"💾 Saved: {output_path}")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_path", type=str, required=True)
+    args = parser.parse_args()
+    main(args.input_path)
