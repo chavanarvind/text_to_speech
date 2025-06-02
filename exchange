@@ -1,24 +1,22 @@
-def main(input_path, abbrev_map_path, output_path):
-    global abbrev_map, abbrev_pattern
+Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.scriptrun = azureml.core.script_run:ScriptRun._from_run_dto with exception (packaging 23.2 (/opt/conda/envs/ptca/lib/python3.8/site-packages), Requirement.parse('packaging<=23.0,>=20.0')).
+usage: step_3_expand_abbreviation.py [-h] --input_path INPUT_PATH --abbrev_map
+                                     ABBREV_MAP --output_path OUTPUT_PATH
+step_3_expand_abbreviation.py: error: the following arguments are required: --output_path
+Cleaning up all outstanding Run operations, waiting 300.0 seconds
+1 items cleaning up...
+Cleanup took 0.10051631927490234 seconds
+Traceback (most recent call last):
+  File "step_3_expand_abbreviation.py", line 62, in <module>
+    args = parser.parse_args()
+  File "/opt/conda/envs/ptca/lib/python3.8/argparse.py", line 1768, in parse_args
+    args, argv = self.parse_known_args(args, namespace)
+  File "/opt/conda/envs/ptca/lib/python3.8/argparse.py", line 1800, in parse_known_args
+    namespace, args = self._parse_known_args(args, namespace)
+  File "/opt/conda/envs/ptca/lib/python3.8/argparse.py", line 2034, in _parse_known_args
+    self.error(_('the following arguments are required: %s') %
+  File "/opt/conda/envs/ptca/lib/python3.8/argparse.py", line 2521, in error
+    self.exit(2, _('%(prog)s: error: %(message)s\n') % args)
+  File "/opt/conda/envs/ptca/lib/python3.8/argparse.py", line 2508, in exit
+    _sys.exit(status)
+SystemExit: 2
 
-    # Load abbreviation map
-    csv_files = glob.glob(os.path.join(abbrev_map_path, "*.csv"))
-    if not csv_files:
-        raise FileNotFoundError(f"No abbreviation CSV found in: {abbrev_map_path}")
-    abbrev_df = pd.read_csv(csv_files[0])
-    abbrev_map = {k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])}
-    abbrev_pattern = re.compile(r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b', flags=re.IGNORECASE)
-
-    # Process files
-    os.makedirs(output_path, exist_ok=True)
-    files = glob.glob(os.path.join(input_path, '*.parquet'))
-    for file in files:
-        try:
-            df = pd.read_parquet(file)
-            df['CMPNT_MATL_DESC'] = df['CMPNT_MATL_DESC'].str.replace(abbrev_pattern, replace_match, regex=True)
-
-            output_file = os.path.join(output_path, os.path.basename(file))
-            df.to_parquet(output_file, index=False)
-            print(f"✅ Expanded abbreviations in: {output_file}")
-        except Exception as e:
-            print(f"❌ Failed: {file} -> {e}")
