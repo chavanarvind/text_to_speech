@@ -1,1 +1,6 @@
-  main(args.input_path, args.abbrev_map, args.output_path)
+Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
+  File "step_5_run_inference.py", line 99, in <module>
+    main(args.input_path)
+  File "step_5_run_inference.py", line 47, in main
+    desc_emb = encoder.encode(
+TypeError: encode() got an unexpected keyword argument 'num_workers'
