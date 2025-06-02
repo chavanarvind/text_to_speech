@@ -1,132 +1,152 @@
+# pipeline_runner.py
 
-
-
-
-
+from azureml.core import Workspace, Environment, Experiment
+from azureml.pipeline.core import Pipeline, PipelineData
+from azureml.pipeline.steps import PythonScriptStep
+from azureml.core.runconfig import RunConfiguration
+from azureml.data.datapath import DataPath
+from azureml.data import OutputFileDatasetConfig
+from azureml.core import Dataset
 import os
-import argparse
-import pandas as pd
-import numpy as np
-import torch
-import joblib
-import subprocess
-subprocess.run(["pip", "install", "lightgbm"], check=True)
-from azureml.core import Run, Model
-from sentence_transformers import SentenceTransformer
 
+# === Load workspace ===
+ws = Workspace.from_config(path=".azureml/dev_config.json")
+compute_name = "llm-gpu-cluster-2"
+env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
 
-def main(input_path):
-    run = Run.get_context()
-    ws = run.experiment.workspace
+run_config = RunConfiguration()
+run_config.target = compute_name
+run_config.environment = env
 
-    print("🔍 Loading model artifacts...")
-    model_dir = Model.get_model_path("lightgbm_Bert_RPM_Category_model", _workspace=ws)
-    model = joblib.load(os.path.join(model_dir, "final_model.joblib"))
-    ordinal = joblib.load(os.path.join(model_dir, "ordinal_encoder.pkl"))
-    scaler = joblib.load(os.path.join(model_dir, "scaler.pkl"))
-warnings.warn(
-📁 Scanning input files...
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.12472367286682129 seconds
-Traceback (most recent call last):
-  File "step_5_run_inference.py", line 99, in <module>
-    main(args.input_path)
-  File "step_5_run_inference.py", line 30, in main
-    files = [f for f in os.listdir(input_path) if f.endswith(".parquet")]
-FileNotFoundError: [Errno 2] No such file or directory: '/mnt/azureml/cr/j/c5c3c4e0056d42879b0be5fb91c7d773/cap/data-capability/wd/INPUT_data_step4_out_workspaceblobstore/azureml/0957401e-01ad-44ef-b795-5b99e3bc6f84/data_step4_out'
+# === Output and input shared folders ===
+data_step1_out = PipelineData(name="data_step1_out", is_directory=True)
+data_step1a_mapped = PipelineData(name="data_step1a_mapped", is_directory=True)
+data_step1a_unmapped = PipelineData(name="data_step1a_unmapped", is_directory=True)
+data_step2_out = PipelineData(name="data_step2_out", is_directory=True)
+data_step3_out = PipelineData(name="data_step3_out", is_directory=True)
+data_step4_out = PipelineData(name="data_step4_out", is_directory=True)
 
+# === Upload high_conf_mapping.csv from local folder to datastore ===
+default_ds = ws.get_default_datastore()
 
-    encoder = SentenceTransformer(
-        'pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb',
-        device='cuda' if torch.cuda.is_available() else 'cpu'
-    )
-    encoder.max_seq_length = 128
+# Upload file as before
+default_ds.upload_files(
+    files=['./local_data/high_conf_direct_mapping.csv'],
+    target_path='high_conf_map',   # <== IMPORTANT: Folder name
+    overwrite=True,
+    show_progress=True
+)
 
-    print("📁 Scanning input files...")
-    files = [f for f in os.listdir(input_path) if f.endswith(".parquet")]
-    print(f"📦 Found {len(files)} files to process.")
+# Register or create file dataset
+high_conf_dataset = Dataset.File.from_files((default_ds, 'high_conf_map'))
+high_conf_mount = high_conf_dataset.as_named_input('high_conf_map').as_mount()
 
-    for f in files:
-        print(f"\n📄 Processing file: {f}")
-        file_path = os.path.join(input_path, f)
-        df_all = pd.read_parquet(file_path)
+default_ds.upload_files(
+    files=['./local_data/abbreviation_expension_updated.csv'],
+    target_path='abbrev_map',
+    overwrite=True,
+    show_progress=True
+)
+abbrev_dataset = Dataset.File.from_files((default_ds, 'abbrev_map'))
+abbrev_mount = abbrev_dataset.as_named_input('abbrev_map').as_mount()
 
-        df_pred = df_all[df_all.get('needs_model', True)].copy()
-        if df_pred.empty:
-            print("✅ Skipped: No rows needing prediction in this file.")
-            df_out = df_all.copy()
-        else:
-            print(f"🧠 Rows needing prediction: {len(df_pred)}")
+# === Step 1: Data Pull ===
+data_pull_step = PythonScriptStep(
+    name="Step 1 - Pull Dataset",
+    script_name="step_1_data_pull.py",
+    source_directory="scripts",
+    arguments=["--output_path", data_step1_out],
+    outputs=[data_step1_out],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
 
-            # Generate BERT embeddings
-            print("🔎 Encoding descriptions with BERT...")
-            desc_emb = encoder.encode(
-                df_pred['CMPNT_MATL_DESC'].astype(str).tolist(),
-                batch_size=256,
-                show_progress_bar=True,
-                convert_to_numpy=True,
-                num_workers=4
-            )
+# === Step 1a: High Confidence Merge ===
+high_conf_merge_step = PythonScriptStep(
+    name="Step 1a - High Confidence Merge",
+    script_name="step_1a_extract_and_merge.py",
+    source_directory="scripts",
+    inputs=[data_step1_out, high_conf_mount],
+    arguments=[
+        "--input_path", data_step1_out,
+         "--mapping_csv", high_conf_mount,   
+        "--mapped_output", data_step1a_mapped,
+        "--needs_model_output", data_step1a_unmapped
+    ],
+    outputs=[data_step1a_mapped, data_step1a_unmapped],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
 
-            # Transform structured features
-            print("⚙️ Transforming structured features...")
-            length_scaled = scaler.transform(df_pred[['CMPNT_MATL_DESC_LEN']])
-            cat_encoded = ordinal.transform(df_pred[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
-            X_pred = np.hstack([desc_emb, length_scaled, cat_encoded])
+# === Step 2: Clean Text ===
+clean_text_step = PythonScriptStep(
+    name="Step 2 - Text Cleaning",
+    script_name="step_2_clean_text.py",
+    source_directory="scripts",
+    inputs=[data_step1a_unmapped],
+    arguments=["--input_path", data_step1a_unmapped, "--output_path", data_step2_out],
+    outputs=[data_step2_out],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
 
-            print("📈 Predicting categories...")
-            y_proba = model.predict_proba(X_pred)
-            y_score = np.max(y_proba, axis=1)
-            y_pred = model.predict(X_pred)
+# === Step 3: Abbreviation Expansion ===
+abbrev_expand_step = PythonScriptStep(
+    name="Step 3 - Expand Abbreviations",
+    script_name="step_3_expand_abbreviation.py",
+    source_directory="scripts",
+    inputs=[data_step2_out],
+    arguments=[
+        "--input_path", data_step2_out,
+        "--abbrev_map", abbrev_mount  # ✅ pass abbreviation CSV location
+    ],
+    outputs=[data_step3_out],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
 
-            df_pred['Score'] = y_score
-            df_pred['Predicted'] = y_pred
-            df_pred['Final_Prediction'] = np.where(y_score < 0.6, 'Other', y_pred)
-            df_pred['prediction_flag'] = np.where(y_score < 0.6, 'Low Confidence', 'High Confidence')
-            df_pred['inferred_category_model'] = 'lightgbm_Bert_RPM_Category_model'
+# === Step 4: Feature Engineering ===
+feature_eng_step = PythonScriptStep(
+    name="Step 4 - Feature Engineering",
+    script_name="step_4_feature_engineering.py",
+    source_directory="scripts",
+    inputs=[data_step3_out],
+    arguments=["--input_path", data_step3_out, "--output_path", data_step4_out],
+    outputs=[data_step4_out],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
 
-            print(f"✅ Finished prediction. High-confidence rows: {(y_score >= 0.6).sum()}")
+# === Step 5: Run Inference ===
+inference_step = PythonScriptStep(
+    name="Step 5 - Run Inference",
+    script_name="step_5_run_inference.py",
+    source_directory="scripts",
+    inputs=[data_step4_out],
+    arguments=["--input_path", data_step4_out],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
 
-            # Merge predictions and input features back
-            merge_cols = [
-                'CMPNT_MATL_NUM', 'Final_Prediction', 'Score',
-                'prediction_flag', 'inferred_category_model',
-                'CMPNT_MATL_DESC_LEN', 'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY'
-            ]
+# === Build pipeline ===
+pipeline = Pipeline(workspace=ws, steps=[
+    data_pull_step,
+    high_conf_merge_step,
+    clean_text_step,
+    abbrev_expand_step,
+    feature_eng_step,
+    inference_step
+])
 
-            df_out = df_all.merge(df_pred[merge_cols], on='CMPNT_MATL_NUM', how='left')
+pipeline.validate()
 
-        # Fill mapped predictions from Final Category
-        if 'Final Category' in df_out.columns:
-            fill_mask = df_out['Final_Prediction'].isna() & df_out['Final Category'].notna()
-            df_out.loc[fill_mask, 'Final_Prediction'] = df_out.loc[fill_mask, 'Final Category']
-            print(f"🧩 Filled {fill_mask.sum()} predictions from mapped Final Category.")
-
-        # Save output
-        os.makedirs("outputs", exist_ok=True)
-        output_path = os.path.join("outputs", f"predicted_{f}")
-        df_out.to_parquet(output_path, index=False)
-        print(f"💾 Saved: {output_path}")
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input_path", type=str, required=True)
-    args = parser.parse_args()
-    main(args.input_path)
-
-
-
-warnings.warn(
-📁 Scanning input files...
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.12472367286682129 seconds
-Traceback (most recent call last):
-  File "step_5_run_inference.py", line 99, in <module>
-    main(args.input_path)
-  File "step_5_run_inference.py", line 30, in main
-    files = [f for f in os.listdir(input_path) if f.endswith(".parquet")]
-FileNotFoundError: [Errno 2] No such file or directory: '/mnt/azureml/cr/j/c5c3c4e0056d42879b0be5fb91c7d773/cap/data-capability/wd/INPUT_data_step4_out_workspaceblobstore/azureml/0957401e-01ad-44ef-b795-5b99e3bc6f84/data_step4_out'
-
-
+# === Submit pipeline ===
+experiment = Experiment(ws, "full_inference_pipeline")
+pipeline_run = experiment.submit(pipeline)
+pipeline_run.wait_for_completion(show_output=True)
