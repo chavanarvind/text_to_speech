@@ -1,4 +1,1 @@
-Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
-  File "step_3_expand_abbreviation.py", line 64, in <module>
-    main(args.input_path, args.abbrev_map)
-TypeError: main() missing 1 required positional argument: 'output_path'
+  main(args.input_path, args.abbrev_map, args.output_path)
