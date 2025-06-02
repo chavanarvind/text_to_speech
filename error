@@ -1,58 +1,26 @@
+# scripts/step_1_data_pull.py
+
 import os
-import re
-import glob
 import argparse
-import pandas as pd
-from multiprocessing import Pool, cpu_count
+from azureml.core import Run, Dataset
 
-# --- Precompiled regex patterns ---
-patterns = {
-    'non_alphanumeric': re.compile(r'[^A-Za-z0-9&% ]+'),
-    'percent_space': re.compile(r"\s*%\s*"),
-    'remove_canada': re.compile(r'canada\s*\d*|can\s*\d*|ca\s*\d*|ca$|can$|ca\s'),
-    'units': re.compile(r"(\D)(\d+)(\s*)(ml|l|gr|gm|g|ct)"),
-    'spf_space': re.compile(r"(\s)(spf)\s*([\d+])"),
-    'units_no_space': re.compile(r'(\d+)\s*(ml|l|gr|gm|g|ct)(?: |$)'),
-    'spf_number': re.compile(r"(\D)(spf\d+)")
-}
+def main(output_path):
+    # Get run context and workspace
+    run = Run.get_context()
+    ws = run.experiment.workspace
 
-# --- Clean function ---
-def clean_series(series):
-    return (series.str.lower()
-        .str.replace(patterns['non_alphanumeric'], '', regex=True)
-        .str.replace(patterns['percent_space'], '% ', regex=True)
-        .str.replace(patterns['remove_canada'], '', regex=True)
-        .str.replace(patterns['units'], r'\1 \2\3\4 ', regex=True)
-        .str.replace(patterns['spf_space'], r'\1\2\3', regex=True)
-        .str.replace(patterns['units_no_space'], lambda z: z.group().replace(" ", ""), regex=True)
-        .str.replace(patterns['spf_number'], r'\1 \2 ', regex=True))
+    # Get dataset by name
+    dataset = Dataset.get_by_name(ws, name='harmonized_bom_data_asset')
 
-# --- Per-file processor ---
-def process_file(file_info):
-    file_path, output_path = file_info
-    try:
-        df = pd.read_parquet(file_path)
-        df['CMPNT_MATL_DESC'] = clean_series(df['CMPNT_MATL_DESC'].fillna(''))
-
-        out_file = os.path.join(output_path, os.path.basename(file_path))
-        df.to_parquet(out_file, index=False)
-        print(f"✅ Cleaned and saved: {os.path.basename(file_path)}")
-    except Exception as e:
-        print(f"❌ Failed: {os.path.basename(file_path)} -> {e}")
-
-# --- Main ---
-def main(input_path, output_path):
+    # Ensure output directory exists and download dataset
     os.makedirs(output_path, exist_ok=True)
-    files = glob.glob(os.path.join(input_path, '*.parquet'))
-    file_info_list = [(f, output_path) for f in files]
+    dataset.download(target_path=output_path, overwrite=True)
 
-    with Pool(cpu_count()) as pool:
-        pool.map(process_file, file_info_list)
+    print(f" Dataset downloaded to: {output_path}")
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_path', required=True)
-    parser.add_argument('--output_path', required=True)
+    parser.add_argument("--output_path", type=str, required=True)
     args = parser.parse_args()
 
-    main(args.input_path, args.output_path)
+    main(args.output_path)
