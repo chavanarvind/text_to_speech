@@ -1,23 +1,24 @@
-📖 Loaded abbreviation map: /mnt/azureml/cr/j/ee77b27157ed4d6c8a2bfbfa9fd53520/cap/data-capability/wd/INPUT_abbrev_map/abbreviation_expension_updated.csv (496 entries)
-📁 Found 3 files to process in /mnt/azureml/cr/j/ee77b27157ed4d6c8a2bfbfa9fd53520/cap/data-capability/wd/INPUT_data_step2_out_workspaceblobstore/azureml/71b0d2e8-2d5f-4fcb-a079-ea52ff3a5043/data_step2_out
-✅ Expanded abbreviations in: /mnt/azureml/cr/j/ee77b27157ed4d6c8a2bfbfa9fd53520/cap/data-capability/wd/INPUT_data_step2_out_workspaceblobstore/azureml/71b0d2e8-2d5f-4fcb-a079-ea52ff3a5043/data_step2_out/part-00000-00bb5c5d-ffa7-4fff-9b9c-7fdfa729ffb8-c000.snappy.parquet
-✅ Expanded abbreviations in: /mnt/azureml/cr/j/ee77b27157ed4d6c8a2bfbfa9fd53520/cap/data-capability/wd/INPUT_data_step2_out_workspaceblobstore/azureml/71b0d2e8-2d5f-4fcb-a079-ea52ff3a5043/data_step2_out/part-00000-0042fc95-a813-4a78-a5ea-9d565974a2b5-c000.snappy.parquet
-✅ Expanded abbreviations in: /mnt/azureml/cr/j/ee77b27157ed4d6c8a2bfbfa9fd53520/cap/data-capability/wd/INPUT_data_step2_out_workspaceblobstore/azureml/71b0d2e8-2d5f-4fcb-a079-ea52ff3a5043/data_step2_out/part-00000-00bb3abb-2599-4885-a2cf-085958187528-c000.snappy.parquet
-✅ Abbreviation expansion completed.
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.1892561912536621 seconds
+def main(input_path, abbrev_map_path, output_path):
+    global abbrev_map, abbrev_pattern
 
-step 4 feature eng.
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.13711166381835938 seconds
+    # Load abbreviation map
+    csv_files = glob.glob(os.path.join(abbrev_map_path, "*.csv"))
+    if not csv_files:
+        raise FileNotFoundError(f"No abbreviation CSV found in: {abbrev_map_path}")
+    abbrev_df = pd.read_csv(csv_files[0])
+    abbrev_map = {k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])}
+    abbrev_pattern = re.compile(r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b', flags=re.IGNORECASE)
 
-step 5 infarance
+    # Process files
+    os.makedirs(output_path, exist_ok=True)
+    files = glob.glob(os.path.join(input_path, '*.parquet'))
+    for file in files:
+        try:
+            df = pd.read_parquet(file)
+            df['CMPNT_MATL_DESC'] = df['CMPNT_MATL_DESC'].str.replace(abbrev_pattern, replace_match, regex=True)
 
-  warnings.warn(
-📁 Scanning input files...
-📦 Found 0 files to process.
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.13220858573913574 seconds
+            output_file = os.path.join(output_path, os.path.basename(file))
+            df.to_parquet(output_file, index=False)
+            print(f"✅ Expanded abbreviations in: {output_file}")
+        except Exception as e:
+            print(f"❌ Failed: {file} -> {e}")
