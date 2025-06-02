@@ -1,22 +1,16 @@
-Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.scriptrun = azureml.core.script_run:ScriptRun._from_run_dto with exception (packaging 23.2 (/opt/conda/envs/ptca/lib/python3.8/site-packages), Requirement.parse('packaging<=23.0,>=20.0')).
-usage: step_3_expand_abbreviation.py [-h] --input_path INPUT_PATH --abbrev_map
-                                     ABBREV_MAP --output_path OUTPUT_PATH
-step_3_expand_abbreviation.py: error: the following arguments are required: --output_path
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.10051631927490234 seconds
-Traceback (most recent call last):
-  File "step_3_expand_abbreviation.py", line 62, in <module>
-    args = parser.parse_args()
-  File "/opt/conda/envs/ptca/lib/python3.8/argparse.py", line 1768, in parse_args
-    args, argv = self.parse_known_args(args, namespace)
-  File "/opt/conda/envs/ptca/lib/python3.8/argparse.py", line 1800, in parse_known_args
-    namespace, args = self._parse_known_args(args, namespace)
-  File "/opt/conda/envs/ptca/lib/python3.8/argparse.py", line 2034, in _parse_known_args
-    self.error(_('the following arguments are required: %s') %
-  File "/opt/conda/envs/ptca/lib/python3.8/argparse.py", line 2521, in error
-    self.exit(2, _('%(prog)s: error: %(message)s\n') % args)
-  File "/opt/conda/envs/ptca/lib/python3.8/argparse.py", line 2508, in exit
-    _sys.exit(status)
-SystemExit: 2
-
+# === Step 3: Abbreviation Expansion ===
+abbrev_expand_step = PythonScriptStep(
+    name="Step 3 - Expand Abbreviations",
+    script_name="step_3_expand_abbreviation.py",
+    source_directory="scripts",
+    inputs=[data_step2_out, abbrev_mount],
+    arguments=[
+        "--input_path", data_step2_out,
+        "--abbrev_map", abbrev_mount,
+        "--output_path", data_step3_out   # ✅ ADD THIS
+    ],
+    outputs=[data_step3_out],            # ✅ INCLUDE output
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
