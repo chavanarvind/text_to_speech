@@ -1,101 +1,23 @@
-import os
-import glob
-import pandas as pd
-from multiprocessing import Pool, cpu_count
-import argparse
+📖 Loaded abbreviation map: /mnt/azureml/cr/j/ee77b27157ed4d6c8a2bfbfa9fd53520/cap/data-capability/wd/INPUT_abbrev_map/abbreviation_expension_updated.csv (496 entries)
+📁 Found 3 files to process in /mnt/azureml/cr/j/ee77b27157ed4d6c8a2bfbfa9fd53520/cap/data-capability/wd/INPUT_data_step2_out_workspaceblobstore/azureml/71b0d2e8-2d5f-4fcb-a079-ea52ff3a5043/data_step2_out
+✅ Expanded abbreviations in: /mnt/azureml/cr/j/ee77b27157ed4d6c8a2bfbfa9fd53520/cap/data-capability/wd/INPUT_data_step2_out_workspaceblobstore/azureml/71b0d2e8-2d5f-4fcb-a079-ea52ff3a5043/data_step2_out/part-00000-00bb5c5d-ffa7-4fff-9b9c-7fdfa729ffb8-c000.snappy.parquet
+✅ Expanded abbreviations in: /mnt/azureml/cr/j/ee77b27157ed4d6c8a2bfbfa9fd53520/cap/data-capability/wd/INPUT_data_step2_out_workspaceblobstore/azureml/71b0d2e8-2d5f-4fcb-a079-ea52ff3a5043/data_step2_out/part-00000-0042fc95-a813-4a78-a5ea-9d565974a2b5-c000.snappy.parquet
+✅ Expanded abbreviations in: /mnt/azureml/cr/j/ee77b27157ed4d6c8a2bfbfa9fd53520/cap/data-capability/wd/INPUT_data_step2_out_workspaceblobstore/azureml/71b0d2e8-2d5f-4fcb-a079-ea52ff3a5043/data_step2_out/part-00000-00bb3abb-2599-4885-a2cf-085958187528-c000.snappy.parquet
+✅ Abbreviation expansion completed.
+Cleaning up all outstanding Run operations, waiting 300.0 seconds
+1 items cleaning up...
+Cleanup took 0.1892561912536621 seconds
 
-# --- UNIT_GROUP mapping ---
-unit_group_map = {
-    'KG': 'CHM', 'KGS': 'CHM', 'KGA': 'CHM', 'KGW': 'CHM', 'G': 'CHM', 'GR': 'CHM', 'GM': 'CHM', 'MG': 'CHM',
-    'LB': 'CHM', 'LBS': 'CHM', 'OZ': 'CHM', 'OZA': 'CHM', 'GW': 'CHM', 'TON': 'CHM', 'DR': 'CHM',
-    'L': 'Liquid', 'LT': 'Liquid', 'ML': 'Liquid', 'CC': 'Liquid', 'CL': 'Liquid', 'CCM': 'Liquid', 'GLL': 'Liquid',
-    'EA': 'Discrete', 'PC': 'Discrete', 'PCS': 'Discrete', 'Pcs': 'Discrete', 'PKT': 'Discrete', 'PK': 'Discrete',
-    'PAK': 'Discrete', 'PCK': 'Discrete', 'CS': 'Discrete', 'CSE': 'Discrete', 'CT': 'Discrete', 'CA': 'Discrete',
-    'ST': 'Discrete', 'GRO': 'Discrete', 'BX': 'Discrete',
-    'BOT': 'Containers', 'BOTTLE': 'Containers', 'ROLL': 'Containers', 'ROL': 'Containers', 'REEL': 'Containers', 'KAR': 'Containers',
-    'FT': 'Dimensional', 'YD': 'Dimensional', 'KM': 'Dimensional', 'DM': 'Dimensional', 'M': 'Dimensional',
-    'M1': 'Dimensional', 'M2': 'Dimensional', 'KM2': 'Dimensional', 'YD2': 'Dimensional', 'FT3': 'Dimensional',
-    'SQM': 'Dimensional', 'sqm': 'Dimensional', 'MYD': 'Dimensional', 'MI': 'Dimensional', 'SM': 'Dimensional',
-    'LM': 'Dimensional', 'LF': 'Dimensional', 'MH': 'Dimensional', 'KN': 'Dimensional', 'CH': 'Dimensional',
-    'TH': 'Unclassified', 'THU': 'Unclassified', 'IM': 'Unclassified', 'NOS': 'Unclassified', 'NO': 'Unclassified',
-    'TS': 'Unclassified', 'KA': 'Unclassified', 'ZPC': 'Unclassified', 'ZCT': 'Unclassified', '0%': 'Unclassified',
-    'KP': 'Unclassified', 'GP': 'Unclassified', 'KAI': 'Unclassified', 'SY': 'Unclassified', 'UN': 'Unclassified',
-    'MU': 'Unclassified', 'UM': 'Unclassified', 'HU': 'Unclassified'
-}
+step 4 feature eng.
+Cleaning up all outstanding Run operations, waiting 300.0 seconds
+1 items cleaning up...
+Cleanup took 0.13711166381835938 seconds
 
-def map_cmpnt_type_category(val):
-    if pd.isna(val):
-        return 'OTHER'
+step 5 infarance
 
-    val_clean = str(val).strip()
-    val_lower = val_clean.lower()
-    val_upper = val_clean.upper()
-
-    erp_type_map = {
-        'FERT': 'FINISHED_PRODUCT',
-        'HALB': 'SEMI_FINISHED',
-        'ROH': 'RAW_MATERIAL',
-        'VERP': 'PACKAGING_MATERIAL',
-        'TRAD': 'TRADED_GOOD',
-        'ERSA': 'SUBCONTRACT_COMPONENT',
-        'API': 'API',
-        'TPF': 'TRADE_PRODUCT',
-        'PACK': 'PACKAGING',
-        'ZHBG': 'INTERMEDIATE',
-        'EPC': 'EXCIPIENT',
-        'EPF': 'FINISHED_PRODUCT',
-        'HAWA': 'TRADING_GOOD',
-        'ZEXI': 'EXCIPIENT',
-        'ZROH': 'RAW_MATERIAL',
-        'SAPR': 'PACKAGING',
-        'IM': 'INTERMEDIATE',
-        'UNBW': 'NON_VALUATED',
-        'IG': 'INTERMEDIATE_GOOD'
-    }
-
-    if val_upper in erp_type_map:
-        return erp_type_map[val_upper]
-    if any(x in val_lower for x in ['packaging', 'bottle', 'jar', 'cap', 'carton', 'tube', 'pouch', 'closure']):
-        return 'PACKAGING'
-    if any(x in val_lower for x in ['chemical', 'solvent', 'alcohol', 'acid', 'buffer', 'salt', 'preservative']):
-        return 'CHEMICAL'
-    if any(x in val_lower for x in ['actives', 'naturals', 'flavor', 'fragrance', 'api']):
-        return 'ACTIVES_NATURALS'
-    if any(x in val_lower for x in ['film', 'foil', 'label', 'sleeve']):
-        return 'FILMS_LABELS'
-    if any(x in val_lower for x in ['soap', 'conditioner', 'emulsifier', 'thickener', 'talc', 'sunscreen']):
-        return 'COSMETIC_BASE'
-    if any(x in val_lower for x in ['glass', 'pump', 'puff']):
-        return 'CONTAINERS'
-    if len(val_clean) <= 5 and val_clean.isalnum():
-        return 'ERP_CODE'
-    return 'OTHER'
-
-# --- Process one file ---
-def process_file(args):
-    file_path, output_path = args
-    try:
-        df = pd.read_parquet(file_path)
-
-        df['CMPNT_MATL_DESC_LEN'] = df['CMPNT_MATL_DESC'].astype(str).str.len()
-        df['UNIT_GROUP'] = df['CMPNT_UOM_CD'].fillna('').str.upper().map(unit_group_map).fillna('Unclassified')
-        df['CMPNT_MATL_TYPE_CATEGORY'] = df['CMPNT_MATL_TYPE_CD'].apply(map_cmpnt_type_category)
-
-        output_file = os.path.join(output_path, os.path.basename(file_path))
-        df.to_parquet(output_file, index=False)
-        print(f"✅ Features written to: {output_file}")
-    except Exception as e:
-        print(f"❌ Failed: {os.path.basename(file_path)} -> {e}")
-
-# --- Main ---
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--input_path', required=True)
-    parser.add_argument('--output_path', required=True)
-    args = parser.parse_args()
-
-    os.makedirs(args.output_path, exist_ok=True)
-
-    files = glob.glob(os.path.join(args.input_path, '*.parquet'))
-    with Pool(cpu_count()) as pool:
-        pool.map(process_file, [(f, args.output_path) for f in files])
+  warnings.warn(
+📁 Scanning input files...
+📦 Found 0 files to process.
+Cleaning up all outstanding Run operations, waiting 300.0 seconds
+1 items cleaning up...
+Cleanup took 0.13220858573913574 seconds
