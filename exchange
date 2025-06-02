@@ -1,3 +1,8 @@
+
+
+
+
+
 import os
 import argparse
 import pandas as pd
@@ -109,3 +114,19 @@ if __name__ == "__main__":
     parser.add_argument("--input_path", type=str, required=True)
     args = parser.parse_args()
     main(args.input_path)
+
+
+
+warnings.warn(
+📁 Scanning input files...
+Cleaning up all outstanding Run operations, waiting 300.0 seconds
+1 items cleaning up...
+Cleanup took 0.12472367286682129 seconds
+Traceback (most recent call last):
+  File "step_5_run_inference.py", line 99, in <module>
+    main(args.input_path)
+  File "step_5_run_inference.py", line 30, in main
+    files = [f for f in os.listdir(input_path) if f.endswith(".parquet")]
+FileNotFoundError: [Errno 2] No such file or directory: '/mnt/azureml/cr/j/c5c3c4e0056d42879b0be5fb91c7d773/cap/data-capability/wd/INPUT_data_step4_out_workspaceblobstore/azureml/0957401e-01ad-44ef-b795-5b99e3bc6f84/data_step4_out'
+
+
