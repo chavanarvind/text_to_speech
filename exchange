@@ -1,8 +1,12 @@
-Hi Niharika,
+Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.scriptrun = azureml.core.script_run:ScriptRun._from_run_dto with exception (packaging 23.2 (/opt/conda/envs/ptca/lib/python3.8/site-packages), Requirement.parse('packaging<=23.0,>=20.0')).
+📖 Loaded abbreviation map: /mnt/azureml/cr/j/1de8ec6100f741e19e3fbdfc0cc8b9b0/cap/data-capability/wd/INPUT_abbrev_map/abbreviation_expension_updated.csv (496 entries)
+📁 Found 3 files to process in /mnt/azureml/cr/j/1de8ec6100f741e19e3fbdfc0cc8b9b0/cap/data-capability/wd/INPUT_data_step2_out_workspaceblobstore/azureml/f56f71ee-b84b-42d5-9a7c-088cd45c1c26/data_step2_out
+✅ Expanded abbreviations in: /mnt/azureml/cr/j/1de8ec6100f741e19e3fbdfc0cc8b9b0/cap/data-capability/wd/INPUT_data_step2_out_workspaceblobstore/azureml/f56f71ee-b84b-42d5-9a7c-088cd45c1c26/data_step2_out/part-00000-00bb5c5d-ffa7-4fff-9b9c-7fdfa729ffb8-c000.snappy.parquet
+✅ Expanded abbreviations in: /mnt/azureml/cr/j/1de8ec6100f741e19e3fbdfc0cc8b9b0/cap/data-capability/wd/INPUT_data_step2_out_workspaceblobstore/azureml/f56f71ee-b84b-42d5-9a7c-088cd45c1c26/data_step2_out/part-00000-0042fc95-a813-4a78-a5ea-9d565974a2b5-c000.snappy.parquet
+✅ Expanded abbreviations in: /mnt/azureml/cr/j/1de8ec6100f741e19e3fbdfc0cc8b9b0/cap/data-capability/wd/INPUT_data_step2_out_workspaceblobstore/azureml/f56f71ee-b84b-42d5-9a7c-088cd45c1c26/data_step2_out/part-00000-00bb3abb-2599-4885-a2cf-085958187528-c000.snappy.parquet
+✅ Abbreviation expansion completed.
 
-All issues have been resolved, and the updated pipeline has been triggered successfully.
-Please find the latest UAT file attached.
-
-Apologies for the delayed response — we had to revise the pipeline flow, which took some additional time.
-
-Best regards,
+feature eng ste4 log is below
+Cleaning up all outstanding Run operations, waiting 300.0 seconds
+1 items cleaning up...
+Cleanup took 0.10665321350097656 seconds
