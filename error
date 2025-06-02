@@ -1,6 +1,56 @@
-Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.scriptrun = azureml.core.script_run:ScriptRun._from_run_dto with exception (packaging 23.2 (/opt/conda/envs/ptca/lib/python3.8/site-packages), Requirement.parse('packaging<=23.0,>=20.0')).
-📖 Loaded abbreviation map: /mnt/azureml/cr/j/6b9858745e5640e88a8a5f638041e1e4/cap/data-capability/wd/INPUT_abbrev_map/abbreviation_expension_updated.csv (496 entries)
-❌ No parquet files found in: /mnt/azureml/cr/j/6b9858745e5640e88a8a5f638041e1e4/cap/data-capability/wd/INPUT_data_step2_out_workspaceblobstore/azureml/87bf9975-d4c2-4907-bef3-fafc9d77b15c/data_step2_out
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.14117002487182617 seconds
+import os
+import re
+import glob
+import argparse
+import pandas as pd
+from multiprocessing import Pool, cpu_count
+
+# --- Precompiled regex patterns ---
+patterns = {
+    'non_alphanumeric': re.compile(r'[^A-Za-z0-9&% ]+'),
+    'percent_space': re.compile(r"\s*%\s*"),
+    'remove_canada': re.compile(r'canada\s*\d*|can\s*\d*|ca\s*\d*|ca$|can$|ca\s'),
+    'units': re.compile(r"(\D)(\d+)(\s*)(ml|l|gr|gm|g|ct)"),
+    'spf_space': re.compile(r"(\s)(spf)\s*([\d+])"),
+    'units_no_space': re.compile(r'(\d+)\s*(ml|l|gr|gm|g|ct)(?: |$)'),
+    'spf_number': re.compile(r"(\D)(spf\d+)")
+}
+
+def clean_series(series):
+    return (series.str.lower()
+        .str.replace(patterns['non_alphanumeric'], '', regex=True)
+        .str.replace(patterns['percent_space'], '% ', regex=True)
+        .str.replace(patterns['remove_canada'], '', regex=True)
+        .str.replace(patterns['units'], r'\1 \2\3\4 ', regex=True)
+        .str.replace(patterns['spf_space'], r'\1\2\3', regex=True)
+        .str.replace(patterns['units_no_space'], lambda z: z.group().replace(" ", ""), regex=True)
+        .str.replace(patterns['spf_number'], r'\1 \2 ', regex=True))
+
+def process_file(file):
+    try:
+        df = pd.read_parquet(file)
+
+        #df['MATL_SHRT_DESC'] = clean_series(df['MATL_SHRT_DESC'].fillna(''))
+        df['CMPNT_MATL_DESC'] = clean_series(df['CMPNT_MATL_DESC'].fillna(''))
+        print("✅ Sample of mapped rows:")
+        print(df.head())
+        # df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'] = (
+        #     df['MATL_SHRT_DESC'] + ' ' + df['CMPNT_MATL_DESC']
+        # ).str.strip()
+
+        df.to_parquet(file, index=False)
+        print(f"Cleaned: {os.path.basename(file)}")
+    except Exception as e:
+        print(f"Failed: {os.path.basename(file)} -> {e}")
+
+def main(input_path):
+    files = glob.glob(os.path.join(input_path, '*.parquet'))
+    with Pool(cpu_count()) as pool:
+        pool.map(process_file, files)
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input_path', required=True)
+    parser.add_argument('--output_path')  # unused; processing in-place
+    args = parser.parse_args()
+    main(args.input_path)
