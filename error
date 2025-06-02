@@ -16,6 +16,7 @@ patterns = {
     'spf_number': re.compile(r"(\D)(spf\d+)")
 }
 
+# --- Clean function ---
 def clean_series(series):
     return (series.str.lower()
         .str.replace(patterns['non_alphanumeric'], '', regex=True)
@@ -26,31 +27,32 @@ def clean_series(series):
         .str.replace(patterns['units_no_space'], lambda z: z.group().replace(" ", ""), regex=True)
         .str.replace(patterns['spf_number'], r'\1 \2 ', regex=True))
 
-def process_file(file):
+# --- Per-file processor ---
+def process_file(file_info):
+    file_path, output_path = file_info
     try:
-        df = pd.read_parquet(file)
-
-        #df['MATL_SHRT_DESC'] = clean_series(df['MATL_SHRT_DESC'].fillna(''))
+        df = pd.read_parquet(file_path)
         df['CMPNT_MATL_DESC'] = clean_series(df['CMPNT_MATL_DESC'].fillna(''))
-        print("✅ Sample of mapped rows:")
-        print(df.head())
-        # df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'] = (
-        #     df['MATL_SHRT_DESC'] + ' ' + df['CMPNT_MATL_DESC']
-        # ).str.strip()
 
-        df.to_parquet(file, index=False)
-        print(f"Cleaned: {os.path.basename(file)}")
+        out_file = os.path.join(output_path, os.path.basename(file_path))
+        df.to_parquet(out_file, index=False)
+        print(f"✅ Cleaned and saved: {os.path.basename(file_path)}")
     except Exception as e:
-        print(f"Failed: {os.path.basename(file)} -> {e}")
+        print(f"❌ Failed: {os.path.basename(file_path)} -> {e}")
 
-def main(input_path):
+# --- Main ---
+def main(input_path, output_path):
+    os.makedirs(output_path, exist_ok=True)
     files = glob.glob(os.path.join(input_path, '*.parquet'))
+    file_info_list = [(f, output_path) for f in files]
+
     with Pool(cpu_count()) as pool:
-        pool.map(process_file, files)
+        pool.map(process_file, file_info_list)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--input_path', required=True)
-    parser.add_argument('--output_path')  # unused; processing in-place
+    parser.add_argument('--output_path', required=True)
     args = parser.parse_args()
-    main(args.input_path)
+
+    main(args.input_path, args.output_path)
