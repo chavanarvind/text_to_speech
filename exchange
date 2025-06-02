@@ -1,152 +1,101 @@
-# pipeline_runner.py
-
-from azureml.core import Workspace, Environment, Experiment
-from azureml.pipeline.core import Pipeline, PipelineData
-from azureml.pipeline.steps import PythonScriptStep
-from azureml.core.runconfig import RunConfiguration
-from azureml.data.datapath import DataPath
-from azureml.data import OutputFileDatasetConfig
-from azureml.core import Dataset
 import os
+import glob
+import pandas as pd
+from multiprocessing import Pool, cpu_count
+import argparse
 
-# === Load workspace ===
-ws = Workspace.from_config(path=".azureml/dev_config.json")
-compute_name = "llm-gpu-cluster-2"
-env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
+# --- UNIT_GROUP mapping ---
+unit_group_map = {
+    'KG': 'CHM', 'KGS': 'CHM', 'KGA': 'CHM', 'KGW': 'CHM', 'G': 'CHM', 'GR': 'CHM', 'GM': 'CHM', 'MG': 'CHM',
+    'LB': 'CHM', 'LBS': 'CHM', 'OZ': 'CHM', 'OZA': 'CHM', 'GW': 'CHM', 'TON': 'CHM', 'DR': 'CHM',
+    'L': 'Liquid', 'LT': 'Liquid', 'ML': 'Liquid', 'CC': 'Liquid', 'CL': 'Liquid', 'CCM': 'Liquid', 'GLL': 'Liquid',
+    'EA': 'Discrete', 'PC': 'Discrete', 'PCS': 'Discrete', 'Pcs': 'Discrete', 'PKT': 'Discrete', 'PK': 'Discrete',
+    'PAK': 'Discrete', 'PCK': 'Discrete', 'CS': 'Discrete', 'CSE': 'Discrete', 'CT': 'Discrete', 'CA': 'Discrete',
+    'ST': 'Discrete', 'GRO': 'Discrete', 'BX': 'Discrete',
+    'BOT': 'Containers', 'BOTTLE': 'Containers', 'ROLL': 'Containers', 'ROL': 'Containers', 'REEL': 'Containers', 'KAR': 'Containers',
+    'FT': 'Dimensional', 'YD': 'Dimensional', 'KM': 'Dimensional', 'DM': 'Dimensional', 'M': 'Dimensional',
+    'M1': 'Dimensional', 'M2': 'Dimensional', 'KM2': 'Dimensional', 'YD2': 'Dimensional', 'FT3': 'Dimensional',
+    'SQM': 'Dimensional', 'sqm': 'Dimensional', 'MYD': 'Dimensional', 'MI': 'Dimensional', 'SM': 'Dimensional',
+    'LM': 'Dimensional', 'LF': 'Dimensional', 'MH': 'Dimensional', 'KN': 'Dimensional', 'CH': 'Dimensional',
+    'TH': 'Unclassified', 'THU': 'Unclassified', 'IM': 'Unclassified', 'NOS': 'Unclassified', 'NO': 'Unclassified',
+    'TS': 'Unclassified', 'KA': 'Unclassified', 'ZPC': 'Unclassified', 'ZCT': 'Unclassified', '0%': 'Unclassified',
+    'KP': 'Unclassified', 'GP': 'Unclassified', 'KAI': 'Unclassified', 'SY': 'Unclassified', 'UN': 'Unclassified',
+    'MU': 'Unclassified', 'UM': 'Unclassified', 'HU': 'Unclassified'
+}
 
-run_config = RunConfiguration()
-run_config.target = compute_name
-run_config.environment = env
+def map_cmpnt_type_category(val):
+    if pd.isna(val):
+        return 'OTHER'
 
-# === Output and input shared folders ===
-data_step1_out = PipelineData(name="data_step1_out", is_directory=True)
-data_step1a_mapped = PipelineData(name="data_step1a_mapped", is_directory=True)
-data_step1a_unmapped = PipelineData(name="data_step1a_unmapped", is_directory=True)
-data_step2_out = PipelineData(name="data_step2_out", is_directory=True)
-data_step3_out = PipelineData(name="data_step3_out", is_directory=True)
-data_step4_out = PipelineData(name="data_step4_out", is_directory=True)
+    val_clean = str(val).strip()
+    val_lower = val_clean.lower()
+    val_upper = val_clean.upper()
 
-# === Upload high_conf_mapping.csv from local folder to datastore ===
-default_ds = ws.get_default_datastore()
+    erp_type_map = {
+        'FERT': 'FINISHED_PRODUCT',
+        'HALB': 'SEMI_FINISHED',
+        'ROH': 'RAW_MATERIAL',
+        'VERP': 'PACKAGING_MATERIAL',
+        'TRAD': 'TRADED_GOOD',
+        'ERSA': 'SUBCONTRACT_COMPONENT',
+        'API': 'API',
+        'TPF': 'TRADE_PRODUCT',
+        'PACK': 'PACKAGING',
+        'ZHBG': 'INTERMEDIATE',
+        'EPC': 'EXCIPIENT',
+        'EPF': 'FINISHED_PRODUCT',
+        'HAWA': 'TRADING_GOOD',
+        'ZEXI': 'EXCIPIENT',
+        'ZROH': 'RAW_MATERIAL',
+        'SAPR': 'PACKAGING',
+        'IM': 'INTERMEDIATE',
+        'UNBW': 'NON_VALUATED',
+        'IG': 'INTERMEDIATE_GOOD'
+    }
 
-# Upload file as before
-default_ds.upload_files(
-    files=['./local_data/high_conf_direct_mapping.csv'],
-    target_path='high_conf_map',   # <== IMPORTANT: Folder name
-    overwrite=True,
-    show_progress=True
-)
+    if val_upper in erp_type_map:
+        return erp_type_map[val_upper]
+    if any(x in val_lower for x in ['packaging', 'bottle', 'jar', 'cap', 'carton', 'tube', 'pouch', 'closure']):
+        return 'PACKAGING'
+    if any(x in val_lower for x in ['chemical', 'solvent', 'alcohol', 'acid', 'buffer', 'salt', 'preservative']):
+        return 'CHEMICAL'
+    if any(x in val_lower for x in ['actives', 'naturals', 'flavor', 'fragrance', 'api']):
+        return 'ACTIVES_NATURALS'
+    if any(x in val_lower for x in ['film', 'foil', 'label', 'sleeve']):
+        return 'FILMS_LABELS'
+    if any(x in val_lower for x in ['soap', 'conditioner', 'emulsifier', 'thickener', 'talc', 'sunscreen']):
+        return 'COSMETIC_BASE'
+    if any(x in val_lower for x in ['glass', 'pump', 'puff']):
+        return 'CONTAINERS'
+    if len(val_clean) <= 5 and val_clean.isalnum():
+        return 'ERP_CODE'
+    return 'OTHER'
 
-# Register or create file dataset
-high_conf_dataset = Dataset.File.from_files((default_ds, 'high_conf_map'))
-high_conf_mount = high_conf_dataset.as_named_input('high_conf_map').as_mount()
+# --- Process one file ---
+def process_file(args):
+    file_path, output_path = args
+    try:
+        df = pd.read_parquet(file_path)
 
-default_ds.upload_files(
-    files=['./local_data/abbreviation_expension_updated.csv'],
-    target_path='abbrev_map',
-    overwrite=True,
-    show_progress=True
-)
-abbrev_dataset = Dataset.File.from_files((default_ds, 'abbrev_map'))
-abbrev_mount = abbrev_dataset.as_named_input('abbrev_map').as_mount()
+        df['CMPNT_MATL_DESC_LEN'] = df['CMPNT_MATL_DESC'].astype(str).str.len()
+        df['UNIT_GROUP'] = df['CMPNT_UOM_CD'].fillna('').str.upper().map(unit_group_map).fillna('Unclassified')
+        df['CMPNT_MATL_TYPE_CATEGORY'] = df['CMPNT_MATL_TYPE_CD'].apply(map_cmpnt_type_category)
 
-# === Step 1: Data Pull ===
-data_pull_step = PythonScriptStep(
-    name="Step 1 - Pull Dataset",
-    script_name="step_1_data_pull.py",
-    source_directory="scripts",
-    arguments=["--output_path", data_step1_out],
-    outputs=[data_step1_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
+        output_file = os.path.join(output_path, os.path.basename(file_path))
+        df.to_parquet(output_file, index=False)
+        print(f"✅ Features written to: {output_file}")
+    except Exception as e:
+        print(f"❌ Failed: {os.path.basename(file_path)} -> {e}")
 
-# === Step 1a: High Confidence Merge ===
-high_conf_merge_step = PythonScriptStep(
-    name="Step 1a - High Confidence Merge",
-    script_name="step_1a_extract_and_merge.py",
-    source_directory="scripts",
-    inputs=[data_step1_out, high_conf_mount],
-    arguments=[
-        "--input_path", data_step1_out,
-         "--mapping_csv", high_conf_mount,   
-        "--mapped_output", data_step1a_mapped,
-        "--needs_model_output", data_step1a_unmapped
-    ],
-    outputs=[data_step1a_mapped, data_step1a_unmapped],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
+# --- Main ---
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input_path', required=True)
+    parser.add_argument('--output_path', required=True)
+    args = parser.parse_args()
 
-# === Step 2: Clean Text ===
-clean_text_step = PythonScriptStep(
-    name="Step 2 - Text Cleaning",
-    script_name="step_2_clean_text.py",
-    source_directory="scripts",
-    inputs=[data_step1a_unmapped],
-    arguments=["--input_path", data_step1a_unmapped, "--output_path", data_step2_out],
-    outputs=[data_step2_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
+    os.makedirs(args.output_path, exist_ok=True)
 
-# === Step 3: Abbreviation Expansion ===
-abbrev_expand_step = PythonScriptStep(
-    name="Step 3 - Expand Abbreviations",
-    script_name="step_3_expand_abbreviation.py",
-    source_directory="scripts",
-    inputs=[data_step2_out],
-    arguments=[
-        "--input_path", data_step2_out,
-        "--abbrev_map", abbrev_mount  # ✅ pass abbreviation CSV location
-    ],
-    outputs=[data_step3_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Step 4: Feature Engineering ===
-feature_eng_step = PythonScriptStep(
-    name="Step 4 - Feature Engineering",
-    script_name="step_4_feature_engineering.py",
-    source_directory="scripts",
-    inputs=[data_step3_out],
-    arguments=["--input_path", data_step3_out, "--output_path", data_step4_out],
-    outputs=[data_step4_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Step 5: Run Inference ===
-inference_step = PythonScriptStep(
-    name="Step 5 - Run Inference",
-    script_name="step_5_run_inference.py",
-    source_directory="scripts",
-    inputs=[data_step4_out],
-    arguments=["--input_path", data_step4_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Build pipeline ===
-pipeline = Pipeline(workspace=ws, steps=[
-    data_pull_step,
-    high_conf_merge_step,
-    clean_text_step,
-    abbrev_expand_step,
-    feature_eng_step,
-    inference_step
-])
-
-pipeline.validate()
-
-# === Submit pipeline ===
-experiment = Experiment(ws, "full_inference_pipeline")
-pipeline_run = experiment.submit(pipeline)
-pipeline_run.wait_for_completion(show_output=True)
+    files = glob.glob(os.path.join(args.input_path, '*.parquet'))
+    with Pool(cpu_count()) as pool:
+        pool.map(process_file, [(f, args.output_path) for f in files])
