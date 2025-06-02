@@ -1,31 +1,7 @@
-import os
-import argparse
-from azureml.core import Run, Dataset
 
-def main(output_path):
-    run = Run.get_context()
-    ws = run.experiment.workspace
-
-    dataset = Dataset.get_by_name(ws, name='harmonized_bom_data_asset')
-
-    # List all file paths in the dataset
-    file_paths = dataset.to_path()
-
-    # Take only the first 2 files
-    selected_files = file_paths[:2]
-
-    # Create a dataset with only those 2 files
-    mini_dataset = Dataset.File.from_files(path=selected_files)
-
-    # Download only the selected files
-    os.makedirs(output_path, exist_ok=True)
-    mini_dataset.download(target_path=output_path, overwrite=True)
-
-    print(f"✅ Downloaded 2 files to: {output_path}")
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--output_path", type=str, required=True)
-    args = parser.parse_args()
-
-    main(args.output_path)
+Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
+  File "step_5_run_inference.py", line 99, in <module>
+    main(args.input_path)
+  File "step_5_run_inference.py", line 30, in main
+    files = [f for f in os.listdir(input_path) if f.endswith(".parquet")]
+FileNotFoundError: [Errno 2] No such file or directory: '/mnt/azureml/cr/j/9f7162ec452b43b3ba29bae890158263/cap/data-capability/wd/INPUT_data_step4_out_workspaceblobstore/azureml/7ab75a3b-c919-4808-97e0-84e1748006d8/data_step4_out'
