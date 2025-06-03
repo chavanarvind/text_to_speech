@@ -1,156 +1,24 @@
-# pipeline_runner.py
+arguments=[
+    "--input_path", data_step1_out,
+    "--mapping_csv", high_conf_mount,
+    "--mapped_output", data_step1a_mapped,
+    "--needs_model_output", data_step1a_unmapped,
+    "--key_output", data_step1a_key_output
+],
+outputs=[data_step1a_mapped, data_step1a_unmapped, data_step1a_key_output],
 
-from azureml.core import Workspace, Environment, Experiment
-from azureml.pipeline.core import Pipeline, PipelineData
-from azureml.pipeline.steps import PythonScriptStep
-from azureml.core.runconfig import RunConfiguration
-from azureml.data.datapath import DataPath
-from azureml.data import OutputFileDatasetConfig
-from azureml.core import Dataset
-import os
 
-# === Load workspace ===
-ws = Workspace.from_config(path=".azureml/dev_config.json")
-compute_name = "llm-gpu-cluster-2"
-env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
-
-run_config = RunConfiguration()
-run_config.target = compute_name
-run_config.environment = env
-
-# === Output and input shared folders ===
-data_step1_out = PipelineData(name="data_step1_out", is_directory=True)
-data_step1a_mapped = PipelineData(name="data_step1a_mapped", is_directory=True)
-data_step1a_unmapped = PipelineData(name="data_step1a_unmapped", is_directory=True)
-data_step2_out = PipelineData(name="data_step2_out", is_directory=True)
-data_step3_out = PipelineData(name="data_step3_out", is_directory=True)
-data_step4_out = PipelineData(name="data_step4_out", is_directory=True)
-
-# === Upload high_conf_mapping.csv from local folder to datastore ===
-default_ds = ws.get_default_datastore()
-
-# Upload file as before
-default_ds.upload_files(
-    files=['./local_data/high_conf_direct_mapping.csv'],
-    target_path='high_conf_map',   # <== IMPORTANT: Folder name
-    overwrite=True,
-    show_progress=True
-)
-
-# Register or create file dataset
-high_conf_dataset = Dataset.File.from_files((default_ds, 'high_conf_map'))
-high_conf_mount = high_conf_dataset.as_named_input('high_conf_map').as_mount()
-
-default_ds.upload_files(
-    files=['./local_data/abbreviation_expension_updated.csv'],
-    target_path='abbrev_map',
-    overwrite=True,
-    show_progress=True
-)
-abbrev_dataset = Dataset.File.from_files((default_ds, 'abbrev_map'))
-abbrev_mount = abbrev_dataset.as_named_input('abbrev_map').as_mount()
-
-# === Step 1: Data Pull ===
-data_pull_step = PythonScriptStep(
-    name="Step 1 - Pull Dataset",
-    script_name="step_1_data_pull.py",
-    source_directory="scripts",
-    arguments=["--output_path", data_step1_out],
-    outputs=[data_step1_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Step 1a: High Confidence Merge ===
-high_conf_merge_step = PythonScriptStep(
-    name="Step 1a - High Confidence Merge",
-    script_name="step_1a_extract_and_merge.py",
-    source_directory="scripts",
-    inputs=[data_step1_out, high_conf_mount],
-    arguments=[
-        "--input_path", data_step1_out,
-         "--mapping_csv", high_conf_mount,   
-        "--mapped_output", data_step1a_mapped,
-        "--needs_model_output", data_step1a_unmapped
-    ],
-    outputs=[data_step1a_mapped, data_step1a_unmapped],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Step 2: Clean Text ===
-clean_text_step = PythonScriptStep(
-    name="Step 2 - Text Cleaning",
-    script_name="step_2_clean_text.py",
-    source_directory="scripts",
-    inputs=[data_step1a_unmapped],
-    arguments=["--input_path", data_step1a_unmapped, "--output_path", data_step2_out],
-    outputs=[data_step2_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Step 3: Abbreviation Expansion ===
-abbrev_expand_step = PythonScriptStep(
-    name="Step 3 - Expand Abbreviations",
-    script_name="step_3_expand_abbreviation.py",
-    source_directory="scripts",
-    inputs=[data_step2_out, abbrev_mount],
-    arguments=[
-        "--input_path", data_step2_out,
-        "--abbrev_map", abbrev_mount,
-        "--output_path", data_step3_out   # ✅ ADD THIS
-    ],
-    outputs=[data_step3_out],            # ✅ INCLUDE output
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Step 4: Feature Engineering ===
-feature_eng_step = PythonScriptStep(
-    name="Step 4 - Feature Engineering",
-    script_name="step_4_feature_engineering.py",
-    source_directory="scripts",
-    inputs=[data_step3_out],
-    arguments=["--input_path", data_step3_out, "--output_path", data_step4_out],
-    outputs=[data_step4_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Step 5: Run Inference ===
 inference_step = PythonScriptStep(
     name="Step 5 - Run Inference",
     script_name="step_5_run_inference.py",
     source_directory="scripts",
-    inputs=[data_step4_out, data_step1a_mapped],
+    inputs=[data_step4_out, data_step1a_mapped, data_step1a_key_output],
     arguments=[
         "--input_path", data_step4_out,
-        "--additional_mapped_dir", data_step1a_mapped
+        "--additional_mapped_dir", data_step1a_mapped,
+        "--key_output_dir", data_step1a_key_output
     ],
     runconfig=run_config,
     compute_target=compute_name,
     allow_reuse=False
 )
-
-# === Build pipeline ===
-pipeline = Pipeline(workspace=ws, steps=[
-    data_pull_step,
-    high_conf_merge_step,
-    clean_text_step,
-    abbrev_expand_step,
-    feature_eng_step,
-    inference_step
-])
-
-pipeline.validate()
-
-# === Submit pipeline ===
-experiment = Experiment(ws, "full_inference_pipeline")
-pipeline_run = experiment.submit(pipeline)
-pipeline_run.wait_for_completion(show_output=True)
