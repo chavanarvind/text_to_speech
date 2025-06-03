@@ -1,3 +1,149 @@
-CHM
-FNW
-PKG
+Collecting numpy==1.23.5
+  Downloading numpy-1.23.5-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (17.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 17.1/17.1 MB 104.2 MB/s eta 0:00:00a 0:00:01
+Collecting pandas==1.5.3
+  Downloading pandas-1.5.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (12.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 12.1/12.1 MB 150.4 MB/s eta 0:00:00a 0:00:01
+Collecting pyarrow==14.0.2
+  Downloading pyarrow-14.0.2-cp310-cp310-manylinux_2_28_x86_64.whl (38.0 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 38.0/38.0 MB 79.6 MB/s eta 0:00:00a 0:00:01
+Collecting pytz>=2020.1
+  Downloading pytz-2025.2-py2.py3-none-any.whl (509 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 509.2/509.2 kB 176.8 MB/s eta 0:00:00
+Collecting python-dateutil>=2.8.1
+  Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 229.9/229.9 kB 299.7 MB/s eta 0:00:00
+Collecting six>=1.5
+  Downloading six-1.17.0-py2.py3-none-any.whl (11 kB)
+Installing collected packages: pytz, six, numpy, python-dateutil, pyarrow, pandas
+  Attempting uninstall: pytz
+    Found existing installation: pytz 2022.5
+    Uninstalling pytz-2022.5:
+      Successfully uninstalled pytz-2022.5
+  Attempting uninstall: six
+    Found existing installation: six 1.17.0
+    Uninstalling six-1.17.0:
+      Successfully uninstalled six-1.17.0
+  Attempting uninstall: numpy
+    Found existing installation: numpy 1.24.3
+    Uninstalling numpy-1.24.3:
+      Successfully uninstalled numpy-1.24.3
+  Attempting uninstall: python-dateutil
+    Found existing installation: python-dateutil 2.9.0.post0
+    Uninstalling python-dateutil-2.9.0.post0:
+      Successfully uninstalled python-dateutil-2.9.0.post0
+  Attempting uninstall: pyarrow
+    Found existing installation: pyarrow 11.0.0
+    Uninstalling pyarrow-11.0.0:
+      Successfully uninstalled pyarrow-11.0.0
+  Attempting uninstall: pandas
+    Found existing installation: pandas 2.2.3
+    Uninstalling pandas-2.2.3:
+      Successfully uninstalled pandas-2.2.3
+ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
+pandas-ml 0.6.1 requires enum34, which is not installed.
+tensorflow 2.19.0 requires numpy<2.2.0,>=1.26.0, but you have numpy 1.23.5 which is incompatible.
+scikit-image 0.25.0 requires numpy>=1.24, but you have numpy 1.23.5 which is incompatible.
+scikit-image 0.25.0 requires pillow>=10.1, but you have pillow 9.2.0 which is incompatible.
+scikit-image 0.25.0 requires scipy>=1.11.2, but you have scipy 1.11.0 which is incompatible.
+responsibleai 0.36.0 requires networkx<=2.5, but you have networkx 3.4 which is incompatible.
+opencensus-ext-azure 1.1.14 requires psutil>=5.6.3, but you have psutil 5.2.2 which is incompatible.
+dask-sql 2024.5.0 requires dask[dataframe]>=2024.4.1, but you have dask 2023.2.0 which is incompatible.
+dask-sql 2024.5.0 requires distributed>=2024.4.1, but you have distributed 2023.2.0 which is incompatible.
+dask-expr 1.1.10 requires dask==2024.8.0, but you have dask 2023.2.0 which is incompatible.
+dask-expr 1.1.10 requires pandas>=2, but you have pandas 1.5.3 which is incompatible.
+azureml-training-tabular 1.60.0 requires scipy<1.11.0,>=1.0.0, but you have scipy 1.11.0 which is incompatible.
+azureml-mlflow 1.60.0 requires azure-storage-blob<=12.19.0,>=12.5.0, but you have azure-storage-blob 12.25.1 which is incompatible.
+azureml-automl-dnn-nlp 1.60.0 requires torch==2.2.2, but you have torch 2.6.0 which is incompatible.
+azure-cli 2.71.0 requires azure-keyvault-keys==4.9.0b3, but you have azure-keyvault-keys 4.8.0 which is incompatible.
+azure-cli 2.71.0 requires azure-mgmt-keyvault==11.0.0, but you have azure-mgmt-keyvault 10.3.1 which is incompatible.
+azure-cli 2.71.0 requires azure-mgmt-storage==22.1.0, but you have azure-mgmt-storage 22.0.0 which is incompatible.
+azure-cli 2.71.0 requires websocket-client~=1.3.1, but you have websocket-client 1.8.0 which is incompatible.
+azure-cli-core 2.71.0 requires psutil>=5.9; sys_platform != "cygwin", but you have psutil 5.2.2 which is incompatible.
+adlfs 2024.12.0 requires azure-datalake-store<0.1,>=0.0.53, but you have azure-datalake-store 1.0.0a0 which is incompatible.
+adlfs 2024.12.0 requires fsspec>=2023.12.0, but you have fsspec 2023.10.0 which is incompatible.
+Successfully installed numpy-1.23.5 pandas-1.5.3 pyarrow-14.0.2 python-dateutil-2.9.0.post0 pytz-2025.2 six-1.17.0
+⏳ Cleaning file: vaildation_data.csv
+✅ Done: ./data/validation_step/vaildation_data.csv → ./data/vaildation_data.parquet | ⏱️ 0.25s
+⏳ Expanding abbreviations in: vaildation_data.parquet
+✅ Done: ./data/vaildation_data.parquet
+⏳ Processing and overwriting: vaildation_data.parquet
+✅ Overwritten: ./data/vaildation_data.parquet
+⏳ Mapping material type category in: vaildation_data.parquet
+✅ Updated and overwritten: ./data/vaildation_data.parquet
+Found existing installation: keras 3.9.2
+Uninstalling keras-3.9.2:
+  Successfully uninstalled keras-3.9.2
+Requirement already satisfied: tf-keras in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (2.19.0)
+Requirement already satisfied: tensorflow<2.20,>=2.19 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tf-keras) (2.19.0)
+Requirement already satisfied: packaging in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (25.0)
+Requirement already satisfied: h5py>=3.11.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (3.13.0)
+Requirement already satisfied: protobuf!=4.21.0,!=4.21.1,!=4.21.2,!=4.21.3,!=4.21.4,!=4.21.5,<6.0.0dev,>=3.20.3 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (4.25.6)
+Requirement already satisfied: setuptools in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (75.8.0)
+Requirement already satisfied: typing-extensions>=3.6.6 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (4.13.2)
+Requirement already satisfied: termcolor>=1.1.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (3.0.1)
+Requirement already satisfied: flatbuffers>=24.3.25 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (25.2.10)
+Requirement already satisfied: absl-py>=1.0.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (2.2.2)
+Requirement already satisfied: requests<3,>=2.21.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (2.32.3)
+Requirement already satisfied: gast!=0.5.0,!=0.5.1,!=0.5.2,>=0.2.1 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (0.6.0)
+Requirement already satisfied: numpy<2.2.0,>=1.26.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (2.1.3)
+Requirement already satisfied: six>=1.12.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (1.17.0)
+Requirement already satisfied: libclang>=13.0.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (18.1.1)
+Collecting keras>=3.5.0
+  Downloading keras-3.9.2-py3-none-any.whl (1.3 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.3/1.3 MB 21.7 MB/s eta 0:00:00a 0:00:01
+Requirement already satisfied: wrapt>=1.11.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (1.14.1)
+Requirement already satisfied: tensorboard~=2.19.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (2.19.0)
+Requirement already satisfied: ml-dtypes<1.0.0,>=0.5.1 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (0.5.1)
+Requirement already satisfied: astunparse>=1.6.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (1.6.3)
+Requirement already satisfied: tensorflow-io-gcs-filesystem>=0.23.1 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (0.37.1)
+Requirement already satisfied: google-pasta>=0.1.1 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (0.2.0)
+Requirement already satisfied: grpcio<2.0,>=1.24.3 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (1.71.0)
+Requirement already satisfied: opt-einsum>=2.3.2 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tensorflow<2.20,>=2.19->tf-keras) (3.4.0)
+Requirement already satisfied: wheel<1.0,>=0.23.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from astunparse>=1.6.0->tensorflow<2.20,>=2.19->tf-keras) (0.45.1)
+Requirement already satisfied: rich in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from keras>=3.5.0->tensorflow<2.20,>=2.19->tf-keras) (14.0.0)
+Requirement already satisfied: namex in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from keras>=3.5.0->tensorflow<2.20,>=2.19->tf-keras) (0.0.8)
+Requirement already satisfied: optree in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from keras>=3.5.0->tensorflow<2.20,>=2.19->tf-keras) (0.15.0)
+Requirement already satisfied: charset-normalizer<4,>=2 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from requests<3,>=2.21.0->tensorflow<2.20,>=2.19->tf-keras) (3.4.1)
+Requirement already satisfied: certifi>=2017.4.17 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from requests<3,>=2.21.0->tensorflow<2.20,>=2.19->tf-keras) (2025.1.31)
+Requirement already satisfied: idna<4,>=2.5 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from requests<3,>=2.21.0->tensorflow<2.20,>=2.19->tf-keras) (3.10)
+Requirement already satisfied: urllib3<3,>=1.21.1 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from requests<3,>=2.21.0->tensorflow<2.20,>=2.19->tf-keras) (1.26.20)
+Requirement already satisfied: tensorboard-data-server<0.8.0,>=0.7.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tensorboard~=2.19.0->tensorflow<2.20,>=2.19->tf-keras) (0.7.2)
+Requirement already satisfied: markdown>=2.6.8 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tensorboard~=2.19.0->tensorflow<2.20,>=2.19->tf-keras) (3.8)
+Requirement already satisfied: werkzeug>=1.0.1 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from tensorboard~=2.19.0->tensorflow<2.20,>=2.19->tf-keras) (3.1.3)
+Requirement already satisfied: MarkupSafe>=2.1.1 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from werkzeug>=1.0.1->tensorboard~=2.19.0->tensorflow<2.20,>=2.19->tf-keras) (3.0.2)
+Requirement already satisfied: markdown-it-py>=2.2.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from rich->keras>=3.5.0->tensorflow<2.20,>=2.19->tf-keras) (3.0.0)
+Requirement already satisfied: pygments<3.0.0,>=2.13.0 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from rich->keras>=3.5.0->tensorflow<2.20,>=2.19->tf-keras) (2.19.1)
+Requirement already satisfied: mdurl~=0.1 in /anaconda/envs/azureml_py38/lib/python3.10/site-packages (from markdown-it-py>=2.2.0->rich->keras>=3.5.0->tensorflow<2.20,>=2.19->tf-keras) (0.1.2)
+Installing collected packages: keras
+Successfully installed keras-3.9.2
+✅ Loaded 3661 records from client file.
+🧠 Predicting with LightGBM model...
+✅ Predictions saved to: ./data/client_predictions_NEW.csv
+Batches:  93%|█████████▎| 14/15 [00:21<00:01,  1.19s/it]
+  CMPNT_MATL_NUM                CMPNT_MATL_DESC CMPNT_MATL_TYPE_CD  \
+0         657960                p3 oxysan fusti                  V   
+1         657950              p3 oxysan taniche                  A   
+2         607000             citric acid usp bb                  A   
+3         347910  sodhydroxide liquid 32% ciste                  A   
+4         385440                   merquat 7spr                  A   
+
+  CMPNT_CAT_CD_DESC CMPNT_UOM_CD   Direct Mapping Final Category  \
+0   OTHER CHEMICALS           GR  OTHER CHEMICALS            CHM   
+1   OTHER CHEMICALS           GR  OTHER CHEMICALS            CHM   
+2   OTHER CHEMICALS           KG  OTHER CHEMICALS            CHM   
+3   OTHER CHEMICALS           KG  OTHER CHEMICALS            CHM   
+4   OTHER CHEMICALS           KG  OTHER CHEMICALS            CHM   
+
+  Final Subcategory          matching_reason  confidence_score  ...  \
+0              None  direct_mapping_category               1.0  ...   
+1              None  direct_mapping_category               1.0  ...   
+2              None  direct_mapping_category               1.0  ...   
+3              None  direct_mapping_category               1.0  ...   
+4              None  direct_mapping_category               1.0  ...   
+
+   CMPNT_MATL_DESC_LEN_x  UNIT_GROUP_x  CMPNT_MATL_TYPE_CATEGORY_x  \
+0                     15           CHM                    ERP_CODE   
+1                     17           CHM                    ERP_CODE   
+2                     18           CHM                    ERP_CODE   
+3                     29           CHM                    ERP_CODE  
