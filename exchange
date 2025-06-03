@@ -1,97 +1,12 @@
-import os
-import argparse
-import pandas as pd
-import numpy as np
-import torch
-import joblib
-import subprocess
-subprocess.run(["pip", "install", "lightgbm"], check=True)
-from azureml.core import Run, Model
-from sentence_transformers import SentenceTransformer
+# Print sample input columns
+print("📊 Input sample columns:", df_all.columns.tolist())
 
+# Print sample of prediction output
+print("📌 Sample output rows with prediction:")
+print(df_out[['CMPNT_MATL_NUM', 'Final_Prediction', 'Score', 'prediction_flag']].head())
 
-def main(input_path):
-    run = Run.get_context()
-    ws = run.experiment.workspace
-
-    print("🔍 Loading model artifacts...")
-    model_dir = Model.get_model_path("lightgbm_Bert_RPM_Category_model", _workspace=ws)
-    model = joblib.load(os.path.join(model_dir, "final_model.joblib"))
-    ordinal = joblib.load(os.path.join(model_dir, "ordinal_encoder.pkl"))
-    scaler = joblib.load(os.path.join(model_dir, "scaler.pkl"))
-
-    encoder = SentenceTransformer(
-        'pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb',
-        device='cuda' if torch.cuda.is_available() else 'cpu'
-    )
-    encoder.max_seq_length = 128
-
-    print("📁 Scanning input files...")
-    files = [f for f in os.listdir(input_path) if f.endswith(".parquet")]
-    print(f"📦 Found {len(files)} files to process.")
-
-    for f in files:
-        print(f"\n📄 Processing file: {f}")
-        file_path = os.path.join(input_path, f)
-        df_all = pd.read_parquet(file_path)
-
-        df_pred = df_all[df_all.get('needs_model', True)].copy()
-        if df_pred.empty:
-            print("✅ Skipped: No rows needing prediction in this file.")
-            df_out = df_all.copy()
-        else:
-            print(f"🧠 Rows needing prediction: {len(df_pred)}")
-
-            # Generate BERT embeddings
-            print("🔎 Encoding descriptions with BERT...")
-            desc_emb = encoder.encode(
-                df_pred['CMPNT_MATL_DESC'].astype(str).tolist(),
-                batch_size=256,
-                show_progress_bar=True,
-                convert_to_numpy=True)
-
-            # Transform structured features
-            print("⚙️ Transforming structured features...")
-            length_scaled = scaler.transform(df_pred[['CMPNT_MATL_DESC_LEN']])
-            cat_encoded = ordinal.transform(df_pred[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
-            X_pred = np.hstack([desc_emb, length_scaled, cat_encoded])
-
-            print("📈 Predicting categories...")
-            y_proba = model.predict_proba(X_pred)
-            y_score = np.max(y_proba, axis=1)
-            y_pred = model.predict(X_pred)
-
-            df_pred['Score'] = y_score
-            df_pred['Predicted'] = y_pred
-            df_pred['Final_Prediction'] = np.where(y_score < 0.6, 'Other', y_pred)
-            df_pred['prediction_flag'] = np.where(y_score < 0.6, 'Low Confidence', 'High Confidence')
-            df_pred['inferred_category_model'] = 'lightgbm_Bert_RPM_Category_model'
-
-            print(f"✅ Finished prediction. High-confidence rows: {(y_score >= 0.6).sum()}")
-
-            # Merge predictions and input features back
-            merge_cols = [
-                'CMPNT_MATL_NUM', 'Final_Prediction', 'Score',
-                'prediction_flag', 'inferred_category_model',
-                'CMPNT_MATL_DESC_LEN', 'UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY'
-            ]
-
-            df_out = df_all.merge(df_pred[merge_cols], on='CMPNT_MATL_NUM', how='left')
-
-        # Fill mapped predictions from Final Category
-        if 'Final Category' in df_out.columns:
-            fill_mask = df_out['Final_Prediction'].isna() & df_out['Final Category'].notna()
-            df_out.loc[fill_mask, 'Final_Prediction'] = df_out.loc[fill_mask, 'Final Category']
-            print(f"🧩 Filled {fill_mask.sum()} predictions from mapped Final Category.")
-
-        # Save output
-        os.makedirs("outputs", exist_ok=True)
-        output_path = os.path.join("outputs", f"predicted_{f}")
-        df_out.to_parquet(output_path, index=False)
-        print(f"💾 Saved: {output_path}")
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input_path", type=str, required=True)
-    args = parser.parse_args()
-    main(args.input_path)
+# Save small sample CSV for logging
+os.makedirs("logs", exist_ok=True)
+sample_csv_path = os.path.join("logs", f"sample_predicted_{f.replace('.parquet', '.csv')}")
+df_out[['CMPNT_MATL_NUM', 'Final_Prediction', 'Score', 'prediction_flag']].head(20).to_csv(sample_csv_path, index=False)
+print(f"📝 Sample prediction CSV saved at: {sample_csv_path}")
