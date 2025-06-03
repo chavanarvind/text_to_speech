@@ -1,12 +1,50 @@
-Traceback (most recent call last):
-  File "step_5_run_inference.py", line 134, in <module>
-    main(args.input_path)
-  File "step_5_run_inference.py", line 108, in main
-    length_scaled = sub_scaler.transform(subset[['CMPNT_MATL_DESC_LEN']])
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/frame.py", line 3766, in __getitem__
-    indexer = self.columns._get_indexer_strict(key, "columns")[1]
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 5876, in _get_indexer_strict
-    self._raise_if_missing(keyarr, indexer, axis_name)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 5935, in _raise_if_missing
-    raise KeyError(f"None of [{key}] are in the [{axis_name}]")
-KeyError: "None of [Index(['CMPNT_MATL_DESC_LEN'], dtype='object')] are in the [columns]"
+  CMPNT_MATL_NUM                CMPNT_MATL_DESC CMPNT_MATL_TYPE_CD  \
+0         657960                p3 oxysan fusti                  V   
+1         657950              p3 oxysan taniche                  A   
+2         607000             citric acid usp bb                  A   
+3         347910  sodhydroxide liquid 32% ciste                  A   
+4         385440                   merquat 7spr                  A   
+
+  CMPNT_CAT_CD_DESC CMPNT_UOM_CD   Direct Mapping Final Category  \
+0   OTHER CHEMICALS           GR  OTHER CHEMICALS            CHM   
+1   OTHER CHEMICALS           GR  OTHER CHEMICALS            CHM   
+2   OTHER CHEMICALS           KG  OTHER CHEMICALS            CHM   
+3   OTHER CHEMICALS           KG  OTHER CHEMICALS            CHM   
+4   OTHER CHEMICALS           KG  OTHER CHEMICALS            CHM   
+
+  Final Subcategory          matching_reason  confidence_score  ...  \
+0              None  direct_mapping_category               1.0  ...   
+1              None  direct_mapping_category               1.0  ...   
+2              None  direct_mapping_category               1.0  ...   
+3              None  direct_mapping_category               1.0  ...   
+4              None  direct_mapping_category               1.0  ...   
+
+   CMPNT_MATL_DESC_LEN_x  UNIT_GROUP_x  CMPNT_MATL_TYPE_CATEGORY_x  \
+0                     15           CHM                    ERP_CODE   
+1                     17           CHM                    ERP_CODE   
+2                     18           CHM                    ERP_CODE   
+3                     29           CHM                    ERP_CODE   
+4                     12           CHM                    ERP_CODE   
+
+   Final_Prediction     Score  prediction_flag  \
+0               CHM  0.996933  High Confidence   
+1               CHM  0.998299  High Confidence   
+2               CHM  0.998040  High Confidence   
+3               CHM  0.995079  High Confidence   
+4               CHM  0.998168  High Confidence   
+
+            inferred_category_model  CMPNT_MATL_DESC_LEN_y UNIT_GROUP_y  \
+0  lightgbm_Bert_RPM_Category_model                     15          CHM   
+1  lightgbm_Bert_RPM_Category_model                     17          CHM   
+2  lightgbm_Bert_RPM_Category_model                     18          CHM   
+3  lightgbm_Bert_RPM_Category_model                     29          CHM   
+4  lightgbm_Bert_RPM_Category_model                     12          CHM   
+
+  CMPNT_MATL_TYPE_CATEGORY_y  
+0                   ERP_CODE  
+1                   ERP_CODE  
+2                   ERP_CODE  
+3                   ERP_CODE  
+4                   ERP_CODE  
+
+[5 rows x 23 columns]
