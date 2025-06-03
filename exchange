@@ -1,8 +1,5 @@
-
-Batches:   0%|          | 0/1 [00:00<?, ?it/s]
-Batches: 100%|██████████| 1/1 [00:00<00:00, 69.29it/s]
-📌 Sample output rows:
-  CMPNT_MATL_NUM  ... Predicted_Subcategory
-0         187010  ...                   NaN
-1         109280  ...                   NaN
-2         140520  ...                   NaN
+y_sub = sub_model.predict(X_sub)
+subset['Final Subcategory'] = y_sub
+subset['Predicted_Subcategory'] = y_sub
+subset['Subcategory_Score'] = 0.9
+subset['Subcategory_Model'] = model_name
