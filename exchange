@@ -1,19 +1,138 @@
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.11560893058776855 seconds
-Traceback (most recent call last):
-  File "step_5_run_inference.py", line 136, in <module>
+import os
+import argparse
+import pandas as pd
+import numpy as np
+import torch
+import joblib
+import subprocess
+subprocess.run(["pip", "install", "lightgbm"], check=True)
+from azureml.core import Run, Model
+from sentence_transformers import SentenceTransformer
+
+
+def main(input_path):
+    run = Run.get_context()
+    ws = run.experiment.workspace
+
+    print("🔍 Loading model artifacts...")
+    model_dir = Model.get_model_path("lightgbm_Bert_RPM_Category_model", _workspace=ws)
+    model = joblib.load(os.path.join(model_dir, "final_model.joblib"))
+    ordinal = joblib.load(os.path.join(model_dir, "ordinal_encoder.pkl"))
+    scaler = joblib.load(os.path.join(model_dir, "scaler.pkl"))
+
+    encoder = SentenceTransformer(
+        'pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb',
+        device='cuda' if torch.cuda.is_available() else 'cpu'
+    )
+    encoder.max_seq_length = 128
+
+    print("📁 Scanning input files...")
+    files = [f for f in os.listdir(input_path) if f.endswith(".parquet")]
+    print(f"📦 Found {len(files)} files to process.")
+
+    for f in files:
+        print(f"\n📄 Processing file: {f}")
+        file_path = os.path.join(input_path, f)
+        df_all = pd.read_parquet(file_path)
+        print(f"🧮 Original row count: {len(df_all)}")
+
+        if 'CMPNT_MATL_NUM' not in df_all.columns:
+            raise KeyError("❌ Missing required key column 'CMPNT_MATL_NUM' in input data")
+
+        df_pred = df_all[df_all.get('needs_model', True)].copy()
+        if df_pred.empty:
+            print("✅ Skipped: No rows needing prediction in this file.")
+            df_out = df_all.copy()
+        else:
+            print(f"🧠 Rows needing prediction: {len(df_pred)}")
+
+            print("🔎 Encoding descriptions with BERT...")
+            desc_emb = encoder.encode(
+                df_pred['CMPNT_MATL_DESC'].astype(str).tolist(),
+                batch_size=256,
+                show_progress_bar=True,
+                convert_to_numpy=True)
+
+            print("⚙️ Transforming structured features...")
+            length_scaled = scaler.transform(df_pred[['CMPNT_MATL_DESC_LEN']])
+            cat_encoded = ordinal.transform(df_pred[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+            X_pred = np.hstack([desc_emb, length_scaled, cat_encoded])
+
+            print("📈 Predicting categories...")
+            y_proba = model.predict_proba(X_pred)
+            y_score = np.max(y_proba, axis=1)
+            y_pred = model.predict(X_pred)
+
+            df_pred['Score'] = y_score
+            df_pred['Predicted'] = y_pred
+            df_pred['Final_Prediction'] = np.where(y_score < 0.6, 'Other', y_pred)
+            df_pred['prediction_flag'] = np.where(y_score < 0.6, 'Low Confidence', 'High Confidence')
+            df_pred['inferred_category_model'] = 'lightgbm_Bert_RPM_Category_model'
+
+            print(f"✅ Finished prediction. High-confidence rows: {(y_score >= 0.6).sum()}")
+
+            merge_cols = [
+                'CMPNT_MATL_NUM', 'Final_Prediction', 'Score',
+                'prediction_flag', 'inferred_category_model'
+            ]
+
+            df_out = df_all.drop(columns=[c for c in merge_cols if c in df_all.columns], errors='ignore')
+            df_out = df_out.merge(df_pred[merge_cols], on='CMPNT_MATL_NUM', how='left')
+
+        print(f"📊 Final merged row count: {len(df_out)}")
+        if len(df_all) != len(df_out):
+            print("⚠️ WARNING: Row count mismatch after merge!")
+        else:
+            print("✅ Row count preserved after merge.")
+
+        if 'Final Category' in df_out.columns:
+            fill_mask = df_out['Final_Prediction'].isna() & df_out['Final Category'].notna()
+            df_out.loc[fill_mask, 'Final_Prediction'] = df_out.loc[fill_mask, 'Final Category']
+            print(f"🧩 Filled {fill_mask.sum()} predictions from mapped Final Category.")
+
+        print("🔁 Predicting subcategories for missing values...")
+        subcat_predictions = []
+        for cat in ['CHM', 'PKG', 'FNW']:
+            subset = df_out[(df_out['Final_Prediction'] == cat) & (df_out['Final Subcategory'].isna())].copy()
+            if not subset.empty:
+                print(f"🔍 Subcategory prediction for {cat}: {len(subset)} rows")
+                model_name = f"lightgbm_Bert_RPM_Category_model_{cat.lower()}"
+                model_path = Model.get_model_path(model_name, _workspace=ws)
+                sub_model = joblib.load(os.path.join(model_path, "final_model.joblib"))
+                sub_encoder = joblib.load(os.path.join(model_path, "ordinal_encoder.pkl"))
+                sub_scaler = joblib.load(os.path.join(model_path, "scaler.pkl"))
+
+                desc_emb = encoder.encode(
+                    subset['CMPNT_MATL_DESC'].astype(str).tolist(),
+                    batch_size=256,
+                    show_progress_bar=True,
+                    convert_to_numpy=True)
+
+                length_scaled = sub_scaler.transform(subset[['CMPNT_MATL_DESC_LEN']])
+                cat_encoded = sub_encoder.transform(subset[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+                X_sub = np.hstack([desc_emb, length_scaled, cat_encoded])
+                y_sub = sub_model.predict(X_sub)
+                subset['Predicted_Subcategory'] = y_sub
+                subcat_predictions.append(subset[['CMPNT_MATL_NUM', 'Predicted_Subcategory']])
+
+        if subcat_predictions:
+            sub_df = pd.concat(subcat_predictions)
+            df_out = df_out.drop(columns=['Predicted_Subcategory'], errors='ignore')
+            df_out = df_out.merge(sub_df, on='CMPNT_MATL_NUM', how='left')
+            df_out['Final Subcategory'] = df_out['Final Subcategory'].combine_first(df_out['Predicted_Subcategory'])
+            df_out.drop(columns=['Predicted_Subcategory'], inplace=True)
+
+        print("📌 Sample output rows:")
+        print(df_out.head(3))
+
+        os.makedirs("outputs", exist_ok=True)
+        output_path = os.path.join("outputs", f"predicted_{f}")
+        df_out.to_parquet(output_path, index=False)
+        df_out.head(100).to_csv(os.path.join("outputs", f"sample_{f}.csv"), index=False)
+        print(f"💾 Saved: {output_path} and sample CSV")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_path", type=str, required=True)
+    args = parser.parse_args()
     main(args.input_path)
-  File "step_5_run_inference.py", line 77, in main
-    df_out = df_out.merge(df_pred[merge_cols], on='CMPNT_MATL_NUM', how='left')
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/frame.py", line 9843, in merge
-    return merge(
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/reshape/merge.py", line 142, in merge
-    op = _MergeOperation(
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/reshape/merge.py", line 731, in __init__
-    ) = self._get_merge_keys()
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/reshape/merge.py", line 1207, in _get_merge_keys
-    left_keys.append(left._get_label_or_level_values(lk))
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/generic.py", line 1778, in _get_label_or_level_values
-    raise KeyError(key)
-KeyError: 'CMPNT_MATL_NUM'
