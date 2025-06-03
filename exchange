@@ -1,13 +1,141 @@
-all_outputs = []
+import os
+import argparse
+import pandas as pd
+import numpy as np
+import torch
+import joblib
+import subprocess
+subprocess.run(["pip", "install", "lightgbm"], check=True)
+from azureml.core import Run, Model
+from sentence_transformers import SentenceTransformer
 
-all_outputs.append(df_out)
+def main(input_path):
+    run = Run.get_context()
+    ws = run.experiment.workspace
 
-# === Combine all and save final output ===
-if all_outputs:
-    final_df = pd.concat(all_outputs, ignore_index=True)
-    os.makedirs("outputs", exist_ok=True)
-    final_df.to_parquet("outputs/final_inference_output.parquet", index=False)
-    final_df.head(100).to_csv("outputs/final_inference_sample.csv", index=False)
-    print("✅ Saved final output parquet and sample CSV.")
-else:
-    print("⚠️ No data processed, nothing to save.")
+    print("🔍 Loading model artifacts...")
+    model_dir = Model.get_model_path("lightgbm_Bert_RPM_Category_model", _workspace=ws)
+    model = joblib.load(os.path.join(model_dir, "final_model.joblib"))
+    ordinal = joblib.load(os.path.join(model_dir, "ordinal_encoder.pkl"))
+    scaler = joblib.load(os.path.join(model_dir, "scaler.pkl"))
+
+    encoder = SentenceTransformer(
+        'pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb',
+        device='cuda' if torch.cuda.is_available() else 'cpu'
+    )
+    encoder.max_seq_length = 128
+
+    print("📁 Scanning input files...")
+    files = [f for f in os.listdir(input_path) if f.endswith(".parquet")]
+    print(f"📦 Found {len(files)} files to process.")
+    
+    
+    for f in files:
+        print(f"\n📄 Processing file: {f}")
+        file_path = os.path.join(input_path, f)
+        df_all = pd.read_parquet(file_path)
+        print(f"🧮 Original row count: {len(df_all)}")
+
+        if 'CMPNT_MATL_NUM' not in df_all.columns:
+            print(f"❌ Skipping {f}: 'CMPNT_MATL_NUM' column not found.")
+            continue
+
+        df_mapped = df_all[df_all.get('needs_model') == False].copy()
+        df_pred = df_all[df_all.get('needs_model', True)].copy()
+
+        # Mapped rows dummy tagging
+        df_mapped['Final_Prediction'] = df_mapped['Final Category']
+        df_mapped['Score'] = 1.0
+        df_mapped['prediction_flag'] = 'Mapped'
+        df_mapped['inferred_category_model'] = 'direct_mapping'
+
+        if not df_pred.empty:
+            print(f"🧠 Rows needing prediction: {len(df_pred)}")
+            print("🔎 Encoding descriptions with BERT...")
+            desc_emb = encoder.encode(
+                df_pred['CMPNT_MATL_DESC'].astype(str).tolist(),
+                batch_size=256,
+                show_progress_bar=True,
+                convert_to_numpy=True)
+
+            print("⚙️ Transforming structured features...")
+            length_scaled = scaler.transform(df_pred[['CMPNT_MATL_DESC_LEN']])
+            cat_encoded = ordinal.transform(df_pred[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+            X_pred = np.hstack([desc_emb, length_scaled, cat_encoded])
+
+            print("📈 Predicting categories...")
+            y_proba = model.predict_proba(X_pred)
+            y_score = np.max(y_proba, axis=1)
+            y_pred = model.predict(X_pred)
+
+            df_pred['Score'] = y_score
+            df_pred['Predicted'] = y_pred
+            df_pred['Final_Prediction'] = np.where(y_score < 0.6, 'Other', y_pred)
+            df_pred['prediction_flag'] = np.where(y_score < 0.6, 'Low Confidence', 'High Confidence')
+            df_pred['inferred_category_model'] = 'lightgbm_Bert_RPM_Category_model'
+
+            print(f"✅ Finished prediction. High-confidence rows: {(y_score >= 0.6).sum()}")
+
+        # Combine category prediction
+        df_out = pd.concat([df_pred, df_mapped], axis=0).sort_index()
+        print(f"📊 Final category prediction rows: {len(df_out)}")
+
+        print("🔁 Predicting subcategories for missing values...")
+        df_sub_mapped = df_out[df_out['Final Subcategory'].notna()].copy()
+        df_sub_pred = df_out[df_out['Final Subcategory'].isna()].copy()
+
+        subcat_predictions = []
+        valid_categories = ['CHM', 'PKG', 'FNW']
+        for cat in valid_categories:
+            subset = df_sub_pred[df_sub_pred['Final_Prediction'] == cat].copy()
+            if not subset.empty:
+                print(f"🔍 Subcategory prediction for {cat}: {len(subset)} rows")
+                model_name = f"lightgbm_Bert_RPM_Category_model_{cat.lower()}"
+                model_path = Model.get_model_path(model_name, _workspace=ws)
+                sub_model = joblib.load(os.path.join(model_path, "final_model.joblib"))
+                sub_encoder = joblib.load(os.path.join(model_path, "ordinal_encoder.pkl"))
+                sub_scaler = joblib.load(os.path.join(model_path, "scaler.pkl"))
+
+                desc_emb = encoder.encode(
+                    subset['CMPNT_MATL_DESC'].astype(str).tolist(),
+                    batch_size=256,
+                    show_progress_bar=True,
+                    convert_to_numpy=True)
+
+                length_scaled = sub_scaler.transform(subset[['CMPNT_MATL_DESC_LEN']])
+                cat_encoded = sub_encoder.transform(subset[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+                X_sub = np.hstack([desc_emb, length_scaled, cat_encoded])
+                y_sub = sub_model.predict(X_sub)
+                subset['Final Subcategory'] = y_sub
+                subset['Predicted_Subcategory'] = y_sub
+                subset['Subcategory_Score'] = 0.9
+                subset['Subcategory_Model'] = model_name
+                subcat_predictions.append(subset)
+
+        # Fallback for other categories
+        fallback_rows = df_sub_pred[~df_sub_pred['Final_Prediction'].isin(valid_categories)].copy()
+        fallback_rows['Final Subcategory'] = fallback_rows['Final_Prediction']
+        fallback_rows['Subcategory_Score'] = 0.9
+        fallback_rows['Subcategory_Model'] = 'default_fallback'
+
+        df_sub_mapped['Subcategory_Score'] = 1.0
+        df_sub_mapped['Subcategory_Model'] = 'direct_mapping'
+        df_sub_mapped['Predicted_Subcategory'] = df_sub_mapped['Final Subcategory']
+
+        df_sub_pred_final = pd.concat(subcat_predictions + [fallback_rows])
+        df_out = pd.concat([df_sub_pred_final, df_sub_mapped], axis=0).sort_index()
+
+        print("📌 Sample output rows:")
+        print(df_out.head(3))
+
+        os.makedirs("outputs", exist_ok=True)
+        output_path = os.path.join("outputs", f"predicted_{f}")
+        df_out.to_parquet(output_path, index=False)
+        df_out.head(100).to_csv(os.path.join("outputs", f"sample_{f}.csv"), index=False)
+        print(f"💾 Saved: {output_path} and sample CSV")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_path", type=str, required=True)
+    args = parser.parse_args()
+    main(args.input_path)
