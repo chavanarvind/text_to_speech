@@ -1,5 +1,13 @@
-y_sub = sub_model.predict(X_sub)
-subset['Final Subcategory'] = y_sub
-subset['Predicted_Subcategory'] = y_sub
-subset['Subcategory_Score'] = 0.9
-subset['Subcategory_Model'] = model_name
+all_outputs = []
+
+all_outputs.append(df_out)
+
+# === Combine all and save final output ===
+if all_outputs:
+    final_df = pd.concat(all_outputs, ignore_index=True)
+    os.makedirs("outputs", exist_ok=True)
+    final_df.to_parquet("outputs/final_inference_output.parquet", index=False)
+    final_df.head(100).to_csv("outputs/final_inference_sample.csv", index=False)
+    print("✅ Saved final output parquet and sample CSV.")
+else:
+    print("⚠️ No data processed, nothing to save.")
