@@ -18,7 +18,7 @@ def main(input_path, additional_mapped_dir):
     run = Run.get_context()
     ws = run.experiment.workspace
 
-    log(" Loading model artifacts...")
+    log("\U0001F50D Loading model artifacts...")
     model_dir = Model.get_model_path("lightgbm_Bert_RPM_Category_model", _workspace=ws)
     model = joblib.load(os.path.join(model_dir, "final_model.joblib"))
     ordinal = joblib.load(os.path.join(model_dir, "ordinal_encoder.pkl"))
@@ -30,13 +30,13 @@ def main(input_path, additional_mapped_dir):
     )
     encoder.max_seq_length = 128
 
-    log(" Scanning input files...")
+    log("\U0001F4C1 Scanning input files...")
     files = [f for f in os.listdir(input_path) if f.endswith(".parquet")]
-    log(f" Found {len(files)} files to process.")
+    log(f"\U0001F4E6 Found {len(files)} files to process.")
 
     all_results = []
 
-    log(f" Loading pre-mapped data from: {additional_mapped_dir}")
+    log(f"\U0001F4C5 Loading pre-mapped data from: {additional_mapped_dir}")
     mapped_files = [f for f in os.listdir(additional_mapped_dir) if f.endswith(".parquet")]
     mapped_dfs = []
     for f in mapped_files:
@@ -68,18 +68,18 @@ def main(input_path, additional_mapped_dir):
     if mapped_dfs:
         mapped_combined_df = pd.concat(mapped_dfs, ignore_index=True)
         all_results.append(mapped_combined_df)
-        log(f" Loaded and added {len(mapped_combined_df)} mapped rows from step_1a.")
+        log(f"✅ Loaded and added {len(mapped_combined_df)} mapped rows from step_1a.")
     else:
-        log(" No additional mapped data found.")
+        log("⚠️ No additional mapped data found.")
 
     for f in files:
-        log(f"\n Processing file: {f}")
+        log(f"\n📄 Processing file: {f}")
         file_path = os.path.join(input_path, f)
         df_all = pd.read_parquet(file_path)
-        log(f" Original row count: {len(df_all)}")
+        log(f"\U0001F9BE Original row count: {len(df_all)}")
 
         if 'CMPNT_MATL_NUM' not in df_all.columns:
-            log(f" Skipping {f}: 'CMPNT_MATL_NUM' column not found.")
+            log(f"❌ Skipping {f}: 'CMPNT_MATL_NUM' column not found.")
             continue
 
         if 'needs_model' in df_all.columns:
@@ -95,20 +95,20 @@ def main(input_path, additional_mapped_dir):
         df_mapped['inferred_category_model'] = 'direct_mapping'
 
         if not df_pred.empty:
-            log(f" Rows needing prediction: {len(df_pred)}")
-            log(" Encoding descriptions with BERT...")
+            log(f"\U0001F9E0 Rows needing prediction: {len(df_pred)}")
+            log("\U0001F50E Encoding descriptions with BERT...")
             desc_emb = encoder.encode(
                 df_pred['CMPNT_MATL_DESC'].astype(str).tolist(),
                 batch_size=256,
                 show_progress_bar=True,
                 convert_to_numpy=True)
 
-            log(" Transforming structured features...")
+            log("⚙️ Transforming structured features...")
             length_scaled = scaler.transform(df_pred[['CMPNT_MATL_DESC_LEN']])
             cat_encoded = ordinal.transform(df_pred[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
             X_pred = np.hstack([desc_emb, length_scaled, cat_encoded])
 
-            log(" Predicting categories...")
+            log("\U0001F4C8 Predicting categories...")
             y_proba = model.predict_proba(X_pred)
             y_score = np.max(y_proba, axis=1)
             y_pred = model.predict(X_pred)
@@ -119,11 +119,11 @@ def main(input_path, additional_mapped_dir):
             df_pred['prediction_flag'] = np.where(y_score < 0.6, 'Low Confidence', 'High Confidence')
             df_pred['inferred_category_model'] = 'lightgbm_Bert_RPM_Category_model'
 
-            log(f" Finished prediction. High-confidence rows: {(y_score >= 0.6).sum()}")
+            log(f"✅ Finished prediction. High-confidence rows: {(y_score >= 0.6).sum()}")
 
         df_out = pd.concat([df_pred, df_mapped], axis=0).sort_index()
 
-        log(" Predicting subcategories for missing values...")
+        log("\U0001F501 Predicting subcategories for missing values...")
         df_sub_mapped = df_out[df_out['Final Subcategory'].notna()].copy()
         df_sub_pred = df_out[df_out['Final Subcategory'].isna()].copy()
 
@@ -132,7 +132,7 @@ def main(input_path, additional_mapped_dir):
         for cat in valid_categories:
             subset = df_sub_pred[df_sub_pred['Final_Prediction'] == cat].copy()
             if not subset.empty:
-                log(f" Subcategory prediction for {cat}: {len(subset)} rows")
+                log(f"\U0001F50D Subcategory prediction for {cat}: {len(subset)} rows")
                 model_name = f"lightgbm_Bert_RPM_Category_model_{cat.lower()}"
                 model_path = Model.get_model_path(model_name, _workspace=ws)
                 sub_model = joblib.load(os.path.join(model_path, "final_model.joblib"))
@@ -170,34 +170,16 @@ def main(input_path, additional_mapped_dir):
         df_out['source_file'] = f
         all_results.append(df_out)
 
-    log(" Combining all results into one DataFrame...")
+    log("\U0001F9E9 Combining all results into one DataFrame...")
     final_df = pd.concat(all_results, axis=0, ignore_index=True)
 
-    log(" Removing duplicates by CMPNT_MATL_NUM...")
+    log("\U0001F9F9 Removing duplicates by CMPNT_MATL_NUM...")
     final_df = final_df.drop_duplicates(subset='CMPNT_MATL_NUM')
 
     os.makedirs("outputs", exist_ok=True)
     final_df.to_parquet("outputs/final_prediction_combined.parquet", index=False)
     final_df.head(100).to_csv("outputs/final_prediction_sample.csv", index=False)
-    log(" Saved combined output as final_prediction_combined.parquet and sample CSV")
-    log(" Mapping predictions back to original key files...")
-key_files = [f for f in os.listdir(args.key_output_dir) if f.endswith(".parquet")]
-mapped_keys_dir = os.path.join("outputs", "mapped_keys")
-os.makedirs(mapped_keys_dir, exist_ok=True)
-
-for key_file in key_files:
-    key_path = os.path.join(args.key_output_dir, key_file)
-    try:
-        key_df = pd.read_parquet(key_path)
-        merged_df = key_df.merge(
-            final_df[["CMPNT_MATL_NUM", "Final_Prediction", "Final Subcategory"]],
-            how="left", on="CMPNT_MATL_NUM"
-        )
-        out_path = os.path.join(mapped_keys_dir, key_file)
-        merged_df.to_parquet(out_path, index=False)
-        log(f" Saved mapped key file: {out_path}")
-    except Exception as e:
-        log(f" Failed to process key file {key_file}: {e}")
+    log("✅ Saved combined output as final_prediction_combined.parquet and sample CSV")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -208,7 +190,7 @@ if __name__ == "__main__":
 
     main(args.input_path, args.additional_mapped_dir)
 
-    log(" Mapping predictions back to original key files...")
+    log("\U0001F501 Mapping predictions back to original key files...")
     key_files = [f for f in os.listdir(args.key_output_dir) if f.endswith(".parquet")]
     mapped_keys_dir = os.path.join("outputs", "mapped_keys")
     os.makedirs(mapped_keys_dir, exist_ok=True)
@@ -225,6 +207,6 @@ if __name__ == "__main__":
             )
             out_path = os.path.join(mapped_keys_dir, key_file)
             merged_df.to_parquet(out_path, index=False)
-            log(f" Saved mapped key file: {out_path}")
+            log(f"✅ Saved mapped key file: {out_path}")
         except Exception as e:
-            log(f" Failed to process key file {key_file}: {e}")
+            log(f"⚠️ Failed to process key file {key_file}: {e}")
