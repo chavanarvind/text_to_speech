@@ -1,4 +1,29 @@
-Traceback (most recent call last):
-  File "step_5_run_inference.py", line 184, in <module>
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_path", type=str, required=True)
+    parser.add_argument("--additional_mapped_dir", type=str, required=True)
+    parser.add_argument("--key_output_dir", type=str, required=True)
+    args = parser.parse_args()
+
+    main(args.input_path, args.additional_mapped_dir)
+
+    log("🔁 Mapping predictions back to original key files...")
     key_files = [f for f in os.listdir(args.key_output_dir) if f.endswith(".parquet")]
-NameError: name 'args' is not defined
+    mapped_keys_dir = os.path.join("outputs", "mapped_keys")
+    os.makedirs(mapped_keys_dir, exist_ok=True)
+
+    final_df = pd.read_parquet("outputs/final_prediction_combined.parquet")  # Load output from main()
+
+    for key_file in key_files:
+        key_path = os.path.join(args.key_output_dir, key_file)
+        try:
+            key_df = pd.read_parquet(key_path)
+            merged_df = key_df.merge(
+                final_df[["CMPNT_MATL_NUM", "Final_Prediction", "Final Subcategory"]],
+                how="left", on="CMPNT_MATL_NUM"
+            )
+            out_path = os.path.join(mapped_keys_dir, key_file)
+            merged_df.to_parquet(out_path, index=False)
+            log(f"✅ Saved mapped key file: {out_path}")
+        except Exception as e:
+            log(f"⚠️ Failed to process key file {key_file}: {e}")
