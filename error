@@ -12,7 +12,7 @@ if __name__ == "__main__":
     mapped_keys_dir = os.path.join("outputs", "mapped_keys")
     os.makedirs(mapped_keys_dir, exist_ok=True)
 
-    final_df = pd.read_parquet("outputs/final_prediction_combined.parquet")  # Load output from main()
+    final_df = pd.read_parquet("outputs/final_prediction_combined.parquet")
 
     for key_file in key_files:
         key_path = os.path.join(args.key_output_dir, key_file)
