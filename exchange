@@ -1,14 +1,93 @@
-in Step 1a - High Confidence Merge log i am getting this
+import os
+import glob
+import argparse
+import pandas as pd
+from azureml.core import Run
 
+# === Column to match ===
+JOIN_COL_1 = "CMPNT_CAT_CD_DESC"
+JOIN_COL_2 = "CMPNT_MATL_TYPE_CD"
+DIRECT_MAP_KEY_1 = "Direct Mapping"
+DIRECT_MAP_KEY_2 = "Direct Mapping"
 
+# === Key Columns to output ===
+KEY_COLS = [
+    "ROW_NM", "SRC_SYS_CD", "MATL_NUM", "PLNT_CD", "CMPNT_MATL_NUM",
+    "BOM_LVL_DTLS_NUM", "TRU_MATL_NUM", "CMPNT_RM_SPEC_CD",
+    "CMPNT_PC_SPEC_CD", "CMPNT_DC_SPEC_CD", "RAW_MATL_TITLE_NM"
+]
 
+def process_file(file_path, mapping_df, mapped_dir, needs_model_dir, key_output_dir):
+    try:
+        df = pd.read_parquet(file_path)
+        df.drop_duplicates(inplace=True)
 
-❌ Failed to process /mnt/azureml/cr/j/53401efca8f14120898d32f09a1775a9/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/11d209a7-3d00-4dd1-b8b9-fb6e22080ccf/data_step1_out/part-00000-93cd7e62-f893-4c6e-9c47-46e97c385d2d-c000.snappy.parquet: Casting from timestamp[ns] to timestamp[us] would lose data: 6475421128654848
-❌ Failed to process /mnt/azureml/cr/j/53401efca8f14120898d32f09a1775a9/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/11d209a7-3d00-4dd1-b8b9-fb6e22080ccf/data_step1_out/part-00000-94251222-196d-4280-9eb0-6b99ed2fe767-c000.snappy.parquet: Casting from timestamp[ns] to timestamp[us] would lose data: 6475421128654848
-❌ Failed to process /mnt/azureml/cr/j/53401efca8f14120898d32f09a1775a9/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/11d209a7-3d00-4dd1-b8b9-fb6e22080ccf/data_step1_out/part-00000-9431c660-31c2-40ba-bb69-b4ada9be9c7a-c000.snappy.parquet: Casting from timestamp[ns] to timestamp[us] would lose data: 6475421128654848
-❌ Failed to process /mnt/azureml/cr/j/53401efca8f14120898d32f09a1775a9/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/11d209a7-3d00-4dd1-b8b9-fb6e22080ccf/data_step1_out/part-00000-945771b7-b6a9-479a-9416-d96a15921d10-c000.snappy.parquet: Casting from timestamp[ns] to timestamp[us] would lose data: 6475421128654848
-❌ Failed to process /mnt/azureml/cr/j/53401efca8f14120898d32f09a1775a9/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/11d209a7-3d00-4dd1-b8b9-fb6e22080ccf/data_step1_out/part-00000-946bb248-126e-451a-969e-f07c23009b8e-c000.snappy.parquet: Casting from timestamp[ns] to timestamp[us] would lose data: 6475421128654848
-❌ Failed to process /mnt/azureml/cr/j/53401efca8f14120898d32f09a1775a9/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/11d209a7-3d00-4dd1-b8b9-fb6e22080ccf/data_step1_out/part-00000-9594f068-031c-4456-88e7-955b9e205564-c000.snappy.parquet: Casting from timestamp[ns] to timestamp[us] would lose data: 6475421128654848
-❌ Failed to process /mnt/azureml/cr/j/53401efca8f14120898d32f09a1775a9/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/11d209a7-3d00-4dd1-b8b9-fb6e22080ccf/data_step1_out/part-00000-95b73f6e-b033-44fb-af88-b11a4df56b00-c000.snappy.parquet: Casting from timestamp[ns] to timestamp[us] would lose data: 6475421128654848
-❌ Failed to process /mnt/azureml/cr/j/53401efca8f14120898d32f09a1775a9/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/11d209a7-3d00-4dd1-b8b9-fb6e22080ccf/data_step1_out/part-00000-9607a175-3c8f-4f4a-8ab6-854cae3f559b-c000.snappy.parquet: Casting from timestamp[ns] to timestamp[us] would lose data: 6475421128654848
-❌ Failed to process /mnt/azureml/cr/j/53401efca8f14120898d32f09a1775a9/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/11d209a7-3d00-4dd1-b8b9-fb6e22080ccf/data_step1_out/part-00000-972aa78f-cbdb-4279-85e5-008ad6a8ca7a-c000.snappy.parquet: Casting from timestamp[ns] to timestamp[us] would lose data: 6475421128654848
+        df[JOIN_COL_1] = df[JOIN_COL_1].fillna("").astype(str).str.strip()
+        df[JOIN_COL_2] = df[JOIN_COL_2].fillna("").astype(str).str.strip()
+        mapping_df[DIRECT_MAP_KEY_1] = mapping_df[DIRECT_MAP_KEY_1].astype(str).str.strip()
+        mapping_df[DIRECT_MAP_KEY_2] = mapping_df[DIRECT_MAP_KEY_2].astype(str).str.strip()
+
+        # Stage 1 mapping
+        stage1_df = df.merge(mapping_df, how="inner", left_on=[JOIN_COL_1], right_on=[DIRECT_MAP_KEY_1])
+        stage1_df['matching_reason'] = 'direct_mapping_category'
+        stage1_df['confidence_score'] = 1.0
+
+        # Stage 2 mapping
+        df_not_mapped = df[~df['CMPNT_MATL_NUM'].isin(stage1_df['CMPNT_MATL_NUM'])]
+        stage2_df = df_not_mapped.merge(mapping_df, how="inner", left_on=[JOIN_COL_2], right_on=[DIRECT_MAP_KEY_2])
+        stage2_df['matching_reason'] = 'direct_mapping_type_only'
+        stage2_df['confidence_score'] = 1.0
+
+        mapped_df = pd.concat([stage1_df, stage2_df], ignore_index=True)
+        mapped_df['Final Category Filled'] = mapped_df['Final Category'].notna() & mapped_df['Final Category'].str.strip().ne("")
+        mapped_df['Final Subcategory Filled'] = mapped_df['Final Subcategory'].notna() & mapped_df['Final Subcategory'].str.strip().ne("")
+        mapped_df['needs_model'] = ~mapped_df['Final Category Filled'] | ~mapped_df['Final Subcategory Filled']
+
+        mapped_only_df = mapped_df[~mapped_df['needs_model']].copy()
+        needs_model_df = mapped_df[mapped_df['needs_model']].copy()
+
+        # Drop datetime columns to avoid Parquet casting issues
+        mapped_only_df = mapped_only_df.drop(columns=mapped_only_df.select_dtypes(include=["datetime64[ns]"]).columns)
+        needs_model_df = needs_model_df.drop(columns=needs_model_df.select_dtypes(include=["datetime64[ns]"]).columns)
+
+        base_name = os.path.basename(file_path)
+        os.makedirs(mapped_dir, exist_ok=True)
+        os.makedirs(needs_model_dir, exist_ok=True)
+
+        mapped_only_df.to_parquet(os.path.join(mapped_dir, base_name), index=False)
+        needs_model_df.to_parquet(os.path.join(needs_model_dir, base_name), index=False)
+
+        # Save key reference
+        if all(col in df.columns for col in KEY_COLS):
+            key_df = df[KEY_COLS].drop_duplicates()
+            key_df = key_df.drop(columns=key_df.select_dtypes(include=["datetime64[ns]"]).columns)
+            os.makedirs(key_output_dir, exist_ok=True)
+            key_df.to_parquet(os.path.join(key_output_dir, base_name), index=False)
+            print(f"🔑 Saved key reference: {base_name}")
+
+    except Exception as e:
+        print(f"❌ Failed to process {file_path}: {e}")
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_path", type=str, required=True)
+    parser.add_argument("--mapping_csv", type=str, required=True)
+    parser.add_argument("--mapped_output", type=str, required=True)
+    parser.add_argument("--needs_model_output", type=str, required=True)
+    parser.add_argument("--key_output", type=str, required=True)
+    args = parser.parse_args()
+
+    run = Run.get_context()
+
+    csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
+    if not csv_files:
+        raise FileNotFoundError(f"No CSV file found in mapped directory: {args.mapping_csv}")
+
+    mapping_df = pd.read_csv(csv_files[0]).drop_duplicates()
+    all_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
+
+    for file_path in all_files:
+        process_file(file_path, mapping_df, args.mapped_output, args.needs_model_output, args.key_output)
+
+if __name__ == "__main__":
+    main()
