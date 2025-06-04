@@ -86,9 +86,9 @@ def main():
     mapping_df = pd.read_csv(csv_files[0]).drop_duplicates()
     all_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
 
-    for file_path in all_files:
+    # Process only first 2 files for testing
+    for file_path in all_files[:2]:
         process_file(file_path, mapping_df, args.mapped_output, args.needs_model_output, args.key_output)
 
 if __name__ == "__main__":
     main()
------------
