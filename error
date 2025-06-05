@@ -4,13 +4,16 @@ import re
 import argparse
 import pandas as pd
 from multiprocessing import Pool, cpu_count
+from functools import partial
 
 # --- Replacement function ---
-def replace_match(m):
-    return abbrev_map.get(m.group(0).lower(), m.group(0))
+def replace_match_factory(abbrev_map):
+    def replace_match(m):
+        return abbrev_map.get(m.group(0).lower(), m.group(0))
+    return replace_match
 
 # --- Per-file processing ---
-def process_file(file):
+def process_file(file, abbrev_pattern, replace_match, output_path):
     try:
         df = pd.read_parquet(file)
 
@@ -22,43 +25,44 @@ def process_file(file):
             abbrev_pattern, replace_match, regex=True
         )
 
-        df.to_parquet(file, index=False)
-        print(f"✅ Expanded abbreviations in: {file}")
+        output_file = os.path.join(output_path, os.path.basename(file))
+        df.to_parquet(output_file, index=False)
+        print(f"✅ Expanded abbreviations in: {output_file}")
 
     except Exception as e:
         print(f"❌ Failed to process {file} -> {e}")
 
 # --- Main ---
 def main(input_path, abbrev_map_path, output_path):
-    global abbrev_map, abbrev_pattern
-
     # Load abbreviation map
     csv_files = glob.glob(os.path.join(abbrev_map_path, "*.csv"))
     if not csv_files:
         raise FileNotFoundError(f"No abbreviation CSV found in: {abbrev_map_path}")
+    
     abbrev_df = pd.read_csv(csv_files[0])
-    abbrev_map = {k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])}
-    abbrev_pattern = re.compile(r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b', flags=re.IGNORECASE)
+    abbrev_map = {
+        k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])
+    }
+    abbrev_pattern = re.compile(
+        r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b',
+        flags=re.IGNORECASE
+    )
+    replace_match = replace_match_factory(abbrev_map)
 
-    # Process files
     os.makedirs(output_path, exist_ok=True)
     files = glob.glob(os.path.join(input_path, '*.parquet'))
-    for file in files:
-        try:
-            df = pd.read_parquet(file)
-            df['CMPNT_MATL_DESC'] = df['CMPNT_MATL_DESC'].str.replace(abbrev_pattern, replace_match, regex=True)
 
-            output_file = os.path.join(output_path, os.path.basename(file))
-            df.to_parquet(output_file, index=False)
-            print(f"✅ Expanded abbreviations in: {output_file}")
-        except Exception as e:
-            print(f"❌ Failed: {file} -> {e}")
+    # Optional: run in parallel
+    worker_func = partial(process_file, abbrev_pattern=abbrev_pattern, replace_match=replace_match, output_path=output_path)
+    with Pool(processes=cpu_count()) as pool:
+        pool.map(worker_func, files)
+
 # --- Entry point ---
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--input_path', required=True)
     parser.add_argument('--abbrev_map', required=True)
-    parser.add_argument('--output_path',required=True)  # not used for now
+    parser.add_argument('--output_path', required=True)
     args = parser.parse_args()
 
     main(args.input_path, args.abbrev_map, args.output_path)
