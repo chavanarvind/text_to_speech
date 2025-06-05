@@ -1,16 +1,11 @@
-# Assign priority scores
-final_df['priority'] = final_df['prediction_flag'].map({
-    'Mapped_PreExtracted': 2,
-    'Mapped': 2,
-    'High Confidence': 1,
-    'Low Confidence': 0
-}).fillna(0)
+# Save separate samples for mapped and predicted
+sample_dir = os.path.join("outputs", "samples_by_source")
+os.makedirs(sample_dir, exist_ok=True)
 
-# Sort to put mapped rows first
-final_df = final_df.sort_values(by=['CMPNT_MATL_NUM', 'priority'], ascending=[True, False])
+# Mapped rows
+mapped_rows = final_df[final_df['prediction_flag'].str.contains("Mapped")]
+mapped_rows.head(100).to_csv(os.path.join(sample_dir, "sample_mapped_rows.csv"), index=False)
 
-# Drop duplicates, keeping highest priority (mapped rows)
-final_df = final_df.drop_duplicates(subset='CMPNT_MATL_NUM', keep='first')
-
-# Optional: clean up
-final_df.drop(columns='priority', inplace=True)
+# Predicted rows (inferred by model)
+predicted_rows = final_df[final_df['prediction_flag'].isin(["High Confidence", "Low Confidence"])]
+predicted_rows.head(100).to_csv(os.path.join(sample_dir, "sample_predicted_rows.csv"), index=False)
