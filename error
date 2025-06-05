@@ -1,67 +1,64 @@
-#data cleaning step
 import os
-import re
-import time
 import glob
+import re
+import argparse
 import pandas as pd
 from multiprocessing import Pool, cpu_count
-from functools import partial
 
-# --- Precompiled regex patterns ---
-patterns = {
-    'non_alphanumeric': re.compile(r'[^A-Za-z0-9&% ]+'),
-    'percent_space': re.compile(r"\s*%\s*"),
-    'canada_variants': re.compile(r'(canada|can|(ca\d+)$|ca)'),
-    'remove_canada': re.compile(r'canada\s*(\d{2,})|(canada\d+)|canada|can\s*(\d{2,})|(can\d+)|can|(ca\d+)|ca\s(\d{2,})|ca$|(ca\s)'),
-    'units': re.compile(r"(\D)(\d+)(\s*)(ml|l|gr|gm|g|ct)"),
-    'spf_space': re.compile(r"(\s)(spf)\s*([\d+])"),
-    'units_no_space': re.compile(r'([\d+])\s*(?:ml|l|gr|gm|g|ct)(?: |$)'),
-    'spf_number': re.compile(r"(\D)(spf\d+)")
-}
+# --- Replacement function ---
+def replace_match(m):
+    return abbrev_map.get(m.group(0).lower(), m.group(0))
 
-def clean_series(series):
-    return (series.str.lower()
-        .str.replace(patterns['non_alphanumeric'], '', regex=True)
-        .str.replace(patterns['percent_space'], '% ', regex=True)
-        .str.replace(patterns['canada_variants'], r' \1', regex=True)
-        .str.replace(patterns['remove_canada'], '', regex=True)
-        .str.replace(patterns['units'], r'\1 \2\3\4 ', regex=True)
-        .str.replace(patterns['spf_space'], r'\1\2\3', regex=True)
-        .str.replace(patterns['units_no_space'], lambda z: z.group().replace(" ", ""), regex=True)
-        .str.replace(patterns['spf_number'], r'\1 \2 ', regex=True)
-    )
-
-def text_clean_step(file, input_path, output_path):
+# --- Per-file processing ---
+def process_file(file):
     try:
         df = pd.read_parquet(file)
-        print(df)
 
-        df['MATL_SHRT_DESC'] = clean_series(df['MATL_SHRT_DESC'].fillna(''))
-        df['CMPNT_MATL_DESC'] = clean_series(df['CMPNT_MATL_DESC'].fillna(''))
+        if 'CMPNT_MATL_DESC' not in df.columns:
+            print(f"⚠️ Skipped {file}: missing 'CMPNT_MATL_DESC'")
+            return
 
-        df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'] = (
-            df['MATL_SHRT_DESC'] + ' ' + df['CMPNT_MATL_DESC']
-        ).str.strip()
+        df['CMPNT_MATL_DESC'] = df['CMPNT_MATL_DESC'].str.replace(
+            abbrev_pattern, replace_match, regex=True
+        )
 
-        rel_path = os.path.relpath(file, input_path)
-        output_file = os.path.join(output_path, rel_path)
-        os.makedirs(os.path.dirname(output_file), exist_ok=True)
-        df.to_parquet(output_file, index=False)
+        df.to_parquet(file, index=False)
+        print(f"✅ Expanded abbreviations in: {file}")
 
-        print(f"Done: {os.path.basename(file)}")
     except Exception as e:
-        print(f"Failed: {os.path.basename(file)} -> {e}")
+        print(f"❌ Failed to process {file} -> {e}")
 
-# --- Setup & execution ---
+# --- Main ---
+def main(input_path, abbrev_map_path, output_path):
+    global abbrev_map, abbrev_pattern
+
+    # Load abbreviation map
+    csv_files = glob.glob(os.path.join(abbrev_map_path, "*.csv"))
+    if not csv_files:
+        raise FileNotFoundError(f"No abbreviation CSV found in: {abbrev_map_path}")
+    abbrev_df = pd.read_csv(csv_files[0])
+    abbrev_map = {k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])}
+    abbrev_pattern = re.compile(r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b', flags=re.IGNORECASE)
+
+    # Process files
+    os.makedirs(output_path, exist_ok=True)
+    files = glob.glob(os.path.join(input_path, '*.parquet'))
+    for file in files:
+        try:
+            df = pd.read_parquet(file)
+            df['CMPNT_MATL_DESC'] = df['CMPNT_MATL_DESC'].str.replace(abbrev_pattern, replace_match, regex=True)
+
+            output_file = os.path.join(output_path, os.path.basename(file))
+            df.to_parquet(output_file, index=False)
+            print(f"✅ Expanded abbreviations in: {output_file}")
+        except Exception as e:
+            print(f"❌ Failed: {file} -> {e}")
+# --- Entry point ---
 if __name__ == '__main__':
-    input_path = './data/validation_step'
-    output_path = './data/validation_step'
-    max_processes = cpu_count()  # Or set manually
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input_path', required=True)
+    parser.add_argument('--abbrev_map', required=True)
+    parser.add_argument('--output_path',required=True)  # not used for now
+    args = parser.parse_args()
 
-    all_files = glob.glob(os.path.join(input_path, '*.parquet'))
-
-    # Use functools.partial to pass static args to worker
-    worker_func = partial(text_clean_step, input_path=input_path, output_path=output_path)
-
-    with Pool(processes=max_processes) as pool:
-        pool.map(worker_func, all_files)
+    main(args.input_path, args.abbrev_map, args.output_path)
