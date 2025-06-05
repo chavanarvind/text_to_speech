@@ -1,15 +1,10 @@
-# === Step 3: Abbreviation Expansion (run BEFORE cleaning now) ===
-abbrev_expand_step = PythonScriptStep(
-    name="Step 3 - Expand Abbreviations",
-    script_name="step_3_expand_abbreviation.py",
+clean_text_step = PythonScriptStep(
+    name="Step 2 - Text Cleaning",
+    script_name="step_2_clean_text.py",
     source_directory="scripts",
-    inputs=[data_step1a_unmapped, abbrev_mount],  # ⬅️ changed from data_step2_out
-    arguments=[
-        "--input_path", data_step1a_unmapped,
-        "--abbrev_map", abbrev_mount,
-        "--output_path", data_step2_out   # output will now feed into cleaning step
-    ],
-    outputs=[data_step2_out],  # renamed for consistency
+    inputs=[data_step2_out],
+    arguments=["--input_path", data_step2_out, "--output_path", data_step3_out],
+    outputs=[data_step3_out],
     runconfig=run_config,
     compute_target=compute_name,
     allow_reuse=False
