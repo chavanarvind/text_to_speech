@@ -1,1 +1,15 @@
-.str.replace(r'\b\d{5,}\b$', '', regex=True)
+def clean_series(series):
+    return (series.str.lower()
+        .str.replace(patterns['non_alphanumeric'], '', regex=True)
+        .str.replace(patterns['percent_space'], '% ', regex=True)
+        .str.replace(patterns['remove_canada'], '', regex=True)
+        .str.replace(patterns['units'], r'\1 \2\3\4 ', regex=True)
+        .str.replace(patterns['spf_space'], r'\1\2\3', regex=True)
+        .str.replace(patterns['units_no_space'], lambda z: z.group().replace(" ", ""), regex=True)
+        .str.replace(patterns['spf_number'], r'\1 \2 ', regex=True)
+        .str.replace(r'\b\d{5,}\b$', '', regex=True)       # remove trailing long numbers
+        .str.replace(r'\b\d+\b', '', regex=True)           # remove all standalone numbers
+        .str.replace(r'\s+', ' ', regex=True)              # normalize extra spaces
+        .str.strip()
+        .apply(lambda x: ' '.join(dict.fromkeys(x.split())))  # remove duplicate words
+    )
