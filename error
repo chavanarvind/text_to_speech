@@ -1,11 +1,115 @@
-clean_text_step = PythonScriptStep(
-    name="Step 2 - Text Cleaning",
-    script_name="step_2_clean_text.py",
-    source_directory="scripts",
-    inputs=[data_step2_out],
-    arguments=["--input_path", data_step2_out, "--output_path", data_step3_out],
-    outputs=[data_step3_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
+import os
+import re
+import glob
+import pandas as pd
+from multiprocessing import Pool, cpu_count
+from functools import partial
+
+# Precompiled regex patterns
+patterns = {
+    'non_alphanumeric': re.compile(r'[^A-Za-z0-9&% ]+'),
+    'percent_space': re.compile(r"\s*%\s*"),
+    'canada_variants': re.compile(r'(canada|can|(ca\d+)$|ca)'),
+    'remove_canada': re.compile(r'canada\s*(\d{2,})|(canada\d+)|canada|can\s*(\d{2,})|(can\d+)|can|(ca\d+)|ca\s(\d{2,})|ca$|(ca\s)'),
+    'units': re.compile(r"(\D)(\d+)(\s*)(ml|l|gr|gm|g|ct)"),
+    'spf_space': re.compile(r"(\s)(spf)\s*([\d+])"),
+    'units_no_space': re.compile(r'([\d+])\s*(?:ml|l|gr|gm|g|ct)(?: |$)'),
+    'spf_number': re.compile(r"(\D)(spf\d+)")
+}
+
+def clean_series(series):
+    return (series.str.lower()
+        .str.replace(patterns['non_alphanumeric'], '', regex=True)
+        .str.replace(patterns['percent_space'], '% ', regex=True)
+        .str.replace(patterns['canada_variants'], r' \1', regex=True)
+        .str.replace(patterns['remove_canada'], '', regex=True)
+        .str.replace(patterns['units'], r'\1 \2\3\4 ', regex=True)
+        .str.replace(patterns['spf_space'], r'\1\2\3', regex=True)
+        .str.replace(patterns['units_no_space'], lambda z: z.group().replace(" ", ""), regex=True)
+        .str.replace(patterns['spf_number'], r'\1 \2 ', regex=True)
+    )
+
+def text_clean_step(file, input_path, output_path):
+    try:
+        df = pd.read_parquet(file)
+
+        # Keep only rows with Final Category
+        df = df[df['Final Category'].notna()]
+        if df.empty:
+            print(f"⚠️ Skipped (no valid rows): {os.path.basename(file)}")
+            return
+
+        # Clean both columns separately
+        df['MATL_SHRT_DESC'] = clean_series(df['MATL_SHRT_DESC'].fillna(''))
+        df['CMPNT_MATL_DESC'] = clean_series(df['CMPNT_MATL_DESC'].fillna(''))
+
+        # Combine cleaned text
+        df['MATL_SHRT_DESC_AND_CMPNT_MATL_DESC'] = (
+            df['MATL_SHRT_DESC'] + ' ' + df['CMPNT_MATL_DESC']
+        ).str.strip()
+
+        # Save to new path
+        rel_path = os.path.relpath(file, input_path)
+        output_file = os.path.join(output_path, rel_path)
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        df.to_parquet(output_file, index=False)
+
+        print(f"✅ Done: {os.path.basename(file)}")
+    except Exception as e:
+        print(f"❌ Failed: {os.path.basename(file)} -> {e}")
+
+# Run the cleaning process in parallel
+if __name__ == '__main__':
+    input_path = './data/target_map_parquet_files'
+    output_path = './data/target_map_cleaned_non_null_target'
+    all_files = glob.glob(os.path.join(input_path, '*.parquet'))
+
+    worker_func = partial(text_clean_step, input_path=input_path, output_path=output_path)
+    with Pool(processes=cpu_count()) as pool:
+        pool.map(worker_func, all_files)
+____________________________________________________
+
+import os
+import re
+import glob
+import pandas as pd
+from multiprocessing import Pool, cpu_count
+
+# --- Load abbreviation map ---
+abbrev_csv_path = './data/abbreviation_expension_updated.csv'
+abbrev_df = pd.read_csv(abbrev_csv_path)
+abbrev_map = {k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])}
+abbrev_pattern = re.compile(r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b', flags=re.IGNORECASE)
+
+def expand_abbreviations(text):
+    return abbrev_pattern.sub(lambda m: abbrev_map.get(m.group(0).lower(), m.group(0)), text)
+
+# --- Worker function ---
+def process_file(file):
+    try:
+        df = pd.read_parquet(file)
+
+        # Filter out rows with null Final Category
+        df = df[df['Final Category'].notna()]
+        if df.empty:
+            print(f"⚠️ Skipped (no valid rows): {os.path.basename(file)}")
+            return
+
+        # Apply abbreviation expansion only
+        df['MATL_SHRT_DESC'] = df['MATL_SHRT_DESC'].fillna('').apply(expand_abbreviations)
+        df['CMPNT_MATL_DESC'] = df['CMPNT_MATL_DESC'].fillna('').apply(expand_abbreviations)
+
+        # Overwrite file
+        df.to_parquet(file, index=False)
+        print(f"✅ Done: {os.path.basename(file)}")
+
+    except Exception as e:
+        print(f"❌ Failed: {os.path.basename(file)} -> {e}")
+
+# --- Execute in parallel ---
+if __name__ == '__main__':
+    input_path = './data/target_map_cleaned_non_null_target'
+    files = glob.glob(os.path.join(input_path, '*.parquet'))
+
+    with Pool(processes=cpu_count()) as pool:
+        pool.map(process_file, files)
