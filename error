@@ -1,9 +1,16 @@
-# Updated order: Abbreviation before Cleaning
-pipeline = Pipeline(workspace=ws, steps=[
-    data_pull_step,
-    high_conf_merge_step,
-    abbrev_expand_step,   # 👈 move this up
-    clean_text_step,      # 👈 move this down
-    feature_eng_step,
-    inference_step
-])
+# === Step 3: Abbreviation Expansion (run BEFORE cleaning now) ===
+abbrev_expand_step = PythonScriptStep(
+    name="Step 3 - Expand Abbreviations",
+    script_name="step_3_expand_abbreviation.py",
+    source_directory="scripts",
+    inputs=[data_step1a_unmapped, abbrev_mount],  # ⬅️ changed from data_step2_out
+    arguments=[
+        "--input_path", data_step1a_unmapped,
+        "--abbrev_map", abbrev_mount,
+        "--output_path", data_step2_out   # output will now feed into cleaning step
+    ],
+    outputs=[data_step2_out],  # renamed for consistency
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
