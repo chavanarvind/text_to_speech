@@ -6,14 +6,15 @@ import pandas as pd
 from multiprocessing import Pool, cpu_count
 from functools import partial
 
-# --- Replacement function ---
-def replace_match_factory(abbrev_map):
-    def replace_match(m):
-        return abbrev_map.get(m.group(0).lower(), m.group(0))
-    return replace_match
+# Global abbreviation map for multiprocessing-safe replacement
+GLOBAL_ABBREV_MAP = {}
+
+# --- Replacement function (must be top-level for pickling) ---
+def replace_match(m):
+    return GLOBAL_ABBREV_MAP.get(m.group(0).lower(), m.group(0))
 
 # --- Per-file processing ---
-def process_file(file, abbrev_pattern, replace_match, output_path):
+def process_file(file, abbrev_pattern, output_path):
     try:
         df = pd.read_parquet(file)
 
@@ -43,17 +44,25 @@ def main(input_path, abbrev_map_path, output_path):
     abbrev_map = {
         k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])
     }
+
+    # Set global for multiprocessing-safe replacement
+    global GLOBAL_ABBREV_MAP
+    GLOBAL_ABBREV_MAP = abbrev_map
+
     abbrev_pattern = re.compile(
         r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b',
         flags=re.IGNORECASE
     )
-    replace_match = replace_match_factory(abbrev_map)
 
     os.makedirs(output_path, exist_ok=True)
     files = glob.glob(os.path.join(input_path, '*.parquet'))
 
-    # Optional: run in parallel
-    worker_func = partial(process_file, abbrev_pattern=abbrev_pattern, replace_match=replace_match, output_path=output_path)
+    # Run in parallel
+    worker_func = partial(
+        process_file,
+        abbrev_pattern=abbrev_pattern,
+        output_path=output_path
+    )
     with Pool(processes=cpu_count()) as pool:
         pool.map(worker_func, files)
 
@@ -66,34 +75,3 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     main(args.input_path, args.abbrev_map, args.output_path)
-
-
-
-
-
-
-
-
-
-
-Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.scriptrun = azureml.core.script_run:ScriptRun._from_run_dto with exception (packaging 23.2 (/opt/conda/envs/ptca/lib/python3.8/site-packages), Requirement.parse('packaging<=23.0,>=20.0')).
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.1066288948059082 seconds
-Traceback (most recent call last):
-  File "step_3_expand_abbreviation.py", line 68, in <module>
-    main(args.input_path, args.abbrev_map, args.output_path)
-  File "step_3_expand_abbreviation.py", line 58, in main
-    pool.map(worker_func, files)
-  File "/opt/conda/envs/ptca/lib/python3.8/multiprocessing/pool.py", line 364, in map
-    return self._map_async(func, iterable, mapstar, chunksize).get()
-  File "/opt/conda/envs/ptca/lib/python3.8/multiprocessing/pool.py", line 771, in get
-    raise self._value
-  File "/opt/conda/envs/ptca/lib/python3.8/multiprocessing/pool.py", line 537, in _handle_tasks
-    put(task)
-  File "/opt/conda/envs/ptca/lib/python3.8/multiprocessing/connection.py", line 206, in send
-    self._send_bytes(_ForkingPickler.dumps(obj))
-  File "/opt/conda/envs/ptca/lib/python3.8/multiprocessing/reduction.py", line 51, in dumps
-    cls(buf, protocol).dump(obj)
-AttributeError: Can't pickle local object 'replace_match_factory.<locals>.replace_match'
-
