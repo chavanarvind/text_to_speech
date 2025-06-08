@@ -1,24 +1,5 @@
-AFTER final_df = pd.read_parquet("outputs/final_prediction_combined.parquet")
-
-# Rename columns for final mapping
-final_df = final_df.rename(columns={
-    "Final_Prediction": "AI_FINAL_CATEGORY",
-    "Final Subcategory": "AI_FINAL_SUBCATEGORY",
-    "Score": "AI_FINAL_CATEGORY_CONFIDENCE",
-    "Subcategory_Score": "AI_FINAL_SUBCATEGORY_CONFIDENCE",
-    "inferred_category_model": "AI_MATCHING_REASON_FINAL_CATEGORY",
-    "Subcategory_Model": "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
-})
-
-merged_df = key_df.merge(
-    final_df[[
-        "CMPNT_MATL_NUM",
-        "AI_FINAL_CATEGORY",
-        "AI_FINAL_SUBCATEGORY",
-        "AI_FINAL_CATEGORY_CONFIDENCE",
-        "AI_FINAL_SUBCATEGORY_CONFIDENCE",
-        "AI_MATCHING_REASON_FINAL_CATEGORY",
-        "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
-    ]],
-    how="left", on="CMPNT_MATL_NUM"
-)
+ADLS2 Container:
+Storage: adlsdtodsdev
+Container: bom-xref  
+Weekly Folder: hbom_category_prediction_DDMMYYYY
+ 
