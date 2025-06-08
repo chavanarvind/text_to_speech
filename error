@@ -1,3 +1,9 @@
+RPM_Category_model_full_CHM_V1
+RPM_Category_model_full_FNW_V1
+RPM_Category_model_full_PKG_V1
+
+
+
 import os
 import argparse
 import pandas as pd
