@@ -1,18 +1,1 @@
-[2025-06-08 17:23:03]  Removing duplicates by CMPNT_MATL_NUM...
-[2025-06-08 17:23:18]  Saved combined output as final_prediction_combined.parquet and sample CSV
-[2025-06-08 17:23:24]  Mapping predictions back to original key files...
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.11261916160583496 seconds
-Traceback (most recent call last):
-  File "step_5_run_inference.py", line 220, in <module>
-    final_df = pd.read_parquet("outputs/final_prediction_combined.parquet")
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/io/parquet.py", line 509, in read_parquet
-    return impl.read(
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/io/parquet.py", line 220, in read
-    path_or_handle, handles, kwargs["filesystem"] = _get_path_or_handle(
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/io/parquet.py", line 110, in _get_path_or_handle
-    handles = get_handle(
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/io/common.py", line 868, in get_handle
-    handle = open(handle, ioargs.mode)
-FileNotFoundError: [Errno 2] No such file or directory: 'outputs/final_prediction_combined.parquet'
+final_df.to_parquet("outputs/final_prediction_combined.parquet", index=False)
