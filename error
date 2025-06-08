@@ -1,42 +1,76 @@
-from azureml.core import Run, Datastore, Dataset, Workspace
-import time
+log(" Mapping predictions back to original key files...")
+    key_files = [f for f in os.listdir(args.key_output_dir) if f.endswith(".parquet")]
+    mapped_keys_dir = os.path.join("outputs", "mapped_keys")
+    os.makedirs(mapped_keys_dir, exist_ok=True)
 
-# Step 1: Get current date in DDMMYYYY format
-curr_time = time.strftime("%d%m%Y", time.localtime())
-output_folder_name = f"hbom_category_prediction_{curr_time}"
+    final_df = pd.read_parquet("outputs/final_prediction_combined.parquet")
 
-# Step 2: Setup upload directory
-upload_dir = os.path.join("outputs", "upload_dir")
-os.makedirs(upload_dir, exist_ok=True)
+    # Rename columns for final output
+    final_df = final_df.rename(columns={
+        "Final_Prediction": "AI_FINAL_CATEGORY",
+        "Final Subcategory": "AI_FINAL_SUBCATEGORY",
+        "Score": "AI_FINAL_CATEGORY_CONFIDENCE",
+        "Subcategory_Score": "AI_FINAL_SUBCATEGORY_CONFIDENCE",
+        "inferred_category_model": "AI_MATCHING_REASON_FINAL_CATEGORY",
+        "Subcategory_Model": "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
+    })
 
-# Step 3: Copy all merged parquet files into upload_dir
-for key_file in key_files:
+    for key_file in key_files:
+        key_path = os.path.join(args.key_output_dir, key_file)
+        try:
+            key_df = pd.read_parquet(key_path)
+            merged_df = key_df.merge(
+                final_df[[
+                    "CMPNT_MATL_NUM",
+                    "AI_FINAL_CATEGORY",
+                    "AI_FINAL_SUBCATEGORY",
+                    "AI_FINAL_CATEGORY_CONFIDENCE",
+                    "AI_FINAL_SUBCATEGORY_CONFIDENCE",
+                    "AI_MATCHING_REASON_FINAL_CATEGORY",
+                    "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
+                ]],
+                how="left", on="CMPNT_MATL_NUM"
+            )
+            out_path = os.path.join(mapped_keys_dir, key_file)
+            merged_df.to_parquet(out_path, index=False)
+            log(f"✅ Saved mapped key file: {out_path}")
+        except Exception as e:
+            log(f"❌ Failed to process key file {key_file}: {e}")
+
+    # ✅ Upload to ADLS2 (bom-xref) in hbom_category_prediction_DDMMYYYY format
+    from azureml.core import Run, Datastore, Dataset, Workspace
+    import time
+    import shutil
+
+    curr_time = time.strftime("%d%m%Y", time.localtime())
+    output_folder_name = f"hbom_category_prediction_{curr_time}"
+    upload_dir = os.path.join("outputs", "upload_dir")
+    os.makedirs(upload_dir, exist_ok=True)
+
+    for key_file in key_files:
+        try:
+            source_path = os.path.join(mapped_keys_dir, key_file)
+            target_path = os.path.join(upload_dir, key_file)
+            if os.path.exists(source_path):
+                shutil.copy2(source_path, target_path)
+        except Exception as e:
+            log(f"❌ Failed to copy {key_file} to upload_dir: {e}")
+
     try:
-        source_path = os.path.join("outputs", "mapped_keys", key_file)
-        target_path = os.path.join(upload_dir, key_file)
-        if os.path.exists(source_path):
-            import shutil
-            shutil.copy2(source_path, target_path)
+        run = Run.get_context()
+        if run.identity.startswith("OfflineRun"):
+            ws = Workspace.from_config()
+        else:
+            ws = run.experiment.workspace
+
+        ds = Datastore.get(ws, "bom-xref")
+
+        Dataset.File.upload_directory(
+            src_dir=upload_dir,
+            target=ds.path(output_folder_name),
+            overwrite=True
+        )
+
+        log(f"✅ Uploaded merged files to ADLS2 path: bom-xref/{output_folder_name}/")
     except Exception as e:
-        log(f"❌ Failed to copy {key_file} to upload_dir: {e}")
-
-# Step 4: Upload to ADLS2 container via registered datastore
-try:
-    run = Run.get_context()
-    if run.identity.startswith('OfflineRun'):
-        # If running locally (OPTIONAL: replace with your workspace config)
-        ws = Workspace.from_config()
-    else:
-        ws = run.experiment.workspace
-
-    ds = Datastore.get(ws, "bom-xref")
-
-    Dataset.File.upload_directory(
-        src_dir=upload_dir,
-        target=ds.path(output_folder_name),
-        overwrite=True
-    )
-
-    log(f"✅ Uploaded merged files to ADLS2 path: bom-xref/{output_folder_name}/")
-except Exception as e:
-    log(f"❌ ADLS2 upload failed: {e}")
+        log(f"❌ ADLS2 upload failed: {e}")
