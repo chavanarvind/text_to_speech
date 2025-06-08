@@ -1,76 +1,99 @@
-log(" Mapping predictions back to original key files...")
-    key_files = [f for f in os.listdir(args.key_output_dir) if f.endswith(".parquet")]
-    mapped_keys_dir = os.path.join("outputs", "mapped_keys")
-    os.makedirs(mapped_keys_dir, exist_ok=True)
+import os
+import glob
+import re
+import argparse
+import pandas as pd
+from multiprocessing import Pool, cpu_count
+from functools import partial
 
-    final_df = pd.read_parquet("outputs/final_prediction_combined.parquet")
+# --- Replacement function ---
+def replace_match_factory(abbrev_map):
+    def replace_match(m):
+        return abbrev_map.get(m.group(0).lower(), m.group(0))
+    return replace_match
 
-    # Rename columns for final output
-    final_df = final_df.rename(columns={
-        "Final_Prediction": "AI_FINAL_CATEGORY",
-        "Final Subcategory": "AI_FINAL_SUBCATEGORY",
-        "Score": "AI_FINAL_CATEGORY_CONFIDENCE",
-        "Subcategory_Score": "AI_FINAL_SUBCATEGORY_CONFIDENCE",
-        "inferred_category_model": "AI_MATCHING_REASON_FINAL_CATEGORY",
-        "Subcategory_Model": "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
-    })
-
-    for key_file in key_files:
-        key_path = os.path.join(args.key_output_dir, key_file)
-        try:
-            key_df = pd.read_parquet(key_path)
-            merged_df = key_df.merge(
-                final_df[[
-                    "CMPNT_MATL_NUM",
-                    "AI_FINAL_CATEGORY",
-                    "AI_FINAL_SUBCATEGORY",
-                    "AI_FINAL_CATEGORY_CONFIDENCE",
-                    "AI_FINAL_SUBCATEGORY_CONFIDENCE",
-                    "AI_MATCHING_REASON_FINAL_CATEGORY",
-                    "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
-                ]],
-                how="left", on="CMPNT_MATL_NUM"
-            )
-            out_path = os.path.join(mapped_keys_dir, key_file)
-            merged_df.to_parquet(out_path, index=False)
-            log(f"✅ Saved mapped key file: {out_path}")
-        except Exception as e:
-            log(f"❌ Failed to process key file {key_file}: {e}")
-
-    # ✅ Upload to ADLS2 (bom-xref) in hbom_category_prediction_DDMMYYYY format
-    from azureml.core import Run, Datastore, Dataset, Workspace
-    import time
-    import shutil
-
-    curr_time = time.strftime("%d%m%Y", time.localtime())
-    output_folder_name = f"hbom_category_prediction_{curr_time}"
-    upload_dir = os.path.join("outputs", "upload_dir")
-    os.makedirs(upload_dir, exist_ok=True)
-
-    for key_file in key_files:
-        try:
-            source_path = os.path.join(mapped_keys_dir, key_file)
-            target_path = os.path.join(upload_dir, key_file)
-            if os.path.exists(source_path):
-                shutil.copy2(source_path, target_path)
-        except Exception as e:
-            log(f"❌ Failed to copy {key_file} to upload_dir: {e}")
-
+# --- Per-file processing ---
+def process_file(file, abbrev_pattern, replace_match, output_path):
     try:
-        run = Run.get_context()
-        if run.identity.startswith("OfflineRun"):
-            ws = Workspace.from_config()
-        else:
-            ws = run.experiment.workspace
+        df = pd.read_parquet(file)
 
-        ds = Datastore.get(ws, "bom-xref")
+        if 'CMPNT_MATL_DESC' not in df.columns:
+            print(f"⚠️ Skipped {file}: missing 'CMPNT_MATL_DESC'")
+            return
 
-        Dataset.File.upload_directory(
-            src_dir=upload_dir,
-            target=ds.path(output_folder_name),
-            overwrite=True
+        df['CMPNT_MATL_DESC_CLEAN'] = df['CMPNT_MATL_DESC'].str.replace(
+            abbrev_pattern, replace_match, regex=True
         )
 
-        log(f"✅ Uploaded merged files to ADLS2 path: bom-xref/{output_folder_name}/")
+        output_file = os.path.join(output_path, os.path.basename(file))
+        df.to_parquet(output_file, index=False)
+        print(f"✅ Expanded abbreviations in: {output_file}")
+
     except Exception as e:
-        log(f"❌ ADLS2 upload failed: {e}")
+        print(f"❌ Failed to process {file} -> {e}")
+
+# --- Main ---
+def main(input_path, abbrev_map_path, output_path):
+    # Load abbreviation map
+    csv_files = glob.glob(os.path.join(abbrev_map_path, "*.csv"))
+    if not csv_files:
+        raise FileNotFoundError(f"No abbreviation CSV found in: {abbrev_map_path}")
+    
+    abbrev_df = pd.read_csv(csv_files[0])
+    abbrev_map = {
+        k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])
+    }
+    abbrev_pattern = re.compile(
+        r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b',
+        flags=re.IGNORECASE
+    )
+    replace_match = replace_match_factory(abbrev_map)
+
+    os.makedirs(output_path, exist_ok=True)
+    files = glob.glob(os.path.join(input_path, '*.parquet'))
+
+    # Optional: run in parallel
+    worker_func = partial(process_file, abbrev_pattern=abbrev_pattern, replace_match=replace_match, output_path=output_path)
+    with Pool(processes=cpu_count()) as pool:
+        pool.map(worker_func, files)
+
+# --- Entry point ---
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input_path', required=True)
+    parser.add_argument('--abbrev_map', required=True)
+    parser.add_argument('--output_path', required=True)
+    args = parser.parse_args()
+
+    main(args.input_path, args.abbrev_map, args.output_path)
+
+
+
+
+
+
+
+
+
+
+Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.scriptrun = azureml.core.script_run:ScriptRun._from_run_dto with exception (packaging 23.2 (/opt/conda/envs/ptca/lib/python3.8/site-packages), Requirement.parse('packaging<=23.0,>=20.0')).
+Cleaning up all outstanding Run operations, waiting 300.0 seconds
+1 items cleaning up...
+Cleanup took 0.1066288948059082 seconds
+Traceback (most recent call last):
+  File "step_3_expand_abbreviation.py", line 68, in <module>
+    main(args.input_path, args.abbrev_map, args.output_path)
+  File "step_3_expand_abbreviation.py", line 58, in main
+    pool.map(worker_func, files)
+  File "/opt/conda/envs/ptca/lib/python3.8/multiprocessing/pool.py", line 364, in map
+    return self._map_async(func, iterable, mapstar, chunksize).get()
+  File "/opt/conda/envs/ptca/lib/python3.8/multiprocessing/pool.py", line 771, in get
+    raise self._value
+  File "/opt/conda/envs/ptca/lib/python3.8/multiprocessing/pool.py", line 537, in _handle_tasks
+    put(task)
+  File "/opt/conda/envs/ptca/lib/python3.8/multiprocessing/connection.py", line 206, in send
+    self._send_bytes(_ForkingPickler.dumps(obj))
+  File "/opt/conda/envs/ptca/lib/python3.8/multiprocessing/reduction.py", line 51, in dumps
+    cls(buf, protocol).dump(obj)
+AttributeError: Can't pickle local object 'replace_match_factory.<locals>.replace_match'
+
