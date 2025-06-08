@@ -1,8 +1,6 @@
-model_name = f"RPM_Category_model_full_{cat}_V1"
-
-valid_categories = ['CHM', 'PKG', 'FNW']
-for cat in valid_categories:
-    subset = df_sub_pred[df_sub_pred['Final_Prediction'] == cat].copy()
-    if not subset.empty:
-        log(f" Subcategory prediction for {cat}: {len(subset)} rows")
-        model_name = f"RPM_Category_model_full_{cat}_V1"
+AI_FINAL_CATEGORY
+AI_FINAL_SUBCATEGORY
+AI_FINAL_CATEGORY_CONFIDENCE
+AI_FINAL_SUBCATEGORY_CONFIDENCE
+AI_MATCHING_REASON_FINAL_CATEGORY
+AI_MATCHING_REASON_FINAL_SUBCATEGORY
