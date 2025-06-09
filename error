@@ -1,4 +1,4 @@
-
-df_no_category_needed = df_pred[~df_pred.index.isin(df_needs_category.index)].copy()
-
-df_no_category_needed['Final_Prediction'] = df_no_category_needed['Final Category']
+df_mapped['Final Subcategory'] = df_mapped['Final Subcategory'] if 'Final Subcategory' in df_mapped.columns else df_mapped['Final Category']
+df_mapped['Subcategory_Score'] = 1.0
+df_mapped['Subcategory_Model'] = 'direct_mapping'
+df_mapped['Predicted_Subcategory'] = df_mapped['Final Subcategory']
