@@ -1,12 +1,22 @@
-df_out.loc[df_out['prediction_flag'].str.contains("Mapped"), 'Final Subcategory'] = df_out['Final Subcategory']
-df_out.loc[df_out['prediction_flag'].str.contains("Mapped"), 'Subcategory_Score'] = 1.0
-df_out.loc[df_out['prediction_flag'].str.contains("Mapped"), 'Subcategory_Model'] = 'direct_mapping'
-df_out.loc[df_out['prediction_flag'].str.contains("Mapped"), 'Predicted_Subcategory'] = df_out['Final Subcategory']
+merged_df = key_df.merge(
+    final_df[[
+        "CMPNT_MATL_NUM",
+        "AI_FINAL_CATEGORY",
+        "AI_FINAL_SUBCATEGORY",
+        "AI_FINAL_CATEGORY_CONFIDENCE",
+        "AI_FINAL_SUBCATEGORY_CONFIDENCE",
+        "AI_MATCHING_REASON_FINAL_CATEGORY",
+        "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
+    ]],
+    how="left", on="CMPNT_MATL_NUM"
+)
 
-if not df_out.empty and 'prediction_flag' in df_out.columns:
-    mask_mapped = df_out['prediction_flag'].astype(str).str.contains("Mapped", na=False)
-    if mask_mapped.any():
-        df_out.loc[mask_mapped, 'Final Subcategory'] = df_out.loc[mask_mapped, 'Final Subcategory']
-        df_out.loc[mask_mapped, 'Subcategory_Score'] = 1.0
-        df_out.loc[mask_mapped, 'Subcategory_Model'] = 'direct_mapping'
-        df_out.loc[mask_mapped, 'Predicted_Subcategory'] = df_out.loc[mask_mapped, 'Final Subcategory']
+# 🔍 Add this validation block here
+if len(merged_df) != len(key_df):
+    print(f"❌ Row count mismatch: original = {len(key_df)}, merged = {len(merged_df)}")
+else:
+    print(f"✅ Row count validated: {len(merged_df)} rows")
+
+out_path = os.path.join(mapped_keys_dir, key_file)
+merged_df.to_parquet(out_path, index=False)
+log(f"✅ Saved mapped key file: {out_path}")
