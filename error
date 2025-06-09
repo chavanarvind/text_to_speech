@@ -1,22 +1,98 @@
-/opt/conda/envs/ptca/lib/python3.8/site-packages/sklearn/base.py:318: UserWarning: Trying to unpickle estimator StandardScaler from version 1.5.1 when using version 1.2.2. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
-https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
-  warnings.warn(
-[2025-06-09 16:10:45] [INFO] Total original input rows: 2475492
-[2025-06-09 16:10:45] [INFO] Final prediction row count (after deduplication): 186771
-[2025-06-09 16:10:46] Saved final prediction file
-[2025-06-09 16:11:00] Mapped back predictions to key file: part-00000-0042fc95-a813-4a78-a5ea-9d565974a2b5-c000.snappy.parquet
-[2025-06-09 16:11:12] Mapped back predictions to key file: part-00000-00bb3abb-2599-4885-a2cf-085958187528-c000.snappy.parquet
-[2025-06-09 16:11:25] Mapped back predictions to key file: part-00000-00bb5c5d-ffa7-4fff-9b9c-7fdfa729ffb8-c000.snappy.parquet
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.12522315979003906 seconds
-Traceback (most recent call last):
-  File "step_5_run_inference.py", line 191, in <module>
-    main(args.input_path, args.additional_mapped_dir, args.key_output_dir)
-  File "step_5_run_inference.py", line 180, in main
-    final_df[final_df['prediction_flag'].str.contains("Mapped")].head(100).to_csv(
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/frame.py", line 3750, in __getitem__
-    if com.is_bool_indexer(key):
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/common.py", line 134, in is_bool_indexer
-    raise ValueError(na_msg)
-ValueError: Cannot mask with non-boolean array containing NA / NaN values
+import os
+import glob
+import argparse
+import pandas as pd
+from azureml.core import Run
+
+# === Column to match ===
+JOIN_COL_1 = "CMPNT_CAT_CD_DESC"
+JOIN_COL_2 = "CMPNT_MATL_TYPE_CD"
+DIRECT_MAP_KEY_1 = "Direct Mapping"
+DIRECT_MAP_KEY_2 = "Direct Mapping"
+
+# === Key Columns to output ===
+KEY_COLS = [
+    "ROW_NM", "SRC_SYS_CD", "MATL_NUM", "PLNT_CD", "CMPNT_MATL_NUM",
+    "BOM_LVL_DTLS_NUM", "TRU_MATL_NUM", "CMPNT_RM_SPEC_CD",
+    "CMPNT_PC_SPEC_CD", "CMPNT_DC_SPEC_CD", "RAW_MATL_TITLE_NM"
+]
+
+def process_file(file_path, mapping_df, mapped_dir, needs_model_dir, key_output_dir):
+    try:
+        df = pd.read_parquet(file_path)
+        df.drop_duplicates(inplace=True)
+
+        df[JOIN_COL_1] = df[JOIN_COL_1].fillna("").astype(str).str.strip()
+        df[JOIN_COL_2] = df[JOIN_COL_2].fillna("").astype(str).str.strip()
+        mapping_df[DIRECT_MAP_KEY_1] = mapping_df[DIRECT_MAP_KEY_1].astype(str).str.strip()
+        mapping_df[DIRECT_MAP_KEY_2] = mapping_df[DIRECT_MAP_KEY_2].astype(str).str.strip()
+
+        # Stage 1 mapping
+        stage1_df = df.merge(mapping_df, how="inner", left_on=[JOIN_COL_1], right_on=[DIRECT_MAP_KEY_1])
+        stage1_df['matching_reason'] = 'direct_mapping_category'
+        stage1_df['confidence_score'] = 1.0
+
+        # Stage 2 mapping
+        df_not_mapped = df[~df['CMPNT_MATL_NUM'].isin(stage1_df['CMPNT_MATL_NUM'])]
+        stage2_df = df_not_mapped.merge(mapping_df, how="inner", left_on=[JOIN_COL_2], right_on=[DIRECT_MAP_KEY_2])
+        stage2_df['matching_reason'] = 'direct_mapping_type_only'
+        stage2_df['confidence_score'] = 1.0
+
+        mapped_df = pd.concat([stage1_df, stage2_df], ignore_index=True)
+        mapped_df['Final Category Filled'] = mapped_df['Final Category'].notna() & mapped_df['Final Category'].str.strip().ne("")
+        mapped_df['Final Subcategory Filled'] = mapped_df['Final Subcategory'].notna() & mapped_df['Final Subcategory'].str.strip().ne("")
+        mapped_df['needs_model'] = ~mapped_df['Final Category Filled'] | ~mapped_df['Final Subcategory Filled']
+
+        mapped_only_df = mapped_df[~mapped_df['needs_model']].copy()
+        needs_model_df = mapped_df[mapped_df['needs_model']].copy()
+        sample_dir = os.path.join("outputs", "samples_by_source")
+        os.makedirs(sample_dir, exist_ok=True)
+        needs_model_df.to_csv("outputs/needs_model_df.csv", index=False)
+
+
+        # Drop datetime columns to avoid Parquet casting issues
+        mapped_only_df = mapped_only_df.drop(columns=mapped_only_df.select_dtypes(include=["datetime64[ns]"]).columns)
+        needs_model_df = needs_model_df.drop(columns=needs_model_df.select_dtypes(include=["datetime64[ns]"]).columns)
+
+        base_name = os.path.basename(file_path)
+        os.makedirs(mapped_dir, exist_ok=True)
+        os.makedirs(needs_model_dir, exist_ok=True)
+
+        mapped_only_df.to_parquet(os.path.join(mapped_dir, base_name), index=False)
+        needs_model_df.to_parquet(os.path.join(needs_model_dir, base_name), index=False)
+
+        # Save key reference
+        if all(col in df.columns for col in KEY_COLS):
+            key_df = df[KEY_COLS].drop_duplicates()
+            key_df = key_df.drop(columns=key_df.select_dtypes(include=["datetime64[ns]"]).columns)
+            os.makedirs(key_output_dir, exist_ok=True)
+            key_df.to_parquet(os.path.join(key_output_dir, base_name), index=False)
+            print(f"🔑 Saved key reference: {base_name}")
+
+    except Exception as e:
+        print(f"❌ Failed to process {file_path}: {e}")
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_path", type=str, required=True)
+    parser.add_argument("--mapping_csv", type=str, required=True)
+    parser.add_argument("--mapped_output", type=str, required=True)
+    parser.add_argument("--needs_model_output", type=str, required=True)
+    parser.add_argument("--key_output", type=str, required=True)
+    args = parser.parse_args()
+
+    run = Run.get_context()
+
+    csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
+    if not csv_files:
+        raise FileNotFoundError(f"No CSV file found in mapped directory: {args.mapping_csv}")
+
+    mapping_df = pd.read_csv(csv_files[0]).drop_duplicates()
+    all_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
+
+    # Process only first 2 files for testing
+    for file_path in all_files[:3]:
+        process_file(file_path, mapping_df, args.mapped_output, args.needs_model_output, args.key_output)
+
+if __name__ == "__main__":
+    main()
