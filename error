@@ -1,3 +1,19 @@
-df_pred = df_all[df_all['needs_model'] == True].copy() --REPLACE
-df_pred = df_all[(df_all['needs_model'] == True) & (df_all['Final Category'].isnull())].copy()
+df_out = pd.concat([df_pred, df_mapped], axis=0).sort_index()
 
+# 🔒 Lock mapped Final Category and Score
+df_out.loc[df_out['prediction_flag'].str.contains("Mapped"), 'Final_Prediction'] = df_out['Final Category']
+df_out.loc[df_out['prediction_flag'].str.contains("Mapped"), 'Score'] = 1.0
+
+final_df = pd.concat(all_results, axis=0, ignore_index=True)
+
+# 🔒 Final lock for category (safety net)
+final_df.loc[final_df['prediction_flag'].str.contains("Mapped"), 'Final_Prediction'] = final_df['Final Category']
+final_df.loc[final_df['prediction_flag'].str.contains("Mapped"), 'Score'] = 1.0
+
+df_out = pd.concat([df_pred, df_mapped], axis=0).sort_index()
+
+# 🔒 Lock mapped subcategory fields
+df_out.loc[df_out['prediction_flag'].str.contains("Mapped"), 'Final Subcategory'] = df_out['Final Subcategory']
+df_out.loc[df_out['prediction_flag'].str.contains("Mapped"), 'Subcategory_Score'] = 1.0
+df_out.loc[df_out['prediction_flag'].str.contains("Mapped"), 'Subcategory_Model'] = 'direct_mapping'
+df_out.loc[df_out['prediction_flag'].str.contains("Mapped"), 'Predicted_Subcategory'] = df_out['Final Subcategory']
