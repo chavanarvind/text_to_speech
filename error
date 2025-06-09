@@ -1,6 +1,1 @@
-final_df = pd.concat(all_results, axis=0, ignore_index=True)
-# 🔒 Final lock for subcategory (safety net)
-final_df.loc[final_df['prediction_flag'].str.contains("Mapped"), 'Final Subcategory'] = final_df['Final Subcategory']
-final_df.loc[final_df['prediction_flag'].str.contains("Mapped"), 'Subcategory_Score'] = 1.0
-final_df.loc[final_df['prediction_flag'].str.contains("Mapped"), 'Subcategory_Model'] = 'direct_mapping'
-final_df.loc[final_df['prediction_flag'].str.contains("Mapped"), 'Predicted_Subcategory'] = final_df['Final Subcategory']
+direct_mapping_type_only
