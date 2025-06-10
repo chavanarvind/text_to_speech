@@ -1,3 +1,24 @@
-mapped_keys_dir = args.final_output_dir
-os.makedirs(mapped_keys_dir, exist_ok=True)
-merged_df.to_parquet(os.path.join(mapped_keys_dir, key_file), index=False)
+# Merge with key files
+    today = datetime.today().strftime("%d%m%Y")
+    mapped_keys_dir = args.final_output_dir
+    os.makedirs(mapped_keys_dir, exist_ok=True)
+    for key_file in os.listdir(key_output_dir):
+        if key_file.endswith(".parquet"):
+            key_df = pd.read_parquet(os.path.join(key_output_dir, key_file))
+            merged_df = key_df.merge(final_df[[
+                "CMPNT_MATL_NUM",
+                "AI_FINAL_CATEGORY",
+                "AI_FINAL_SUBCATEGORY",
+                "AI_FINAL_CATEGORY_CONFIDENCE",
+                "AI_FINAL_SUBCATEGORY_CONFIDENCE",
+                "AI_MATCHING_REASON_FINAL_CATEGORY",
+                "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
+            ]], how="left", on="CMPNT_MATL_NUM")
+            merged_df.to_parquet(os.path.join(mapped_keys_dir, key_file), index=False)
+            print(merged_df.columns)
+            log(f"Mapped back predictions to key file: {key_file}")
+            merged_parquet_path = os.path.join(mapped_keys_dir, key_file)
+            merged_df.to_parquet(merged_parquet_path, index=False)
+            log(f"Mapped back predictions to key file: {key_file}")
+            #  Upload to ADLS Gen2
+            #upload_to_adls(file_path=merged_parquet_path, file_name_in_blob=key_file)
