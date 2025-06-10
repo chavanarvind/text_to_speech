@@ -1,5 +1,13 @@
- input_bindings, output_bindings = self.create_input_output_bindings(self._inputs, self._outputs,
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\pipeline\core\builder.py", line 990, in create_input_output_bindings
-    raise ValueError("Step output %s can not be used as an output for step %s, as it is already an "
-ValueError: Step output data_step1a_key_output can not be used as an output for step Step 1a - High Confidence Merge, as it is already an output of step Step 5 - Run Inference.
-(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\RPM_Claasification_Pipeline> 
+from azureml.data import OutputFileDatasetConfig
+from datetime import datetime
+
+today = datetime.today().strftime("%d%m%Y")
+
+# Temporary output from Step 1a
+step1a_key_output_temp = OutputFileDatasetConfig(name='step1a_key_output_temp')
+
+# Final output to ADLS from Step 5
+final_output_to_adls = OutputFileDatasetConfig(
+    name='final_predictions_to_adls',
+    destination=(default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/")
+)
