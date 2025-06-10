@@ -1,146 +1,161 @@
-import json
-import sys
-from azureml.core import Experiment, RunConfiguration, Environment, Workspace, Dataset
-from azureml.core.authentication import ServicePrincipalAuthentication
+# pipeline_runner.py
 
-from azureml.pipeline.core import Pipeline
+from azureml.core import Workspace, Environment, Experiment
+from azureml.pipeline.core import Pipeline, PipelineData
 from azureml.pipeline.steps import PythonScriptStep
+from azureml.core.runconfig import RunConfiguration
+from azureml.data.datapath import DataPath
 from azureml.data import OutputFileDatasetConfig
+from azureml.core import Dataset
+import os
 
+# === Load workspace ===
+ws = Workspace.from_config(path=".azureml/dev_config.json")
+compute_name = "llm-gpu-cluster-2"
+env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
 
-def set_aml_config_for_training(ws, compute_name):
-    compute_target = ws.compute_targets[compute_name]
-    aml_run_config = RunConfiguration()
-    aml_run_config.target = compute_target
-    env = Environment.get(workspace=ws,
-                          name="Bom_X_Evaluator")
-    aml_run_config.environment = env
+run_config = RunConfiguration()
+run_config.target = compute_name
+run_config.environment = env
 
-    return aml_run_config
+# === Output and input shared folders ===
+data_step1_out = PipelineData(name="data_step1_out", is_directory=True)
+data_step1a_mapped = PipelineData(name="data_step1a_mapped", is_directory=True)
+data_step1a_unmapped = PipelineData(name="data_step1a_unmapped", is_directory=True)
+data_step2_out = PipelineData(name="data_step2_out", is_directory=True)
+data_step3_out = PipelineData(name="data_step3_out", is_directory=True)
+data_step4_out = PipelineData(name="data_step4_out", is_directory=True)
+data_step1a_key_output = PipelineData(name="data_step1a_key_output", is_directory=True)
 
+# === Upload high_conf_mapping.csv from local folder to datastore ===
+default_ds = ws.get_default_datastore()
 
-def workspace_from_cmd(args):
-    print('Reading workspace from command line arguments')
-    tenant_id = args[1]
-    client_id = args[2]
-    client_secret = args[3]
-    config_file = args[4]
+# Upload file as before
+default_ds.upload_files(
+    files=['./local_data/high_conf_direct_mapping.csv'],
+    target_path='high_conf_map',   # <== IMPORTANT: Folder name
+    overwrite=True,
+    show_progress=True
+)
 
-    # Needed when triggering from Jenkins
-    service_principal_auth = ServicePrincipalAuthentication(tenant_id=tenant_id,
-                                                            service_principal_id=client_id,
-                                                            service_principal_password=client_secret)
-    path = '../.azureml/' + config_file
+# Register or create file dataset
+high_conf_dataset = Dataset.File.from_files((default_ds, 'high_conf_map'))
+high_conf_mount = high_conf_dataset.as_named_input('high_conf_map').as_mount()
 
-    with open(path) as json_file_obj:
-        config_json = json.load(json_file_obj)
+default_ds.upload_files(
+    files=['./local_data/abbreviation_expension_updated.csv'],
+    target_path='abbrev_map',
+    overwrite=True,
+    show_progress=True
+)
+abbrev_dataset = Dataset.File.from_files((default_ds, 'abbrev_map'))
+abbrev_mount = abbrev_dataset.as_named_input('abbrev_map').as_mount()
 
-    return Workspace(subscription_id=config_json['subscription_id'],
-                     resource_group=config_json['resource_group'],
-                     workspace_name=config_json['workspace_name'],
-                     auth=service_principal_auth)
+# === Step 1: Data Pull ===
+data_pull_step = PythonScriptStep(
+    name="Step 1 - Pull Dataset",
+    script_name="step_1_data_pull.py",
+    source_directory="scripts",
+    arguments=["--output_path", data_step1_out],
+    outputs=[data_step1_out],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
 
+# === Step 1a: High Confidence Merge ===
+high_conf_merge_step = PythonScriptStep(
+    name="Step 1a - High Confidence Merge",
+    script_name="step_1a_extract_and_merge.py",
+    source_directory="scripts",
+    inputs=[data_step1_out, high_conf_mount],
+    arguments=[
+    "--input_path", data_step1_out,
+    "--mapping_csv", high_conf_mount,
+    "--mapped_output", data_step1a_mapped,
+    "--needs_model_output", data_step1a_unmapped,
+    "--key_output", data_step1a_key_output
+],
+    outputs=[data_step1a_mapped, data_step1a_unmapped, data_step1a_key_output],
 
-def workspace_from_config(path):
-    print('Reading workspace from local config file')
-    with open(path) as json_file_obj:
-        config_json = json.load(json_file_obj)
+    #outputs=[data_step1a_mapped, data_step1a_unmapped],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
 
-    return Workspace(subscription_id=config_json['subscription_id'],
-                     resource_group=config_json['resource_group'],
-                     workspace_name=config_json['workspace_name'])
+# === Step 2: Clean Text ===
+clean_text_step = PythonScriptStep(
+    name="Step 2 - Text Cleaning",
+    script_name="step_2_clean_text.py",
+    source_directory="scripts",
+    inputs=[data_step2_out],
+    arguments=["--input_path", data_step2_out, "--output_path", data_step3_out],
+    outputs=[data_step3_out],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
 
+# === Step 3: Abbreviation Expansion ===
+abbrev_expand_step = PythonScriptStep(
+    name="Step 3 - Expand Abbreviations",
+    script_name="step_3_expand_abbreviation.py",
+    source_directory="scripts",
+    inputs=[data_step1a_unmapped, abbrev_mount],  # ⬅️ changed from data_step2_out
+    arguments=[
+        "--input_path", data_step1a_unmapped,
+        "--abbrev_map", abbrev_mount,
+        "--output_path", data_step2_out   # output will now feed into cleaning step
+    ],
+    outputs=[data_step2_out],  # renamed for consistency
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
 
-#ENV = 'dev'
-ENV = 'dev'
+# === Step 4: Feature Engineering ===
+feature_eng_step = PythonScriptStep(
+    name="Step 4 - Feature Engineering",
+    script_name="step_4_feature_engineering.py",
+    source_directory="scripts",
+    inputs=[data_step3_out],
+    arguments=["--input_path", data_step3_out, "--output_path", data_step4_out],
+    outputs=[data_step4_out],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
 
-if __name__ == '__main__':
-    if len(sys.argv) > 1:  # Command line args
-        workspace = workspace_from_cmd(sys.argv)
-        # Default to dev when running from jenkins
-        aml_config_file = 'dev_config.json'
-        datastore_name = 'xbomrefadlsg2'
-        compute_name = 'llm-gpu-cluster-2'
-    else:
-        if ENV == 'prod':
-            aml_config_file = 'prod_config.json'
-            datastore_name = 'xbom_prod_adlsgen2'
-            compute_name = 'bom-cluster-2'
-        else:
-            aml_config_file = 'dev_config.json'
-            datastore_name = 'xbomrefadlsg2'
-            compute_name = 'llm-gpu-cluster-2'
+# === Step 5: Run Inference ===
+inference_step = PythonScriptStep(
+    name="Step 5 - Run Inference",
+    script_name="step_5_run_inference.py",
+    source_directory="scripts",
+    inputs=[data_step4_out, data_step1a_mapped, data_step1a_key_output],
+    arguments=[
+        "--input_path", data_step4_out,
+        "--additional_mapped_dir", data_step1a_mapped,
+        "--key_output_dir", data_step1a_key_output
+    ],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
 
-        workspace = workspace_from_config(path='../.azureml/' + aml_config_file)
+# === Build pipeline ===
+pipeline = Pipeline(workspace=ws, steps=[
+    data_pull_step,
+    high_conf_merge_step,
+    abbrev_expand_step,
+    clean_text_step, 
+    feature_eng_step,
+    inference_step
+])
 
-    aml_config = set_aml_config_for_training(workspace, compute_name=compute_name)
+pipeline.validate()
 
-    # version = 'aug_2023'
-    # version = 'sep9_2023'
-    # version = '5k'
-    # version = 'sep19_2023'
-    # version = 'oct10_2023'
-    # version = 'nov14_2023'
-    # version = 'may14_2024'
-#    version = 'jun12_2024'
-    version = 'aug20_2024'
-
-    model_type = 'offline_transformer'
-    # model_type = 'open_ai'
-    transformer_model = 'all-roberta-large-kft'
-    db_style = 'pandas'
-
-    sentence_transformer_dir = (Dataset
-                                .get_by_name(workspace, name=transformer_model)
-                                .as_named_input('transformer_model')
-                                .as_mount()
-                                )
-    try:
-        embeddings_dir = (Dataset
-                          .get_by_name(workspace, name=f'bom_embeddings_{model_type}_{version}')
-                          .as_named_input('embeddings')
-                          .as_mount()
-                          )
-    except Exception as e:
-        print(e)
-        embeddings_dir = 'new_embd'
-
-    # This will return the id of the datasets
-    erp_im_data = Dataset.get_by_name(workspace, f'nlp_input_bom_hier_dtls').as_named_input(f'erp_im_bom')
-    erp_em_data = Dataset.get_by_name(workspace, f'nlp_input_bom_hier').as_named_input(f'erp_em_bom')
-    tru_data = Dataset.get_by_name(workspace, f'nlp_input_p360_bom').as_named_input(f'tru_bom')
-    trade_names_data = Dataset.get_by_name(workspace, 'nlp_input_p360_trdnm').as_named_input('trade_names_feb08_2024')
-
-    matches_output = OutputFileDatasetConfig(name='matches')
-    full_training_step = PythonScriptStep(
-        name="Cross Hound Matching",
-        source_directory="src",
-        script_name="cross_hound/matcher.py",
-        arguments=['--erp-im-dataset-name', erp_im_data,
-                   '--erp-em-dataset-name', erp_em_data,
-                   '--tru-dataset-name', tru_data,
-                   '--trade-names-name', trade_names_data,
-                   '--sentence-transformer-dir', sentence_transformer_dir,
-                   '--embeddings-dir', embeddings_dir,
-                   '--output_dir', matches_output,
-                   '--datastore-name', datastore_name,
-                   '--data-version', version,
-                   '--model-type', model_type,
-                   '--db-style', db_style],
-        runconfig=aml_config,
-        allow_reuse=False
-    )
-
-    pipeline = Pipeline(workspace=workspace, steps=[full_training_step])
-    print('Pipeline created and about to be deployed')
-
-    try:
-        from git import Repo
-
-        local_branch = Repo(search_parent_directories=True).active_branch.name
-        local_branch = local_branch.replace('/', '-')
-        local_branch = local_branch.replace(' ', '-')
-    except:
-        local_branch = 'jenkins_run'
-    pipeline_run = Experiment(workspace, name=f'xHound-{local_branch}').submit(pipeline)
-    pipeline_run.wait_for_completion()
+# === Submit pipeline ===
+experiment = Experiment(ws, "full_inference_pipeline")
+pipeline_run = experiment.submit(pipeline)
+pipeline_run.wait_for_completion(show_output=True)
