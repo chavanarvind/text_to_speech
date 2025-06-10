@@ -1,9 +1,2 @@
-merged_df.to_parquet(os.path.join(mapped_keys_dir, key_file), index=False)
-log(f"Mapped back predictions to key file: {key_file}")
-
-merged_parquet_path = os.path.join(mapped_keys_dir, key_file)
-merged_df.to_parquet(merged_parquet_path, index=False)
-log(f"Mapped back predictions to key file: {key_file}")
-
-# ⬇️ Upload to ADLS Gen2
-upload_to_adls(file_path=merged_parquet_path, file_name_in_blob=key_file)
+df = pd.read_parquet(file_path,columns=["CMPNT_MATL_NUM", 'CMPNT_MATL_DESC','CMPNT_MATL_TYPE_CD',
+                                                'CMPNT_CAT_CD_DESC','CMPNT_UOM_CD'])
