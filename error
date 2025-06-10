@@ -1,10 +1,6 @@
-mapped_keys_dir = os.path.join("outputs", "mapped_keys")
-os.makedirs(mapped_keys_dir, exist_ok=True)
+ADLS2 Container:
+Storage: adlsdtodsdev
+Container: bom-xref  
 
-today = datetime.today().strftime("%d%m%Y")
-mapped_keys_dir = os.path.join(args.key_output_dir, f"hbom_category_prediction_{today}")
-os.makedirs(mapped_keys_dir, exist_ok=True)
-
-remove
-def upload_to_adls(...):
-upload_to_adls(file_path=merged_parquet_path, file_name_in_blob=key_file)
+Main Folder: hbom_category_prediction
+Weekly Folder: hbom_category_prediction_DDMMYYYY/
