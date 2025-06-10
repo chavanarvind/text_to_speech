@@ -1,89 +1,22 @@
-FUNCTION IN MY CODE WHICH IS GIVING ERROR : [2025-06-10 11:17:10] Mapped back predictions to key file: part-00000-00bb5c5d-ffa7-4fff-9b9c-7fdfa729ffb8-c000.snappy.parquet
-[2025-06-10 11:17:16] Mapped back predictions to key file: part-00000-00bb5c5d-ffa7-4fff-9b9c-7fdfa729ffb8-c000.snappy.parquet
-[2025-06-10 11:18:38] ❌ Failed to upload outputs/mapped_keys/part-00000-00bb5c5d-ffa7-4fff-9b9c-7fdfa729ffb8-c000.snappy.parquet to ADLS: 
-No credential in this chain provided a token.
-Attempted credentials:
-	EnvironmentCredential: Incomplete environment configuration. See https://aka.ms/python-sdk-identity#environment-variables for expected environment variables
-	MsiCredential: Unexpected response 'InternalError - :{
-Info: Request failure status code: 404
+     from azure.identity import ChainedTokenCredential, EnvironmentCredential, ManagedIdentityCredential
 
-}'
-Content: InternalError - :{
-Info: Request failure status code: 404
+     def upload_to_adls(file_path, file_name_in_blob):
+         storage_account_name = "adlsdtodsdev"
+         container_name = "bom-xref"
+         today = datetime.today().strftime("%d%m%Y")
+         folder_path = f"hbom_category_prediction/hbom_category_prediction_{today}/"
+         blob_path = f"{folder_path}{file_name_in_blob}"
 
-}
+         try:
+             credential = ChainedTokenCredential(EnvironmentCredential(), ManagedIdentityCredential())
+             account_url = f"https://{storage_account_name}.blob.core.windows.net"
+             blob_service_client = BlobServiceClient(account_url=account_url, credential=credential)
+             blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_path)
 
-Please visit the documentation at
-https://aka.ms/python-sdk-identity#defaultazurecredential
-to learn what options DefaultAzureCredential supports
-def upload_to_adls(file_path, file_name_in_blob):
-    storage_account_name = "adlsdtodsdev"
-    container_name = "bom-xref"
-    today = datetime.today().strftime("%d%m%Y")
-    folder_path = f"hbom_category_prediction/hbom_category_prediction_{today}/"
-    blob_path = f"{folder_path}{file_name_in_blob}"
+             with open(file_path, "rb") as data:
+                 blob_client.upload_blob(data, overwrite=True)
 
-    try:
-        credential = DefaultAzureCredential()
-        account_url = f"https://{storage_account_name}.blob.core.windows.net"
-        blob_service_client = BlobServiceClient(account_url=account_url, credential=credential)
-        blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_path)
-
-        with open(file_path, "rb") as data:
-            blob_client.upload_blob(data, overwrite=True)
-
-        log(f"✅ Uploaded '{file_path}' to ADLS path: {blob_path}")
-    except Exception as e:
-        log(f"❌ Failed to upload {file_path} to ADLS: {str(e)}")
-
-
-FUNCTION GIVEN BY YOU
-def upload_to_adls(file_path, file_name_in_blob):
-    storage_account_name = "adlsdtodsdev"
-    container_name = "bom-xref"
-    today = datetime.today().strftime("%d%m%Y")
-    folder_path = f"hbom_category_prediction/hbom_category_prediction_{today}/"
-    blob_path = f"{folder_path}{file_name_in_blob}"
-
-    try:
-        credential = DefaultAzureCredential()
-        account_url = f"https://{storage_account_name}.blob.core.windows.net"
-        blob_service_client = BlobServiceClient(account_url=account_url, credential=credential)
-        blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_path)
-
-        with open(file_path, "rb") as data:
-            blob_client.upload_blob(data, overwrite=True)
-
-        log(f"✅ Uploaded '{file_path}' to ADLS path: {blob_path}")
-    except Exception as e:
-        log(f"❌ Failed to upload {file_path} to ADLS: {str(e)}")
-
-def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
-
-def main(input_path, additional_mapped_dir, key_output_dir):
-    run = Run.get_context()
-    ws = run.experiment.workspace
-
-    log("Loading model artifacts...")
-    model_dir = Model.get_model_path("RPM_Category_model_full_cat", _workspace=ws)
-    model = joblib.load(os.path.join(model_dir, "final_model.joblib"))
-    ordinal = joblib.load(os.path.join(model_dir, "ordinal_encoder.pkl"))
-    scaler = joblib.load(os.path.join(model_dir, "scaler.pkl"))
-
-    encoder = SentenceTransformer(
-        'pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb',
-        device='cuda' if torch.cuda.is_available() else 'cpu')
-    encoder.max_seq_length = 128
-
-    # Load and process data, perform inference, etc...
-    # (Insert your existing logic here for processing and inference)
-
-    final_df.to_parquet("outputs/final_prediction_combined.parquet", index=False)
-    log("Saved final prediction file")
-
-    upload_to_adls("outputs/final_prediction_combined.parquet", "final_prediction_combined.parquet")
-
-if __name__ == "__main__":
-    # Provide the paths or parameters needed for your function
-    main("input_path", "additional_mapped_dir", "key_output_dir")
+             log(f"✅ Uploaded '{file_path}' to ADLS path: {blob_path}")
+         except Exception as e:
+             log(f"❌ Failed to upload {file_path} to ADLS: {str(e)}")
+     
