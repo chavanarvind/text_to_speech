@@ -1,20 +1,7 @@
-final_df['category_priority'] = final_df['prediction_flag'].map({
-    'Mapped_PreExtracted': 2,
-    'Mapped': 2,
-    'High Confidence': 1,
-    'Low Confidence': 0
-}).fillna(0)
+DEV
+ADLS2 Container:
+Storage: adlsdtodsdev
+Container: bom-xref  
 
-final_df['subcategory_priority'] = final_df['prediction_flag_subcategory'].map({
-    'Mapped': 2,
-    'High Confidence': 1,
-    'Low Confidence': 0,
-    'Fallback': -1
-}).fillna(0)
-
-final_df = final_df.sort_values(
-    by=['CMPNT_MATL_NUM', 'category_priority', 'subcategory_priority'],
-    ascending=[True, False, False]
-)
-
-final_df = final_df.drop_duplicates(subset='CMPNT_MATL_NUM', keep='first')
+Main Folder: hbom_category_prediction
+Weekly Folder: hbom_category_prediction_DDMMYYYY/
