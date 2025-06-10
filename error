@@ -1,6 +1,7 @@
 rement.parse('azure-mgmt-network<=25.2.0')).
 Using default local authentication
 Traceback (most recent call last):
-  File ".\pipeline_runner.py", line 81, in <module>
-    output_path_on_datastore=custom_output_path.path,
-AttributeError: 'DataPath' object has no attribute 'path'
+  File ".\pipeline_runner.py", line 78, in <module>
+    data_step1a_key_output = PipelineData(
+TypeError: __init__() got an unexpected keyword argument 'output_path_on_datastore'
+(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\RPM_Claasification_Pipeline> 
