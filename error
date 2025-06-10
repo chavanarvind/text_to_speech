@@ -1,6 +1,9 @@
-Using default local authentication
-Traceback (most recent call last):
-  File ".\pipeline_runner.py", line 102, in <module>
-    default_ds.upload_files(
-AttributeError: 'AzureDataLakeGen2Datastore' object has no attribute 'upload_files'
-(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\RPM_Claasification_Pipeline> 
+from azureml.data.dataset_factory import FileDatasetFactory
+
+# Upload local folder as dataset to ADLS Gen2
+Dataset.File.upload_directory(
+    src_dir='./local_data',
+    target=(default_ds, 'high_conf_map'),
+    overwrite=True,
+    show_progress=True
+)
