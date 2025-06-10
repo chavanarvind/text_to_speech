@@ -1,22 +1,26 @@
-     from azure.identity import ChainedTokenCredential, EnvironmentCredential, ManagedIdentityCredential
+from azure.identity import DefaultAzureCredential
+from azure.storage.blob import BlobServiceClient
+from datetime import datetime
 
-     def upload_to_adls(file_path, file_name_in_blob):
-         storage_account_name = "adlsdtodsdev"
-         container_name = "bom-xref"
-         today = datetime.today().strftime("%d%m%Y")
-         folder_path = f"hbom_category_prediction/hbom_category_prediction_{today}/"
-         blob_path = f"{folder_path}{file_name_in_blob}"
+def upload_to_adls(file_path, file_name_in_blob):
+    storage_account_name = "adlsdtodsdev"
+    container_name = "bom-xref"
+    today = datetime.today().strftime("%d%m%Y")
+    folder_path = f"hbom_category_prediction/hbom_category_prediction_{today}/"
+    blob_path = f"{folder_path}{file_name_in_blob}"
 
-         try:
-             credential = ChainedTokenCredential(EnvironmentCredential(), ManagedIdentityCredential())
-             account_url = f"https://{storage_account_name}.blob.core.windows.net"
-             blob_service_client = BlobServiceClient(account_url=account_url, credential=credential)
-             blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_path)
+    try:
+        credential = DefaultAzureCredential()
+        account_url = f"https://{storage_account_name}.blob.core.windows.net"
+        blob_service_client = BlobServiceClient(account_url=account_url, credential=credential)
+        blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_path)
 
-             with open(file_path, "rb") as data:
-                 blob_client.upload_blob(data, overwrite=True)
+        with open(file_path, "rb") as data:
+            blob_client.upload_blob(data, overwrite=True)
 
-             log(f"✅ Uploaded '{file_path}' to ADLS path: {blob_path}")
-         except Exception as e:
-             log(f"❌ Failed to upload {file_path} to ADLS: {str(e)}")
-     
+        log(f"✅ Uploaded '{file_path}' to ADLS path: {blob_path}")
+    except Exception as e:
+        log(f"❌ Failed to upload {file_path} to ADLS: {str(e)}")
+
+def log(msg):
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
