@@ -1,16 +1,58 @@
-# pipeline_runner.py
-
-from azureml.core import Workspace, Environment, Experiment
+from azureml.core import Workspace, Environment, Experiment, Dataset
 from azureml.pipeline.core import Pipeline, PipelineData
 from azureml.pipeline.steps import PythonScriptStep
 from azureml.core.runconfig import RunConfiguration
-from azureml.data.datapath import DataPath
 from azureml.data import OutputFileDatasetConfig
-from azureml.core import Dataset
+from azureml.core.authentication import ServicePrincipalAuthentication
+from azureml.data.datapath import DataPath
 import os
+import sys
+import json
 
-# === Load workspace ===
-ws = Workspace.from_config(path=".azureml/dev_config.json")
+# === Auth helper functions ===
+def workspace_from_cmd(args):
+    print('Reading workspace from command line arguments')
+    tenant_id = args[1]
+    client_id = args[2]
+    client_secret = args[3]
+    config_file = args[4]
+
+    service_principal_auth = ServicePrincipalAuthentication(
+        tenant_id=tenant_id,
+        service_principal_id=client_id,
+        service_principal_password=client_secret
+    )
+
+    path = '.azureml/' + config_file
+    with open(path) as json_file_obj:
+        config_json = json.load(json_file_obj)
+
+    return Workspace(
+        subscription_id=config_json['subscription_id'],
+        resource_group=config_json['resource_group'],
+        workspace_name=config_json['workspace_name'],
+        auth=service_principal_auth
+    )
+
+def workspace_from_config(path):
+    print('Reading workspace from local config file')
+    with open(path) as json_file_obj:
+        config_json = json.load(json_file_obj)
+
+    return Workspace(
+        subscription_id=config_json['subscription_id'],
+        resource_group=config_json['resource_group'],
+        workspace_name=config_json['workspace_name']
+    )
+
+# === Set up workspace ===
+if len(sys.argv) > 1:
+    ws = workspace_from_cmd(sys.argv)
+    aml_config_file = 'dev_config.json'
+else:
+    aml_config_file = 'dev_config.json'
+    ws = workspace_from_config(path='.azureml/' + aml_config_file)
+
 compute_name = "llm-gpu-cluster-2"
 env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
 
@@ -27,18 +69,15 @@ data_step3_out = PipelineData(name="data_step3_out", is_directory=True)
 data_step4_out = PipelineData(name="data_step4_out", is_directory=True)
 data_step1a_key_output = PipelineData(name="data_step1a_key_output", is_directory=True)
 
-# === Upload high_conf_mapping.csv from local folder to datastore ===
+# === Upload datasets ===
 default_ds = ws.get_default_datastore()
 
-# Upload file as before
 default_ds.upload_files(
     files=['./local_data/high_conf_direct_mapping.csv'],
-    target_path='high_conf_map',   # <== IMPORTANT: Folder name
+    target_path='high_conf_map',
     overwrite=True,
     show_progress=True
 )
-
-# Register or create file dataset
 high_conf_dataset = Dataset.File.from_files((default_ds, 'high_conf_map'))
 high_conf_mount = high_conf_dataset.as_named_input('high_conf_map').as_mount()
 
@@ -51,7 +90,7 @@ default_ds.upload_files(
 abbrev_dataset = Dataset.File.from_files((default_ds, 'abbrev_map'))
 abbrev_mount = abbrev_dataset.as_named_input('abbrev_map').as_mount()
 
-# === Step 1: Data Pull ===
+# === Define pipeline steps ===
 data_pull_step = PythonScriptStep(
     name="Step 1 - Pull Dataset",
     script_name="step_1_data_pull.py",
@@ -63,28 +102,24 @@ data_pull_step = PythonScriptStep(
     allow_reuse=False
 )
 
-# === Step 1a: High Confidence Merge ===
 high_conf_merge_step = PythonScriptStep(
     name="Step 1a - High Confidence Merge",
     script_name="step_1a_extract_and_merge.py",
     source_directory="scripts",
     inputs=[data_step1_out, high_conf_mount],
     arguments=[
-    "--input_path", data_step1_out,
-    "--mapping_csv", high_conf_mount,
-    "--mapped_output", data_step1a_mapped,
-    "--needs_model_output", data_step1a_unmapped,
-    "--key_output", data_step1a_key_output
-],
+        "--input_path", data_step1_out,
+        "--mapping_csv", high_conf_mount,
+        "--mapped_output", data_step1a_mapped,
+        "--needs_model_output", data_step1a_unmapped,
+        "--key_output", data_step1a_key_output
+    ],
     outputs=[data_step1a_mapped, data_step1a_unmapped, data_step1a_key_output],
-
-    #outputs=[data_step1a_mapped, data_step1a_unmapped],
     runconfig=run_config,
     compute_target=compute_name,
     allow_reuse=False
 )
 
-# === Step 2: Clean Text ===
 clean_text_step = PythonScriptStep(
     name="Step 2 - Text Cleaning",
     script_name="step_2_clean_text.py",
@@ -97,24 +132,22 @@ clean_text_step = PythonScriptStep(
     allow_reuse=False
 )
 
-# === Step 3: Abbreviation Expansion ===
 abbrev_expand_step = PythonScriptStep(
     name="Step 3 - Expand Abbreviations",
     script_name="step_3_expand_abbreviation.py",
     source_directory="scripts",
-    inputs=[data_step1a_unmapped, abbrev_mount],  # ⬅️ changed from data_step2_out
+    inputs=[data_step1a_unmapped, abbrev_mount],
     arguments=[
         "--input_path", data_step1a_unmapped,
         "--abbrev_map", abbrev_mount,
-        "--output_path", data_step2_out   # output will now feed into cleaning step
+        "--output_path", data_step2_out
     ],
-    outputs=[data_step2_out],  # renamed for consistency
+    outputs=[data_step2_out],
     runconfig=run_config,
     compute_target=compute_name,
     allow_reuse=False
 )
 
-# === Step 4: Feature Engineering ===
 feature_eng_step = PythonScriptStep(
     name="Step 4 - Feature Engineering",
     script_name="step_4_feature_engineering.py",
@@ -127,7 +160,6 @@ feature_eng_step = PythonScriptStep(
     allow_reuse=False
 )
 
-# === Step 5: Run Inference ===
 inference_step = PythonScriptStep(
     name="Step 5 - Run Inference",
     script_name="step_5_run_inference.py",
@@ -143,19 +175,17 @@ inference_step = PythonScriptStep(
     allow_reuse=False
 )
 
-# === Build pipeline ===
+# === Build and run pipeline ===
 pipeline = Pipeline(workspace=ws, steps=[
     data_pull_step,
     high_conf_merge_step,
     abbrev_expand_step,
-    clean_text_step, 
+    clean_text_step,
     feature_eng_step,
     inference_step
 ])
 
 pipeline.validate()
-
-# === Submit pipeline ===
 experiment = Experiment(ws, "full_inference_pipeline")
 pipeline_run = experiment.submit(pipeline)
 pipeline_run.wait_for_completion(show_output=True)
