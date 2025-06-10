@@ -1,7 +1,10 @@
-rement.parse('azure-mgmt-network<=25.2.0')).
-Using default local authentication
-Traceback (most recent call last):
-  File ".\pipeline_runner.py", line 78, in <module>
-    data_step1a_key_output = PipelineData(
-TypeError: __init__() got an unexpected keyword argument 'output_path_on_datastore'
-(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\RPM_Claasification_Pipeline> 
+from azureml.data import OutputFileDatasetConfig
+from datetime import datetime
+
+today = datetime.today().strftime("%d%m%Y")
+
+data_step1a_key_output = OutputFileDatasetConfig(
+    name='data_step1a_key_output'
+).as_mount(
+    path_on_datastore=f"hbom_category_prediction/hbom_category_prediction_{today}/"
+)
