@@ -1,9 +1,20 @@
-from azureml.data.dataset_factory import FileDatasetFactory
-
-# Upload local folder as dataset to ADLS Gen2
 Dataset.File.upload_directory(
     src_dir='./local_data',
     target=(default_ds, 'high_conf_map'),
     overwrite=True,
     show_progress=True
 )
+
+high_conf_dataset = Dataset.File.from_files((default_ds, 'high_conf_map'))
+high_conf_mount = high_conf_dataset.as_named_input('high_conf_map').as_mount()
+
+
+Dataset.File.upload_directory(
+    src_dir='./local_data',
+    target=(default_ds, 'abbrev_map'),
+    overwrite=True,
+    show_progress=True
+)
+
+abbrev_dataset = Dataset.File.from_files((default_ds, 'abbrev_map'))
+abbrev_mount = abbrev_dataset.as_named_input('abbrev_map').as_mount()
