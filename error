@@ -1,2 +1,4 @@
 "--key_output", data_step1a_key_output
 outputs=[..., data_step1a_key_output]
+"--key_output", step1a_key_output_temp,
+outputs=[..., step1a_key_output_temp]
