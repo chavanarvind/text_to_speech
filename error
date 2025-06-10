@@ -1,13 +1,6 @@
-final_df = pd.concat(all_results, ignore_index=True)
-
-final_df['category_priority'] = final_df['prediction_flag'].map({
-    'Mapped_PreExtracted': 2,
-    'Mapped': 2,
-    'High Confidence': 1,
-    'Low Confidence': 0}).fillna(0)
-
-final_df['subcategory_priority'] = final_df['prediction_flag_subcategory'].map({
-    'Mapped': 2,
-    'High Confidence': 1,
-    'Low Confidence': 0,
-    'Fallback': -1}).fillna(0)
+Traceback (most recent call last):
+  File "step_5_run_inference.py", line 243, in <module>
+    main(args.input_path, args.additional_mapped_dir, args.key_output_dir)
+  File "step_5_run_inference.py", line 208, in main
+    for key_file in os.listdir(key_output_dir):
+FileNotFoundError: [Errno 2] No such file or directory: '/mnt/azureml/cr/j/d337c799f7d74b2f8b131be423aa0a95/cap/data-capability/wd/INPUT_data_step1a_key_output_workspaceblobstore/azureml/387b79f0-ca68-4e36-a147-fb0da1a1f9a1/data_step1a_key_output'
