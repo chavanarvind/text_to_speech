@@ -1,53 +1,5 @@
-import pandas as pd
-import os
-import sys
-from datetime import datetime
-from azure.identity import ClientSecretCredential, DefaultAzureCredential
-from azure.storage.blob import BlobServiceClient
-
-def upload_csv_to_adls(credential):
-    # ------------------ Setup ------------------ #
-    storage_account_name = "adlsdtodsdev"
-    container_name = "bom-xref"
-
-    today = datetime.today().strftime("%d%m%Y")
-    folder_path = f"hbom_category_prediction/hbom_category_prediction_{today}/"
-    file_name = "sample_output.csv"
-    blob_path = f"{folder_path}{file_name}"
-
-    # ------------------ Create Sample CSV ------------------ #
-    df = pd.DataFrame({
-        "Product": ["Widget A", "Widget B", "Widget C"],
-        "Price": [25.5, 40.0, 15.75],
-        "Quantity": [10, 5, 20]
-    })
-    df.to_csv(file_name, index=False)
-    print(f"[INFO] Sample CSV saved locally as: {file_name}")
-
-    # ------------------ Upload to ADLS ------------------ #
-    account_url = f"https://{storage_account_name}.blob.core.windows.net"
-    blob_service_client = BlobServiceClient(account_url=account_url, credential=credential)
-    blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_path)
-
-    with open(file_name, "rb") as data:
-        blob_client.upload_blob(data, overwrite=True)
-
-    print(f"✅ Successfully uploaded to ADLS Gen2 path: {blob_path}")
-
-# ------------------ Main ------------------ #
-if __name__ == "__main__":
-    if len(sys.argv) >= 4:
-        print("[INFO] Using Service Principal authentication")
-        tenant_id = sys.argv[1]
-        client_id = sys.argv[2]
-        client_secret = sys.argv[3]
-        credential = ClientSecretCredential(
-            tenant_id=tenant_id,
-            client_id=client_id,
-            client_secret=client_secret
-        )
-    else:
-        print("[INFO] No service principal provided. Using DefaultAzureCredential")
-        credential = DefaultAzureCredential()
-
-    upload_csv_to_adls(credential)
+  warnings.warn("loaded more than 1 DLL from .libs:"
+[INFO] No service principal provided. Using DefaultAzureCredential
+[INFO] Sample CSV saved locally as: sample_output.csv
+✅ Successfully uploaded to ADLS Gen2 path: hbom_category_prediction/hbom_category_prediction_10062025/sample_output.csv
+(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline> 
