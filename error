@@ -1,191 +1,45 @@
-from azureml.core import Workspace, Environment, Experiment, Dataset
-from azureml.pipeline.core import Pipeline, PipelineData
-from azureml.pipeline.steps import PythonScriptStep
-from azureml.core.runconfig import RunConfiguration
-from azureml.data import OutputFileDatasetConfig
+from azureml.core import Workspace
 from azureml.core.authentication import ServicePrincipalAuthentication
-from azureml.data.datapath import DataPath
-import os
 import sys
-import json
 
-# === Auth helper functions ===
-def workspace_from_cmd(args):
-    print('Reading workspace from command line arguments')
-    tenant_id = args[1]
-    client_id = args[2]
-    client_secret = args[3]
-    config_file = args[4]
+# Replace these with your actual values
+SUBSCRIPTION_ID = "<your-subscription-id>"
+RESOURCE_GROUP = "<your-resource-group>"
+WORKSPACE_NAME = "<your-workspace-name>"
 
-    service_principal_auth = ServicePrincipalAuthentication(
-        tenant_id=tenant_id,
-        service_principal_id=client_id,
-        service_principal_password=client_secret
-    )
+def get_workspace(use_sp_auth=False, args=None):
+    if use_sp_auth and args:
+        print("Using Service Principal Authentication")
+        tenant_id = args[1]
+        client_id = args[2]
+        client_secret = args[3]
 
-    path = '.azureml/' + config_file
-    with open(path) as json_file_obj:
-        config_json = json.load(json_file_obj)
+        sp_auth = ServicePrincipalAuthentication(
+            tenant_id=tenant_id,
+            service_principal_id=client_id,
+            service_principal_password=client_secret
+        )
+        return Workspace(
+            subscription_id=SUBSCRIPTION_ID,
+            resource_group=RESOURCE_GROUP,
+            workspace_name=WORKSPACE_NAME,
+            auth=sp_auth
+        )
+    else:
+        print("Using default local auth")
+        return Workspace(
+            subscription_id=SUBSCRIPTION_ID,
+            resource_group=RESOURCE_GROUP,
+            workspace_name=WORKSPACE_NAME
+        )
 
-    return Workspace(
-        subscription_id=config_json['subscription_id'],
-        resource_group=config_json['resource_group'],
-        workspace_name=config_json['workspace_name'],
-        auth=service_principal_auth
-    )
 
-def workspace_from_config(path):
-    print('Reading workspace from local config file')
-    with open(path) as json_file_obj:
-        config_json = json.load(json_file_obj)
 
-    return Workspace(
-        subscription_id=config_json['subscription_id'],
-        resource_group=config_json['resource_group'],
-        workspace_name=config_json['workspace_name']
-    )
-
-# === Set up workspace ===
+replace 
 if len(sys.argv) > 1:
     ws = workspace_from_cmd(sys.argv)
     aml_config_file = 'dev_config.json'
 else:
     aml_config_file = 'dev_config.json'
     ws = workspace_from_config(path='.azureml/' + aml_config_file)
-
-compute_name = "llm-gpu-cluster-2"
-env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
-
-run_config = RunConfiguration()
-run_config.target = compute_name
-run_config.environment = env
-
-# === Output and input shared folders ===
-data_step1_out = PipelineData(name="data_step1_out", is_directory=True)
-data_step1a_mapped = PipelineData(name="data_step1a_mapped", is_directory=True)
-data_step1a_unmapped = PipelineData(name="data_step1a_unmapped", is_directory=True)
-data_step2_out = PipelineData(name="data_step2_out", is_directory=True)
-data_step3_out = PipelineData(name="data_step3_out", is_directory=True)
-data_step4_out = PipelineData(name="data_step4_out", is_directory=True)
-data_step1a_key_output = PipelineData(name="data_step1a_key_output", is_directory=True)
-
-# === Upload datasets ===
-default_ds = ws.get_default_datastore()
-
-default_ds.upload_files(
-    files=['./local_data/high_conf_direct_mapping.csv'],
-    target_path='high_conf_map',
-    overwrite=True,
-    show_progress=True
-)
-high_conf_dataset = Dataset.File.from_files((default_ds, 'high_conf_map'))
-high_conf_mount = high_conf_dataset.as_named_input('high_conf_map').as_mount()
-
-default_ds.upload_files(
-    files=['./local_data/abbreviation_expension_updated.csv'],
-    target_path='abbrev_map',
-    overwrite=True,
-    show_progress=True
-)
-abbrev_dataset = Dataset.File.from_files((default_ds, 'abbrev_map'))
-abbrev_mount = abbrev_dataset.as_named_input('abbrev_map').as_mount()
-
-# === Define pipeline steps ===
-data_pull_step = PythonScriptStep(
-    name="Step 1 - Pull Dataset",
-    script_name="step_1_data_pull.py",
-    source_directory="scripts",
-    arguments=["--output_path", data_step1_out],
-    outputs=[data_step1_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-high_conf_merge_step = PythonScriptStep(
-    name="Step 1a - High Confidence Merge",
-    script_name="step_1a_extract_and_merge.py",
-    source_directory="scripts",
-    inputs=[data_step1_out, high_conf_mount],
-    arguments=[
-        "--input_path", data_step1_out,
-        "--mapping_csv", high_conf_mount,
-        "--mapped_output", data_step1a_mapped,
-        "--needs_model_output", data_step1a_unmapped,
-        "--key_output", data_step1a_key_output
-    ],
-    outputs=[data_step1a_mapped, data_step1a_unmapped, data_step1a_key_output],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-clean_text_step = PythonScriptStep(
-    name="Step 2 - Text Cleaning",
-    script_name="step_2_clean_text.py",
-    source_directory="scripts",
-    inputs=[data_step2_out],
-    arguments=["--input_path", data_step2_out, "--output_path", data_step3_out],
-    outputs=[data_step3_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-abbrev_expand_step = PythonScriptStep(
-    name="Step 3 - Expand Abbreviations",
-    script_name="step_3_expand_abbreviation.py",
-    source_directory="scripts",
-    inputs=[data_step1a_unmapped, abbrev_mount],
-    arguments=[
-        "--input_path", data_step1a_unmapped,
-        "--abbrev_map", abbrev_mount,
-        "--output_path", data_step2_out
-    ],
-    outputs=[data_step2_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-feature_eng_step = PythonScriptStep(
-    name="Step 4 - Feature Engineering",
-    script_name="step_4_feature_engineering.py",
-    source_directory="scripts",
-    inputs=[data_step3_out],
-    arguments=["--input_path", data_step3_out, "--output_path", data_step4_out],
-    outputs=[data_step4_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-inference_step = PythonScriptStep(
-    name="Step 5 - Run Inference",
-    script_name="step_5_run_inference.py",
-    source_directory="scripts",
-    inputs=[data_step4_out, data_step1a_mapped, data_step1a_key_output],
-    arguments=[
-        "--input_path", data_step4_out,
-        "--additional_mapped_dir", data_step1a_mapped,
-        "--key_output_dir", data_step1a_key_output
-    ],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Build and run pipeline ===
-pipeline = Pipeline(workspace=ws, steps=[
-    data_pull_step,
-    high_conf_merge_step,
-    abbrev_expand_step,
-    clean_text_step,
-    feature_eng_step,
-    inference_step
-])
-
-pipeline.validate()
-experiment = Experiment(ws, "full_inference_pipeline")
-pipeline_run = experiment.submit(pipeline)
-pipeline_run.wait_for_completion(show_output=True)
+with
