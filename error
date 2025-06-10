@@ -1,4 +1,6 @@
-"--key_output", data_step1a_key_output
-outputs=[..., data_step1a_key_output]
-"--key_output", step1a_key_output_temp,
-outputs=[..., step1a_key_output_temp]
+"--key_output_dir", data_step1a_key_output,
+outputs=[data_step1a_key_output]
+
+"--key_output_dir", step1a_key_output_temp,      # Input (from Step 1a)
+"--final_output_dir", final_output_to_adls,      # Output to ADLS
+outputs=[final_output_to_adls]
