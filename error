@@ -1,161 +1,214 @@
-# pipeline_runner.py
-
-from azureml.core import Workspace, Environment, Experiment
-from azureml.pipeline.core import Pipeline, PipelineData
-from azureml.pipeline.steps import PythonScriptStep
-from azureml.core.runconfig import RunConfiguration
-from azureml.data.datapath import DataPath
-from azureml.data import OutputFileDatasetConfig
-from azureml.core import Dataset
 import os
+import argparse
+import pandas as pd
+import numpy as np
+import torch
+import joblib
+import subprocess
+import shutil
+import time
+from datetime import datetime
+from azureml.core import Run, Model, Datastore, Dataset, Workspace
+from sentence_transformers import SentenceTransformer
 
-# === Load workspace ===
-ws = Workspace.from_config(path=".azureml/dev_config.json")
-compute_name = "llm-gpu-cluster-2"
-env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
+subprocess.run(["pip", "install", "lightgbm"], check=True)
 
-run_config = RunConfiguration()
-run_config.target = compute_name
-run_config.environment = env
+def log(msg):
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
 
-# === Output and input shared folders ===
-data_step1_out = PipelineData(name="data_step1_out", is_directory=True)
-data_step1a_mapped = PipelineData(name="data_step1a_mapped", is_directory=True)
-data_step1a_unmapped = PipelineData(name="data_step1a_unmapped", is_directory=True)
-data_step2_out = PipelineData(name="data_step2_out", is_directory=True)
-data_step3_out = PipelineData(name="data_step3_out", is_directory=True)
-data_step4_out = PipelineData(name="data_step4_out", is_directory=True)
-data_step1a_key_output = PipelineData(name="data_step1a_key_output", is_directory=True)
+def main(input_path, additional_mapped_dir, key_output_dir):
+    run = Run.get_context()
+    ws = run.experiment.workspace
 
-# === Upload high_conf_mapping.csv from local folder to datastore ===
-default_ds = ws.get_default_datastore()
+    log("Loading model artifacts...")
+    model_dir = Model.get_model_path("RPM_Category_model_full_cat", _workspace=ws)
+    model = joblib.load(os.path.join(model_dir, "final_model.joblib"))
+    ordinal = joblib.load(os.path.join(model_dir, "ordinal_encoder.pkl"))
+    scaler = joblib.load(os.path.join(model_dir, "scaler.pkl"))
 
-# Upload file as before
-default_ds.upload_files(
-    files=['./local_data/high_conf_direct_mapping.csv'],
-    target_path='high_conf_map',   # <== IMPORTANT: Folder name
-    overwrite=True,
-    show_progress=True
-)
+    encoder = SentenceTransformer(
+        'pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb',
+        device='cuda' if torch.cuda.is_available() else 'cpu')
+    encoder.max_seq_length = 128
 
-# Register or create file dataset
-high_conf_dataset = Dataset.File.from_files((default_ds, 'high_conf_map'))
-high_conf_mount = high_conf_dataset.as_named_input('high_conf_map').as_mount()
+    all_results = []
+    total_input_rows = 0
 
-default_ds.upload_files(
-    files=['./local_data/abbreviation_expension_updated.csv'],
-    target_path='abbrev_map',
-    overwrite=True,
-    show_progress=True
-)
-abbrev_dataset = Dataset.File.from_files((default_ds, 'abbrev_map'))
-abbrev_mount = abbrev_dataset.as_named_input('abbrev_map').as_mount()
+    # Load mapped files
+    mapped_dfs = []
+    for f in os.listdir(additional_mapped_dir):
+        if f.endswith(".parquet"):
+            df = pd.read_parquet(os.path.join(additional_mapped_dir, f))
+            df['Score'] = df.get('Score', 1.0)
+            df['prediction_flag'] = df.get('prediction_flag', 'Mapped_PreExtracted')
+            df['inferred_category_model'] = df.get('inferred_category_model', 'direct_mapping_step_1a')
+            df['Subcategory_Score'] = df.get('Subcategory_Score', 1.0)
+            df['Subcategory_Model'] = df.get('Subcategory_Model', 'direct_mapping')
+            df['Final_Prediction'] = df.get('Final_Prediction', df.get('Final Category'))
+            df['Predicted_Subcategory'] = df.get('Predicted_Subcategory', df.get('Final Subcategory'))
+            df['source_file'] = f
+            mapped_dfs.append(df)
 
-# === Step 1: Data Pull ===
-data_pull_step = PythonScriptStep(
-    name="Step 1 - Pull Dataset",
-    script_name="step_1_data_pull.py",
-    source_directory="scripts",
-    arguments=["--output_path", data_step1_out],
-    outputs=[data_step1_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
+    if mapped_dfs:
+        mapped_combined_df = pd.concat(mapped_dfs, ignore_index=True)
+        all_results.append(mapped_combined_df)
 
-# === Step 1a: High Confidence Merge ===
-high_conf_merge_step = PythonScriptStep(
-    name="Step 1a - High Confidence Merge",
-    script_name="step_1a_extract_and_merge.py",
-    source_directory="scripts",
-    inputs=[data_step1_out, high_conf_mount],
-    arguments=[
-    "--input_path", data_step1_out,
-    "--mapping_csv", high_conf_mount,
-    "--mapped_output", data_step1a_mapped,
-    "--needs_model_output", data_step1a_unmapped,
-    "--key_output", data_step1a_key_output
-],
-    outputs=[data_step1a_mapped, data_step1a_unmapped, data_step1a_key_output],
+    for f in os.listdir(input_path):
+        log(f"--- Processing file: {f} ---")
+        if not f.endswith(".parquet"): continue
+        df_all = pd.read_parquet(os.path.join(input_path, f))
+        log(f"[DEBUG] Total rows in file: {len(df_all)}")
+        total_input_rows += len(df_all)
 
-    #outputs=[data_step1a_mapped, data_step1a_unmapped],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
+        df_mapped = df_all[df_all.get('needs_model') == False].copy()
+        df_pred = df_all[df_all.get('needs_model') == True].copy()
+        log(f"[DEBUG] Rows with needs_model=True: {len(df_pred)}")
 
-# === Step 2: Clean Text ===
-clean_text_step = PythonScriptStep(
-    name="Step 2 - Text Cleaning",
-    script_name="step_2_clean_text.py",
-    source_directory="scripts",
-    inputs=[data_step2_out],
-    arguments=["--input_path", data_step2_out, "--output_path", data_step3_out],
-    outputs=[data_step3_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
+        df_needs_category = df_pred[df_pred['Final Category'].isnull()].copy()
+        log(f"[DEBUG] Rows with null Final Category (category prediction needed): {len(df_needs_category)}")
+        df_no_category_needed = df_pred[~df_pred.index.isin(df_needs_category.index)].copy()
+        df_no_category_needed['Final_Prediction'] = df_no_category_needed['Final Category']
 
-# === Step 3: Abbreviation Expansion ===
-abbrev_expand_step = PythonScriptStep(
-    name="Step 3 - Expand Abbreviations",
-    script_name="step_3_expand_abbreviation.py",
-    source_directory="scripts",
-    inputs=[data_step1a_unmapped, abbrev_mount],  # ⬅️ changed from data_step2_out
-    arguments=[
-        "--input_path", data_step1a_unmapped,
-        "--abbrev_map", abbrev_mount,
-        "--output_path", data_step2_out   # output will now feed into cleaning step
-    ],
-    outputs=[data_step2_out],  # renamed for consistency
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
+        df_mapped['Final_Prediction'] = df_mapped['Final Category']
+        df_mapped['Score'] = 1.0
+        df_mapped['prediction_flag'] = 'Mapped'
+        df_mapped['inferred_category_model'] = 'direct_mapping'
+        df_mapped['Final Subcategory'] = df_mapped['Final Subcategory'] if 'Final Subcategory' in df_mapped.columns else df_mapped['Final Category']
+        df_mapped['Subcategory_Score'] = 1.0
+        df_mapped['Subcategory_Model'] = 'direct_mapping'
+        df_mapped['Predicted_Subcategory'] = df_mapped['Final Subcategory']
 
-# === Step 4: Feature Engineering ===
-feature_eng_step = PythonScriptStep(
-    name="Step 4 - Feature Engineering",
-    script_name="step_4_feature_engineering.py",
-    source_directory="scripts",
-    inputs=[data_step3_out],
-    arguments=["--input_path", data_step3_out, "--output_path", data_step4_out],
-    outputs=[data_step4_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
+        if not df_needs_category.empty:
+            log(f"Encoding descriptions for category prediction: {len(df_needs_category)} rows")
+            desc_emb = encoder.encode(df_needs_category['CMPNT_MATL_DESC_CLEAN'].astype(str).tolist(),
+                                      batch_size=256, show_progress_bar=True, convert_to_numpy=True)
+            length_scaled = scaler.transform(df_needs_category[['CMPNT_MATL_DESC_LEN']])
+            cat_encoded = ordinal.transform(df_needs_category[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+            X_pred = np.hstack([desc_emb, length_scaled, cat_encoded])
 
-# === Step 5: Run Inference ===
-inference_step = PythonScriptStep(
-    name="Step 5 - Run Inference",
-    script_name="step_5_run_inference.py",
-    source_directory="scripts",
-    inputs=[data_step4_out, data_step1a_mapped, data_step1a_key_output],
-    arguments=[
-        "--input_path", data_step4_out,
-        "--additional_mapped_dir", data_step1a_mapped,
-        "--key_output_dir", data_step1a_key_output
-    ],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
+            y_proba = model.predict_proba(X_pred)
+            y_score = np.max(y_proba, axis=1)
+            y_pred = model.predict(X_pred)
 
-# === Build pipeline ===
-pipeline = Pipeline(workspace=ws, steps=[
-    data_pull_step,
-    high_conf_merge_step,
-    abbrev_expand_step,
-    clean_text_step, 
-    feature_eng_step,
-    inference_step
-])
+            df_needs_category['Score'] = y_score
+            df_needs_category['Predicted'] = y_pred
+            df_needs_category['Final_Prediction'] = np.where(y_score < 0.6, 'Other', y_pred)
+            df_needs_category['prediction_flag'] = np.where(y_score < 0.6, 'Low Confidence', 'High Confidence')
+            df_needs_category['inferred_category_model'] = 'lightgbm_Bert_RPM_Category_model'
 
-pipeline.validate()
+        df_combined = pd.concat([df_mapped, df_needs_category, df_no_category_needed], ignore_index=True)
 
-# === Submit pipeline ===
-experiment = Experiment(ws, "full_inference_pipeline")
-pipeline_run = experiment.submit(pipeline)
-pipeline_run.wait_for_completion(show_output=True)
+        df_sub_mapped = df_combined[df_combined['Final Subcategory'].notna()].copy()
+        df_sub_pred = df_combined[df_combined['Final Subcategory'].isna()].copy()
+        log(f"[DEBUG] Rows with null Final Subcategory (subcategory prediction needed): {len(df_sub_pred)}")
+
+        subcat_predictions = []
+        valid_categories = ['CHM', 'PKG', 'FNW']
+        for cat in valid_categories:
+            subset = df_sub_pred[df_sub_pred['Final_Prediction'] == cat].copy()
+            if not subset.empty:
+                log(f"[DEBUG] Running subcategory model for '{cat}': {len(subset)} rows")
+                model_path = Model.get_model_path(f"RPM_Category_model_full_{cat}_V1", _workspace=ws)
+                sub_model = joblib.load(os.path.join(model_path, "final_model.joblib"))
+                sub_encoder = joblib.load(os.path.join(model_path, "ordinal_encoder.pkl"))
+                sub_scaler = joblib.load(os.path.join(model_path, "scaler.pkl"))
+
+                desc_emb = encoder.encode(subset['CMPNT_MATL_DESC_CLEAN'].astype(str).tolist(),
+                                          batch_size=256, show_progress_bar=True, convert_to_numpy=True)
+                length_scaled = sub_scaler.transform(subset[['CMPNT_MATL_DESC_LEN']])
+                cat_encoded = sub_encoder.transform(subset[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+                X_sub = np.hstack([desc_emb, length_scaled, cat_encoded])
+
+                y_proba_sub = sub_model.predict_proba(X_sub)
+                y_score_sub = np.max(y_proba_sub, axis=1)
+                y_sub = sub_model.predict(X_sub)
+
+                subset['Final Subcategory'] = np.where(y_score_sub < 0.6, subset['Final_Prediction'], y_sub)
+                subset['Predicted_Subcategory'] = y_sub
+                subset['Subcategory_Score'] = y_score_sub
+                subset['prediction_flag_subcategory'] = np.where(y_score_sub < 0.6, 'Low Confidence', 'High Confidence')
+                subset['Subcategory_Model'] = f"RPM_Category_model_full_{cat}_V1"
+                subcat_predictions.append(subset)
+
+        fallback_rows = df_sub_pred[~df_sub_pred['Final_Prediction'].isin(valid_categories)].copy()
+        fallback_rows['Final Subcategory'] = fallback_rows['Final_Prediction']
+        fallback_rows['Subcategory_Score'] = 0.9
+        fallback_rows['Subcategory_Model'] = 'default_fallback'
+
+        df_sub_mapped['Subcategory_Score'] = 1.0
+        df_sub_mapped['Subcategory_Model'] = 'direct_mapping'
+        df_sub_mapped['Predicted_Subcategorory'] = df_sub_mapped['Final Subcategory']
+
+        df_sub_pred_final = pd.concat(subcat_predictions + [fallback_rows])
+        df_out = pd.concat([df_sub_pred_final, df_sub_mapped], axis=0).sort_index()
+        log(f"[DEBUG] Total rows after subcategory + fallback merge: {len(df_out)}")
+        df_out['source_file'] = f
+        all_results.append(df_out)
+
+    final_df['category_priority'] = final_df['prediction_flag'].map({
+    'Mapped_PreExtracted': 2,
+    'Mapped': 2,
+    'High Confidence': 1,
+    'Low Confidence': 0}).fillna(0)
+
+    final_df['subcategory_priority'] = final_df['prediction_flag_subcategory'].map({
+    'Mapped': 2,
+    'High Confidence': 1,
+    'Low Confidence': 0,
+    'Fallback': -1}).fillna(0)
+
+    final_df = final_df.sort_values(
+    by=['CMPNT_MATL_NUM', 'category_priority', 'subcategory_priority'],
+    ascending=[True, False, False])
+
+    final_df = final_df.drop_duplicates(subset='CMPNT_MATL_NUM', keep='first')
+
+    log(f"[INFO] Total original input rows: {total_input_rows}")
+    log(f"[INFO] Final prediction row count (after deduplication): {len(final_df)}")
+
+    final_df.to_parquet("outputs/final_prediction_combined.parquet", index=False)
+    log("Saved final prediction file")
+
+    # Rename columns
+    final_df = final_df.rename(columns={
+        "Final_Prediction": "AI_FINAL_CATEGORY",
+        "Final Subcategory": "AI_FINAL_SUBCATEGORY",
+        "Score": "AI_FINAL_CATEGORY_CONFIDENCE",
+        "Subcategory_Score": "AI_FINAL_SUBCATEGORY_CONFIDENCE",
+        "inferred_category_model": "AI_MATCHING_REASON_FINAL_CATEGORY",
+        "Subcategory_Model": "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
+    })
+
+    # Merge with key files
+    mapped_keys_dir = os.path.join("outputs", "mapped_keys")
+    os.makedirs(mapped_keys_dir, exist_ok=True)
+    for key_file in os.listdir(key_output_dir):
+        if key_file.endswith(".parquet"):
+            key_df = pd.read_parquet(os.path.join(key_output_dir, key_file))
+            merged_df = key_df.merge(final_df[[
+                "CMPNT_MATL_NUM",
+                "AI_FINAL_CATEGORY",
+                "AI_FINAL_SUBCATEGORY",
+                "AI_FINAL_CATEGORY_CONFIDENCE",
+                "AI_FINAL_SUBCATEGORY_CONFIDENCE",
+                "AI_MATCHING_REASON_FINAL_CATEGORY",
+                "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
+            ]], how="left", on="CMPNT_MATL_NUM")
+            merged_df.to_parquet(os.path.join(mapped_keys_dir, key_file), index=False)
+            log(f"Mapped back predictions to key file: {key_file}")
+
+    # Save sample CSV for mapped and predicted
+    sample_dir = os.path.join("outputs", "samples_by_source")
+    os.makedirs(sample_dir, exist_ok=True)
+    final_df[final_df['prediction_flag'].str.contains("Mapped", na=False)].head(100).to_csv(
+        os.path.join(sample_dir, "sample_mapped_rows.csv"), index=False)
+    final_df[final_df['prediction_flag_subcategory'].isin(["High Confidence", "Low Confidence"])].head(100).to_csv(
+        os.path.join(sample_dir, "sample_predicted_rows_subcat.csv"), index=False)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_path", required=True)
+    parser.add_argument("--additional_mapped_dir", required=True)
+    parser.add_argument("--key_output_dir", required=True)
+    args = parser.parse_args()
+    main(args.input_path, args.additional_mapped_dir, args.key_output_dir)
