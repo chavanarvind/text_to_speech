@@ -1,6 +1,1 @@
-parser.add_argument("--final_output_dir", required=True)
-
-
-mapped_keys_dir = os.path.join("outputs", "mapped_keys")
-mapped_keys_dir = args.final_output_dir
-os.makedirs(mapped_keys_dir, exist_ok=True)
+my data is getting saved in wrong conatiner. azureml-blobstore-975b0280-8ce5-42df-bdeb-51637f5ddbc7
