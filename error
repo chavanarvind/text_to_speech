@@ -2,13 +2,13 @@ from azureml.core import Workspace
 from azureml.core.authentication import ServicePrincipalAuthentication
 import sys
 
-# Replace these with your actual values
+# === Hardcoded AML workspace config ===
 SUBSCRIPTION_ID = "<your-subscription-id>"
 RESOURCE_GROUP = "<your-resource-group>"
 WORKSPACE_NAME = "<your-workspace-name>"
 
 def get_workspace(use_sp_auth=False, args=None):
-    if use_sp_auth and args:
+    if use_sp_auth and args and len(args) >= 4:
         print("Using Service Principal Authentication")
         tenant_id = args[1]
         client_id = args[2]
@@ -19,6 +19,7 @@ def get_workspace(use_sp_auth=False, args=None):
             service_principal_id=client_id,
             service_principal_password=client_secret
         )
+
         return Workspace(
             subscription_id=SUBSCRIPTION_ID,
             resource_group=RESOURCE_GROUP,
@@ -26,20 +27,12 @@ def get_workspace(use_sp_auth=False, args=None):
             auth=sp_auth
         )
     else:
-        print("Using default local auth")
+        print("Using default local authentication")
         return Workspace(
             subscription_id=SUBSCRIPTION_ID,
             resource_group=RESOURCE_GROUP,
             workspace_name=WORKSPACE_NAME
         )
 
-
-
-replace 
-if len(sys.argv) > 1:
-    ws = workspace_from_cmd(sys.argv)
-    aml_config_file = 'dev_config.json'
-else:
-    aml_config_file = 'dev_config.json'
-    ws = workspace_from_config(path='.azureml/' + aml_config_file)
-with
+# === Initialize workspace ===
+ws = get_workspace(use_sp_auth=(len(sys.argv) > 3), args=sys.argv)
