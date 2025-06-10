@@ -1,2 +1,1 @@
-df = pd.read_parquet(file_path,columns=["CMPNT_MATL_NUM", 'CMPNT_MATL_DESC','CMPNT_MATL_TYPE_CD',
-                                                'CMPNT_CAT_CD_DESC','CMPNT_UOM_CD'])
+df = df[df['CMPNT_MATL_DESC'].notna()]
