@@ -2,10 +2,10 @@ import pandas as pd
 import os
 import sys
 from datetime import datetime
-from azure.identity import ClientSecretCredential
+from azure.identity import ClientSecretCredential, DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
 
-def upload_csv_to_adls(tenant_id, client_id, client_secret):
+def upload_csv_to_adls(credential):
     # ------------------ Setup ------------------ #
     storage_account_name = "adlsdtodsdev"
     container_name = "bom-xref"
@@ -24,13 +24,7 @@ def upload_csv_to_adls(tenant_id, client_id, client_secret):
     df.to_csv(file_name, index=False)
     print(f"[INFO] Sample CSV saved locally as: {file_name}")
 
-    # ------------------ Authenticate and Upload ------------------ #
-    credential = ClientSecretCredential(
-        tenant_id=tenant_id,
-        client_id=client_id,
-        client_secret=client_secret
-    )
-
+    # ------------------ Upload to ADLS ------------------ #
     account_url = f"https://{storage_account_name}.blob.core.windows.net"
     blob_service_client = BlobServiceClient(account_url=account_url, credential=credential)
     blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_path)
@@ -42,12 +36,18 @@ def upload_csv_to_adls(tenant_id, client_id, client_secret):
 
 # ------------------ Main ------------------ #
 if __name__ == "__main__":
-    if len(sys.argv) < 4:
-        print("❌ Usage: python upload_to_adls.py <tenant_id> <client_id> <client_secret>")
-        sys.exit(1)
+    if len(sys.argv) >= 4:
+        print("[INFO] Using Service Principal authentication")
+        tenant_id = sys.argv[1]
+        client_id = sys.argv[2]
+        client_secret = sys.argv[3]
+        credential = ClientSecretCredential(
+            tenant_id=tenant_id,
+            client_id=client_id,
+            client_secret=client_secret
+        )
+    else:
+        print("[INFO] No service principal provided. Using DefaultAzureCredential")
+        credential = DefaultAzureCredential()
 
-    tenant_id = sys.argv[1]
-    client_id = sys.argv[2]
-    client_secret = sys.argv[3]
-
-    upload_csv_to_adls(tenant_id, client_id, client_secret)
+    upload_csv_to_adls(credential)
