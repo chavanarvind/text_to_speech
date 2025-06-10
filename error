@@ -1,158 +1,146 @@
-import os
-import argparse
-import pandas as pd
-import numpy as np
-import torch
-import joblib
-import subprocess
-subprocess.run(["pip", "install", "lightgbm"], check=True)
-from azureml.core import Run, Model
-from sentence_transformers import SentenceTransformer
+import json
+import sys
+from azureml.core import Experiment, RunConfiguration, Environment, Workspace, Dataset
+from azureml.core.authentication import ServicePrincipalAuthentication
 
-def main(input_path):
-    run = Run.get_context()
-    ws = run.experiment.workspace
+from azureml.pipeline.core import Pipeline
+from azureml.pipeline.steps import PythonScriptStep
+from azureml.data import OutputFileDatasetConfig
 
-    print("🔍 Loading model artifacts...")
-    model_dir = Model.get_model_path("lightgbm_Bert_RPM_Category_model", _workspace=ws)
-    model = joblib.load(os.path.join(model_dir, "final_model.joblib"))
-    ordinal = joblib.load(os.path.join(model_dir, "ordinal_encoder.pkl"))
-    scaler = joblib.load(os.path.join(model_dir, "scaler.pkl"))
 
-    encoder = SentenceTransformer(
-        'pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb',
-        device='cuda' if torch.cuda.is_available() else 'cpu'
+def set_aml_config_for_training(ws, compute_name):
+    compute_target = ws.compute_targets[compute_name]
+    aml_run_config = RunConfiguration()
+    aml_run_config.target = compute_target
+    env = Environment.get(workspace=ws,
+                          name="Bom_X_Evaluator")
+    aml_run_config.environment = env
+
+    return aml_run_config
+
+
+def workspace_from_cmd(args):
+    print('Reading workspace from command line arguments')
+    tenant_id = args[1]
+    client_id = args[2]
+    client_secret = args[3]
+    config_file = args[4]
+
+    # Needed when triggering from Jenkins
+    service_principal_auth = ServicePrincipalAuthentication(tenant_id=tenant_id,
+                                                            service_principal_id=client_id,
+                                                            service_principal_password=client_secret)
+    path = '../.azureml/' + config_file
+
+    with open(path) as json_file_obj:
+        config_json = json.load(json_file_obj)
+
+    return Workspace(subscription_id=config_json['subscription_id'],
+                     resource_group=config_json['resource_group'],
+                     workspace_name=config_json['workspace_name'],
+                     auth=service_principal_auth)
+
+
+def workspace_from_config(path):
+    print('Reading workspace from local config file')
+    with open(path) as json_file_obj:
+        config_json = json.load(json_file_obj)
+
+    return Workspace(subscription_id=config_json['subscription_id'],
+                     resource_group=config_json['resource_group'],
+                     workspace_name=config_json['workspace_name'])
+
+
+#ENV = 'dev'
+ENV = 'dev'
+
+if __name__ == '__main__':
+    if len(sys.argv) > 1:  # Command line args
+        workspace = workspace_from_cmd(sys.argv)
+        # Default to dev when running from jenkins
+        aml_config_file = 'dev_config.json'
+        datastore_name = 'xbomrefadlsg2'
+        compute_name = 'llm-gpu-cluster-2'
+    else:
+        if ENV == 'prod':
+            aml_config_file = 'prod_config.json'
+            datastore_name = 'xbom_prod_adlsgen2'
+            compute_name = 'bom-cluster-2'
+        else:
+            aml_config_file = 'dev_config.json'
+            datastore_name = 'xbomrefadlsg2'
+            compute_name = 'llm-gpu-cluster-2'
+
+        workspace = workspace_from_config(path='../.azureml/' + aml_config_file)
+
+    aml_config = set_aml_config_for_training(workspace, compute_name=compute_name)
+
+    # version = 'aug_2023'
+    # version = 'sep9_2023'
+    # version = '5k'
+    # version = 'sep19_2023'
+    # version = 'oct10_2023'
+    # version = 'nov14_2023'
+    # version = 'may14_2024'
+#    version = 'jun12_2024'
+    version = 'aug20_2024'
+
+    model_type = 'offline_transformer'
+    # model_type = 'open_ai'
+    transformer_model = 'all-roberta-large-kft'
+    db_style = 'pandas'
+
+    sentence_transformer_dir = (Dataset
+                                .get_by_name(workspace, name=transformer_model)
+                                .as_named_input('transformer_model')
+                                .as_mount()
+                                )
+    try:
+        embeddings_dir = (Dataset
+                          .get_by_name(workspace, name=f'bom_embeddings_{model_type}_{version}')
+                          .as_named_input('embeddings')
+                          .as_mount()
+                          )
+    except Exception as e:
+        print(e)
+        embeddings_dir = 'new_embd'
+
+    # This will return the id of the datasets
+    erp_im_data = Dataset.get_by_name(workspace, f'nlp_input_bom_hier_dtls').as_named_input(f'erp_im_bom')
+    erp_em_data = Dataset.get_by_name(workspace, f'nlp_input_bom_hier').as_named_input(f'erp_em_bom')
+    tru_data = Dataset.get_by_name(workspace, f'nlp_input_p360_bom').as_named_input(f'tru_bom')
+    trade_names_data = Dataset.get_by_name(workspace, 'nlp_input_p360_trdnm').as_named_input('trade_names_feb08_2024')
+
+    matches_output = OutputFileDatasetConfig(name='matches')
+    full_training_step = PythonScriptStep(
+        name="Cross Hound Matching",
+        source_directory="src",
+        script_name="cross_hound/matcher.py",
+        arguments=['--erp-im-dataset-name', erp_im_data,
+                   '--erp-em-dataset-name', erp_em_data,
+                   '--tru-dataset-name', tru_data,
+                   '--trade-names-name', trade_names_data,
+                   '--sentence-transformer-dir', sentence_transformer_dir,
+                   '--embeddings-dir', embeddings_dir,
+                   '--output_dir', matches_output,
+                   '--datastore-name', datastore_name,
+                   '--data-version', version,
+                   '--model-type', model_type,
+                   '--db-style', db_style],
+        runconfig=aml_config,
+        allow_reuse=False
     )
-    encoder.max_seq_length = 128
 
-    print("📁 Scanning input files...")
-    files = [f for f in os.listdir(input_path) if f.endswith(".parquet")]
-    print(f"📦 Found {len(files)} files to process.")
+    pipeline = Pipeline(workspace=workspace, steps=[full_training_step])
+    print('Pipeline created and about to be deployed')
 
-    for f in files:
-        print(f"\n📄 Processing file: {f}")
-        file_path = os.path.join(input_path, f)
-        df_all = pd.read_parquet(file_path)
-        print(f"🧮 Original row count: {len(df_all)}")
+    try:
+        from git import Repo
 
-        if 'CMPNT_MATL_NUM' not in df_all.columns:
-            print(f"❌ Skipping {f}: 'CMPNT_MATL_NUM' column not found.")
-            continue
-
-        df_mapped = df_all[df_all.get('needs_model') == False].copy()
-        df_pred = df_all[df_all.get('needs_model', True)].copy()
-
-        # Mapped rows dummy tagging
-        df_mapped['Final_Prediction'] = df_mapped['Final Category']
-        df_mapped['Score'] = 1.0
-        df_mapped['prediction_flag'] = 'Mapped'
-        df_mapped['inferred_category_model'] = 'direct_mapping'
-
-        if not df_pred.empty:
-            print(f"🧠 Rows needing prediction: {len(df_pred)}")
-            print("🔎 Encoding descriptions with BERT...")
-            desc_emb = encoder.encode(
-                df_pred['CMPNT_MATL_DESC'].astype(str).tolist(),
-                batch_size=256,
-                show_progress_bar=True,
-                convert_to_numpy=True)
-
-            print("⚙️ Transforming structured features...")
-            length_scaled = scaler.transform(df_pred[['CMPNT_MATL_DESC_LEN']])
-            cat_encoded = ordinal.transform(df_pred[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
-            X_pred = np.hstack([desc_emb, length_scaled, cat_encoded])
-
-            print("📈 Predicting categories...")
-            y_proba = model.predict_proba(X_pred)
-            y_score = np.max(y_proba, axis=1)
-            y_pred = model.predict(X_pred)
-
-            df_pred['Score'] = y_score
-            df_pred['Predicted'] = y_pred
-            df_pred['Final_Prediction'] = np.where(y_score < 0.6, 'Other', y_pred)
-            df_pred['prediction_flag'] = np.where(y_score < 0.6, 'Low Confidence', 'High Confidence')
-            df_pred['inferred_category_model'] = 'lightgbm_Bert_RPM_Category_model'
-
-            print(f"✅ Finished prediction. High-confidence rows: {(y_score >= 0.6).sum()}")
-
-        # Combine category prediction
-        df_out = pd.concat([df_pred, df_mapped], axis=0).sort_index()
-        print(f"📊 Final category prediction rows: {len(df_out)}")
-
-        print("🔁 Predicting subcategories for missing values...")
-        df_sub_mapped = df_out[df_out['Final Subcategory'].notna()].copy()
-        df_sub_pred = df_out[df_out['Final Subcategory'].isna()].copy()
-
-        subcat_predictions = []
-        for cat in ['CHM', 'PKG', 'FNW']:
-            subset = df_sub_pred[df_sub_pred['Final_Prediction'] == cat].copy()
-            if not subset.empty:
-                print(f"🔍 Subcategory prediction for {cat}: {len(subset)} rows")
-                model_name = f"lightgbm_Bert_RPM_Category_model_{cat.lower()}"
-                model_path = Model.get_model_path(model_name, _workspace=ws)
-                sub_model = joblib.load(os.path.join(model_path, "final_model.joblib"))
-                sub_encoder = joblib.load(os.path.join(model_path, "ordinal_encoder.pkl"))
-                sub_scaler = joblib.load(os.path.join(model_path, "scaler.pkl"))
-
-                desc_emb = encoder.encode(
-                    subset['CMPNT_MATL_DESC'].astype(str).tolist(),
-                    batch_size=256,
-                    show_progress_bar=True,
-                    convert_to_numpy=True)
-
-                length_scaled = sub_scaler.transform(subset[['CMPNT_MATL_DESC_LEN']])
-                cat_encoded = sub_encoder.transform(subset[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
-                X_sub = np.hstack([desc_emb, length_scaled, cat_encoded])
-                y_sub = sub_model.predict(X_sub)
-                subset['Predicted_Subcategory'] = y_sub
-                subcat_predictions.append(subset[['CMPNT_MATL_NUM', 'Predicted_Subcategory']])
-
-        if subcat_predictions:
-            sub_df = pd.concat(subcat_predictions)
-            df_sub_pred = df_sub_pred.merge(sub_df, on='CMPNT_MATL_NUM', how='left')
-            df_sub_pred['Final Subcategory'] = df_sub_pred['Predicted_Subcategory']
-            df_sub_pred['Subcategory_Score'] = df_sub_pred['Subcategory_Score'] = 0.9  # placeholder
-            df_sub_pred['Subcategory_Model'] = df_sub_pred['Final_Prediction'].apply(
-                lambda x: f"lightgbm_Bert_RPM_Category_model_{x.lower()}"
-            )
-
-        df_sub_mapped['Subcategory_Score'] = 1.0
-        df_sub_mapped['Subcategory_Model'] = 'direct_mapping'
-        df_sub_mapped['Predicted_Subcategory'] = df_sub_mapped['Final Subcategory']
-
-        df_out = pd.concat([df_sub_pred, df_sub_mapped], axis=0).sort_index()
-
-        print("📌 Sample output rows:")
-        print(df_out.head(3))
-
-        os.makedirs("outputs", exist_ok=True)
-        output_path = os.path.join("outputs", f"predicted_{f}")
-        df_out.to_parquet(output_path, index=False)
-        df_out.head(100).to_csv(os.path.join("outputs", f"sample_{f}.csv"), index=False)
-        print(f"💾 Saved: {output_path} and sample CSV")
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input_path", type=str, required=True)
-    args = parser.parse_args()
-    main(args.input_path)
-
-
-
-[2025-06-10 11:17:16] Mapped back predictions to key file: part-00000-00bb5c5d-ffa7-4fff-9b9c-7fdfa729ffb8-c000.snappy.parquet
-[2025-06-10 11:18:38] ❌ Failed to upload outputs/mapped_keys/part-00000-00bb5c5d-ffa7-4fff-9b9c-7fdfa729ffb8-c000.snappy.parquet to ADLS: 
-No credential in this chain provided a token.
-Attempted credentials:
-	EnvironmentCredential: Incomplete environment configuration. See https://aka.ms/python-sdk-identity#environment-variables for expected environment variables
-	MsiCredential: Unexpected response 'InternalError - :{
-Info: Request failure status code: 404
-
-}'
-Content: InternalError - :{
-Info: Request failure status code: 404
-
-}
-
-Please visit the documentation at
-https://aka.ms/python-sdk-identity#defaultazurecredential
-to learn what options DefaultAzureCredential supports
+        local_branch = Repo(search_parent_directories=True).active_branch.name
+        local_branch = local_branch.replace('/', '-')
+        local_branch = local_branch.replace(' ', '-')
+    except:
+        local_branch = 'jenkins_run'
+    pipeline_run = Experiment(workspace, name=f'xHound-{local_branch}').submit(pipeline)
+    pipeline_run.wait_for_completion()
