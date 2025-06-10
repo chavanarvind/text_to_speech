@@ -1,38 +1,14 @@
-from azureml.core import Workspace
-from azureml.core.authentication import ServicePrincipalAuthentication
-import sys
+[2025-06-10 11:17:10] Mapped back predictions to key file: part-00000-00bb5c5d-ffa7-4fff-9b9c-7fdfa729ffb8-c000.snappy.parquet
+[2025-06-10 11:17:16] Mapped back predictions to key file: part-00000-00bb5c5d-ffa7-4fff-9b9c-7fdfa729ffb8-c000.snappy.parquet
+[2025-06-10 11:18:38] ❌ Failed to upload outputs/mapped_keys/part-00000-00bb5c5d-ffa7-4fff-9b9c-7fdfa729ffb8-c000.snappy.parquet to ADLS: 
+No credential in this chain provided a token.
+Attempted credentials:
+	EnvironmentCredential: Incomplete environment configuration. See https://aka.ms/python-sdk-identity#environment-variables for expected environment variables
+	MsiCredential: Unexpected response 'InternalError - :{
+Info: Request failure status code: 404
 
-# === Hardcoded AML workspace config ===
-SUBSCRIPTION_ID = "<your-subscription-id>"
-RESOURCE_GROUP = "<your-resource-group>"
-WORKSPACE_NAME = "<your-workspace-name>"
+}'
+Content: InternalError - :{
+Info: Request failure status code: 404
 
-def get_workspace(use_sp_auth=False, args=None):
-    if use_sp_auth and args and len(args) >= 4:
-        print("Using Service Principal Authentication")
-        tenant_id = args[1]
-        client_id = args[2]
-        client_secret = args[3]
-
-        sp_auth = ServicePrincipalAuthentication(
-            tenant_id=tenant_id,
-            service_principal_id=client_id,
-            service_principal_password=client_secret
-        )
-
-        return Workspace(
-            subscription_id=SUBSCRIPTION_ID,
-            resource_group=RESOURCE_GROUP,
-            workspace_name=WORKSPACE_NAME,
-            auth=sp_auth
-        )
-    else:
-        print("Using default local authentication")
-        return Workspace(
-            subscription_id=SUBSCRIPTION_ID,
-            resource_group=RESOURCE_GROUP,
-            workspace_name=WORKSPACE_NAME
-        )
-
-# === Initialize workspace ===
-ws = get_workspace(use_sp_auth=(len(sys.argv) > 3), args=sys.argv)
+}
