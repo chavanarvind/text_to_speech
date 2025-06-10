@@ -1,4 +1,21 @@
-FUNCTION IN MY CODE WHICH IS GIVING ERROR
+FUNCTION IN MY CODE WHICH IS GIVING ERROR : [2025-06-10 11:17:10] Mapped back predictions to key file: part-00000-00bb5c5d-ffa7-4fff-9b9c-7fdfa729ffb8-c000.snappy.parquet
+[2025-06-10 11:17:16] Mapped back predictions to key file: part-00000-00bb5c5d-ffa7-4fff-9b9c-7fdfa729ffb8-c000.snappy.parquet
+[2025-06-10 11:18:38] ❌ Failed to upload outputs/mapped_keys/part-00000-00bb5c5d-ffa7-4fff-9b9c-7fdfa729ffb8-c000.snappy.parquet to ADLS: 
+No credential in this chain provided a token.
+Attempted credentials:
+	EnvironmentCredential: Incomplete environment configuration. See https://aka.ms/python-sdk-identity#environment-variables for expected environment variables
+	MsiCredential: Unexpected response 'InternalError - :{
+Info: Request failure status code: 404
+
+}'
+Content: InternalError - :{
+Info: Request failure status code: 404
+
+}
+
+Please visit the documentation at
+https://aka.ms/python-sdk-identity#defaultazurecredential
+to learn what options DefaultAzureCredential supports
 def upload_to_adls(file_path, file_name_in_blob):
     storage_account_name = "adlsdtodsdev"
     container_name = "bom-xref"
