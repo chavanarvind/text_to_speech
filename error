@@ -1,15 +1,10 @@
-inference_step = PythonScriptStep(
-    name="Step 5 - Run Inference",
-    script_name="step_5_run_inference.py",
-    source_directory="scripts",
-    inputs=[data_step4_out, data_step1a_mapped, data_step1a_key_output],
-    arguments=[
-        "--input_path", data_step4_out,
-        "--additional_mapped_dir", data_step1a_mapped,
-        "--key_output_dir", data_step1a_key_output  # ✅ correct
-    ],
-    outputs=[data_step1a_key_output],  # ✅ output goes here
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
+mapped_keys_dir = os.path.join("outputs", "mapped_keys")
+os.makedirs(mapped_keys_dir, exist_ok=True)
+
+today = datetime.today().strftime("%d%m%Y")
+mapped_keys_dir = os.path.join(args.key_output_dir, f"hbom_category_prediction_{today}")
+os.makedirs(mapped_keys_dir, exist_ok=True)
+
+remove
+def upload_to_adls(...):
+upload_to_adls(file_path=merged_parquet_path, file_name_in_blob=key_file)
