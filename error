@@ -1,22 +1,55 @@
-# scripts/step_1_data_pull.py
-
 import os
 import argparse
+import pandas as pd
+import pyarrow.parquet as pq
+import glob
 from azureml.core import Run, Dataset
 
 def main(output_path):
-    # Get run context and workspace
     run = Run.get_context()
     ws = run.experiment.workspace
 
-    # Get dataset by name
+    print("[INFO] Mounting dataset...")
     dataset = Dataset.get_by_name(ws, name='harmonized_bom_data_asset')
+    mount_context = dataset.mount()
 
-    # Ensure output directory exists and download dataset
-    os.makedirs(output_path, exist_ok=True)
-    dataset.download(target_path=output_path, overwrite=True)
+    with mount_context:
+        dataset_path = mount_context.mount_point
+        print(f"[INFO] Dataset mounted at: {dataset_path}")
 
-    print(f" Dataset downloaded to: {output_path}")
+        parquet_files = glob.glob(os.path.join(dataset_path, "*.parquet"))
+        if not parquet_files:
+            raise FileNotFoundError("No Parquet files found in mounted dataset.")
+
+        dfs = []
+        total_rows = 0
+        max_rows = 1000  # Limit how much data we load
+
+        for file in parquet_files:
+            try:
+                table = pq.read_table(file)
+                df = table.to_pandas()
+                dfs.append(df)
+                total_rows += len(df)
+                print(f"[INFO] Read {len(df)} rows from {os.path.basename(file)}")
+
+                if total_rows >= max_rows:
+                    break
+            except Exception as e:
+                print(f"[WARN] Skipping file {file}: {e}")
+
+        if not dfs:
+            raise ValueError("No data could be loaded from the dataset.")
+
+        combined_df = pd.concat(dfs, ignore_index=True)
+        sampled_df = combined_df.sample(n=min(100, len(combined_df)), random_state=42)
+
+        os.makedirs(output_path, exist_ok=True)
+        output_file = os.path.join(output_path, "sample_bom.parquet")
+        sampled_df.to_parquet(output_file, index=False)
+
+        print(f"[INFO] Sampled {len(sampled_df)} rows.")
+        print(f"[INFO] Sample saved to: {output_file}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
