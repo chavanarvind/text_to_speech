@@ -1,10 +1,4 @@
-from azureml.data import OutputFileDatasetConfig
-from datetime import datetime
-
-today = datetime.today().strftime("%d%m%Y")
-
-data_step1a_key_output = OutputFileDatasetConfig(
-    name='data_step1a_key_output'
-).as_mount(
-    path_on_datastore=f"hbom_category_prediction/hbom_category_prediction_{today}/"
-)
+  data_step1a_key_output = OutputFileDatasetConfig(
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\data\_loggerfactory.py", line 140, in wrapper
+    return func(*args, **kwargs)
+TypeError: as_mount() got an unexpected keyword argument 'path_on_datastore'
