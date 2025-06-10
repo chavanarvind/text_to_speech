@@ -1,6 +1,19 @@
-ADLS2 Container:
-Storage: adlsdtodsdev
-Container: bom-xref  
+data_step1a_key_output = PipelineData(name="data_step1a_key_output", is_directory=True)
+from azureml.data.datapath import DataPath
 
-Main Folder: hbom_category_prediction
-Weekly Folder: hbom_category_prediction_DDMMYYYY/
+from datetime import datetime
+today = datetime.today().strftime("%d%m%Y")
+
+default_ds = ws.get_default_datastore()
+
+custom_output_path = DataPath(
+    datastore=default_ds,
+    path_on_datastore=f"hbom_category_prediction/hbom_category_prediction_{today}/"
+)
+
+data_step1a_key_output = PipelineData(
+    name="data_step1a_key_output",
+    datastore=default_ds,
+    output_path_on_datastore=custom_output_path.path,
+    is_directory=True
+)
