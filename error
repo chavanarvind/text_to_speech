@@ -1,11 +1,5 @@
-custom_output_path = DataPath(
-    datastore=default_ds,
-    path_on_datastore=f"hbom_category_prediction/hbom_category_prediction_{today}/"
-)
+"--key_output", data_step1a_key_output
+outputs=[..., data_step1a_key_output]
 
-today = datetime.today().strftime("%d%m%Y")
-
-data_step1a_key_output = OutputFileDatasetConfig(
-    name='data_step1a_key_output',
-    destination=(default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/")
-)
+"--key_output", step1a_key_output_temp,
+outputs=[..., step1a_key_output_temp]
