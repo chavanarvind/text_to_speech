@@ -133,7 +133,7 @@ def main(input_path, additional_mapped_dir, key_output_dir):
 
         df_sub_mapped['Subcategory_Score'] = 1.0
         df_sub_mapped['Subcategory_Model'] = 'direct_mapping'
-        df_sub_mapped['Predicted_Subcategorory']y'] = df_sub_mapped['Final Subcateg
+        df_sub_mapped['Predicted_Subcategorory'] = df_sub_mapped['Final Subcategory']
 
         df_sub_pred_final = pd.concat(subcat_predictions + [fallback_rows])
         df_out = pd.concat([df_sub_pred_final, df_sub_mapped], axis=0).sort_index()
