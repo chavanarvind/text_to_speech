@@ -1,6 +1,6 @@
-"--key_output_dir", data_step1a_key_output,
-outputs=[data_step1a_key_output]
+parser.add_argument("--final_output_dir", required=True)
 
-"--key_output_dir", step1a_key_output_temp,      # Input (from Step 1a)
-"--final_output_dir", final_output_to_adls,      # Output to ADLS
-outputs=[final_output_to_adls]
+
+mapped_keys_dir = os.path.join("outputs", "mapped_keys")
+mapped_keys_dir = args.final_output_dir
+os.makedirs(mapped_keys_dir, exist_ok=True)
