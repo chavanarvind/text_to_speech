@@ -1,8 +1,1 @@
-# 🚨 Validate mapped-only rows have Final Category
-missing_final_cat = (
-    mapped_only_df['Final Category'].isna() |
-    mapped_only_df['Final Category'].astype(str).str.strip().eq("")
-)
-
-if missing_final_cat.any():
-    raise ValueError(f"[ERROR] {missing_final_cat.sum()} rows are marked as needs_model=False but missing Final Category.")
+print(df[df['CMPNT_MATL_DESC']=='9455900']) is not working and giving blank. can we try something like CMPNT_MATL_NUM LIKE '%9455900'
