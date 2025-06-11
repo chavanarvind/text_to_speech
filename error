@@ -154,3 +154,40 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+[INFO] Processing: part-00000-0042fc95-a813-4a78-a5ea-9d565974a2b5-c000.snappy.parquet
+[INFO] Unique CMPNT_CAT_CD_DESC in input: 774
+[INFO] Unique CMPNT_MATL_TYPE_CD in input: 71
+[CHECK] Matching unique categories: 459
+[CHECK] Matching unique material types: 1
+[STAGE 1] Direct category mapping: 237064 rows matched
+[STAGE 2] Fallback type-code mapping: 1655 rows matched
+[INFO] Total mapped rows (Stage 1 + 2): 238719
+[WARNING] 82693 rows could not be mapped at all.
+[ERROR] Failed to process /mnt/azureml/cr/j/2c1fa2d2cdb547eb86d7614912981709/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/679dff58-aece-45b6-b001-b3eedd951fc0/data_step1_out/part-00000-0042fc95-a813-4a78-a5ea-9d565974a2b5-c000.snappy.parquet: "['Final Category Filled', 'Final Subcategory Filled'] not in index"
+
+[INFO] Processing: part-00000-00bb3abb-2599-4885-a2cf-085958187528-c000.snappy.parquet
+[INFO] Unique CMPNT_CAT_CD_DESC in input: 730
+[INFO] Unique CMPNT_MATL_TYPE_CD in input: 71
+[CHECK] Matching unique categories: 425
+[CHECK] Matching unique material types: 1
+[STAGE 1] Direct category mapping: 225212 rows matched
+[STAGE 2] Fallback type-code mapping: 1648 rows matched
+[INFO] Total mapped rows (Stage 1 + 2): 226860
+[WARNING] 92591 rows could not be mapped at all.
+[ERROR] Failed to process /mnt/azureml/cr/j/2c1fa2d2cdb547eb86d7614912981709/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/679dff58-aece-45b6-b001-b3eedd951fc0/data_step1_out/part-00000-00bb3abb-2599-4885-a2cf-085958187528-c000.snappy.parquet: "['Final Category Filled', 'Final Subcategory Filled'] not in index"
+
+[INFO] Processing: part-00000-00bb5c5d-ffa7-4fff-9b9c-7fdfa729ffb8-c000.snappy.parquet
+[INFO] Unique CMPNT_CAT_CD_DESC in input: 730
+[INFO] Unique CMPNT_MATL_TYPE_CD in input: 71
+[CHECK] Matching unique categories: 425
+[CHECK] Matching unique material types: 1
+[STAGE 1] Direct category mapping: 224954 rows matched
+[STAGE 2] Fallback type-code mapping: 1649 rows matched
+[INFO] Total mapped rows (Stage 1 + 2): 226603
+[WARNING] 95306 rows could not be mapped at all.
+[ERROR] Failed to process /mnt/azureml/cr/j/2c1fa2d2cdb547eb86d7614912981709/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/679dff58-aece-45b6-b001-b3eedd951fc0/data_step1_out/part-00000-00bb5c5d-ffa7-4fff-9b9c-7fdfa729ffb8-c000.snappy.parquet: "['Final Category Filled', 'Final Subcategory Filled'] not in index"
+Cleaning up all outstanding Run operations, waiting 300.0 seconds
+1 items cleaning up...
+Cleanup took 0.11201715469360352 seconds
