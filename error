@@ -1,8 +1,7 @@
-The DEV pipeline has been successfully triggered. Based on current processing time, it may take approximately one and a half days to complete.
-
-The final output file, along with the row count, will be available once the pipeline execution is complete.
-
-Will keep you posted once it's ready.
-
-Best regards,
-Arvind
+Could you please provide me the data type for these fields?
+AI_FINAL_CATEGORY
+AI_FINAL_SUBCATEGORY
+AI_FINAL_CATEGORY_CONFIDENCE
+AI_FINAL_SUBCATEGORY_CONFIDENCE
+AI_MATCHING_REASON_FINAL_CATEGORY
+AI_MATCHING_REASON_FINAL_SUBCATEGORY
