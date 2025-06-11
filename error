@@ -101,32 +101,58 @@ def process_file(file_path, mapping_df, mapped_dir, needs_model_dir, key_output_
 
         # Split mapped / model-needed rows
         mapped_only_df = mapped_df[~mapped_df['needs_model']].copy()
+        mapped_only_df["Final Category Filled"] = mapped_only_df['Final Category'].notna() & mapped_only_df['Final Category'].str.strip().ne("")
+        mapped_only_df["Final Subcategory Filled"] = mapped_only_df['Final Subcategory'].notna() & mapped_only_df['Final Subcategory'].str.strip().ne("")
         needs_model_df = mapped_df[mapped_df['needs_model']].copy()
+        needs_model_df["Final Category Filled"] = needs_model_df['Final Category'].notna() & needs_model_df['Final Category'].str.strip().ne("")
+        needs_model_df["Final Subcategory Filled"] = needs_model_df['Final Subcategory'].notna() & needs_model_df['Final Subcategory'].str.strip().ne("")
+       
+
+        # ✅ New debug for fully mapped rows
+        print(f"[INFO] Rows with both Final Category and Subcategory filled (fully mapped): {len(mapped_only_df)}")
+        print(mapped_only_df[['CMPNT_MATL_NUM', 'Final Category', 'Final Subcategory']].head(5))
+
+        # ✅ Save fully mapped rows to CSV
+        os.makedirs("outputs/samples_by_source", exist_ok=True)
+        mapped_only_df.to_csv(
+            f"outputs/samples_by_source/fully_mapped_rows_{os.path.basename(file_path)}.csv",
+            index=False
+        )
 
         # Append totally unmapped rows
         if not unmapped_df.empty:
             needs_model_df = pd.concat([needs_model_df, unmapped_df[mapped_df.columns]], ignore_index=True)
 
-        # Save CSV samples for debug
-        os.makedirs("outputs/samples_by_source", exist_ok=True)
-        mapped_only_df.to_csv(f"outputs/samples_by_source/fully_mapped_rows_{os.path.basename(file_path)}.csv", index=False)
+        # Validate mapped_only_df
+        missing_final_cat = mapped_only_df['Final Category'].isna() | mapped_only_df['Final Category'].astype(str).str.strip().eq("")
+        if missing_final_cat.any():
+            raise ValueError(f"[ERROR] {missing_final_cat.sum()} mapped-only rows are missing Final Category!")
+
+        # Save needs_model sample
         needs_model_df.head(100).to_csv("outputs/samples_by_source/needs_model_df.csv", index=False)
 
-        # Save to output folders
+        # Drop datetime columns
+        #mapped_only_df = mapped_only_df.drop(columns=mapped_only_df.select_dtypes(include=["datetime64[ns]"]).columns)
+        #needs_model_df = needs_model_df.drop(columns=needs_model_df.select_dtypes(include=["datetime64[ns]"]).columns)
+
+        # Save to parquet
+        base_name = os.path.basename(file_path)
         os.makedirs(mapped_dir, exist_ok=True)
         os.makedirs(needs_model_dir, exist_ok=True)
-        mapped_only_df.to_parquet(os.path.join(mapped_dir, os.path.basename(file_path)), index=False)
-        needs_model_df.to_parquet(os.path.join(needs_model_dir, os.path.basename(file_path)), index=False)
+        mapped_only_df.to_parquet(os.path.join(mapped_dir, base_name), index=False)
+        needs_model_df.to_parquet(os.path.join(needs_model_dir, base_name), index=False)
 
         # Save key file if schema allows
-        full_columns = pd.read_parquet(file_path).columns
+        full_columns = pd.read_parquet(file_path, engine='pyarrow').columns
         if all(col in full_columns for col in KEY_COLS):
-            full_df = pd.read_parquet(file_path, columns=KEY_COLS).drop_duplicates()
+            full_df = pd.read_parquet(file_path, columns=KEY_COLS)
+            key_df = full_df.drop_duplicates()
+            #key_df = key_df.drop(columns=key_df.select_dtypes(include=["datetime64[ns]"]).columns)
             os.makedirs(key_output_dir, exist_ok=True)
-            full_df.to_parquet(os.path.join(key_output_dir, os.path.basename(file_path)), index=False)
-            print(f"[INFO] Saved key reference: {os.path.basename(file_path)}")
+            key_df.to_parquet(os.path.join(key_output_dir, base_name), index=False)
+            print(f"[INFO] Saved key reference: {base_name}")
         else:
-            print(f"[INFO] Skipping key file for {os.path.basename(file_path)}, missing required columns.")
+            print(f"[INFO] Skipping key file for {base_name}, missing one or more key columns.")
 
     except Exception as e:
         print(f"[ERROR] Failed to process {file_path}: {e}")
@@ -145,10 +171,11 @@ def main():
     csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
     if not csv_files:
         raise FileNotFoundError(f"No CSV file found in mapped directory: {args.mapping_csv}")
-
     mapping_df = pd.read_csv(csv_files[0]).drop_duplicates()
 
     all_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
+
+    # Process only first 3 files for testing
     for file_path in all_files[:3]:
         process_file(file_path, mapping_df, args.mapped_output, args.needs_model_output, args.key_output)
 
