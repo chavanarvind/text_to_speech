@@ -1,3 +1,6 @@
+run = Run.get_context()
+
+
 def process_file(file_path, mapping_df, mapped_dir, needs_model_dir, key_output_dir):
     try:
         print(f"\n[INFO] Processing: {os.path.basename(file_path)}")
