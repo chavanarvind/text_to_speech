@@ -1,3 +1,22 @@
+import os
+import glob
+import argparse
+import pandas as pd
+from azureml.core import Run
+
+# === Column to match ===
+JOIN_COL_1 = "CMPNT_CAT_CD_DESC"
+JOIN_COL_2 = "CMPNT_MATL_TYPE_CD"
+DIRECT_MAP_KEY_1 = "Direct Mapping"
+DIRECT_MAP_KEY_2 = "Direct Mapping"
+
+# === Key Columns to output ===
+KEY_COLS = [
+    "ROW_NM", "SRC_SYS_CD", "MATL_NUM", "PLNT_CD", "CMPNT_MATL_NUM",
+    "BOM_LVL_DTLS_NUM", "TRU_MATL_NUM", "CMPNT_RM_SPEC_CD",
+    "CMPNT_PC_SPEC_CD", "CMPNT_DC_SPEC_CD", "RAW_MATL_TITLE_NM"
+]
+
 def process_file(file_path, mapping_df, mapped_dir, needs_model_dir, key_output_dir):
     try:
         print(f"\n[INFO] Processing: {os.path.basename(file_path)}")
@@ -109,3 +128,42 @@ def process_file(file_path, mapping_df, mapped_dir, needs_model_dir, key_output_
 
     except Exception as e:
         print(f"[ERROR] Failed to process {file_path}: {e}")
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_path", type=str, required=True)
+    parser.add_argument("--mapping_csv", type=str, required=True)
+    parser.add_argument("--mapped_output", type=str, required=True)
+    parser.add_argument("--needs_model_output", type=str, required=True)
+    parser.add_argument("--key_output", type=str, required=True)
+    args = parser.parse_args()
+
+    run = Run.get_context()
+
+    csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
+    if not csv_files:
+        raise FileNotFoundError(f"No CSV file found in mapped directory: {args.mapping_csv}")
+
+    mapping_df = pd.read_csv(csv_files[0]).drop_duplicates()
+
+    all_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
+    for file_path in all_files[:3]:
+        process_file(file_path, mapping_df, args.mapped_output, args.needs_model_output, args.key_output)
+
+if __name__ == "__main__":
+    main
+
+
+[INFO] Processing: part-00000-00bb5c5d-ffa7-4fff-9b9c-7fdfa729ffb8-c000.snappy.parquet
+[INFO] Unique CMPNT_CAT_CD_DESC in input: 730
+[INFO] Unique CMPNT_MATL_TYPE_CD in input: 71
+[CHECK] Matching unique categories: 425
+[CHECK] Matching unique material types: 1
+[STAGE 1] Direct category mapping: 224954 rows matched
+[STAGE 2] Fallback type-code mapping: 1649 rows matched
+[INFO] Total mapped rows (Stage 1 + 2): 226603
+[WARNING] 95306 rows could not be mapped at all.
+[ERROR] Failed to process /mnt/azureml/cr/j/cba9c5f69c5c4db38c70c1743621c634/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/f691d4ee-1b43-4a75-bd0c-5fe5c427ae4f/data_step1_out/part-00000-00bb5c5d-ffa7-4fff-9b9c-7fdfa729ffb8-c000.snappy.parquet: "['Final Category Filled', 'Final Subcategory Filled'] not in index"
+Cleaning up all outstanding Run operations, waiting 300.0 seconds
+1 items cleaning up...
+Cleanup took 0.09382915496826172 seconds
