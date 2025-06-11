@@ -1,7 +1,8 @@
-# Extract mapped rows
-df_mapped = df_all[df_all.get('needs_model') == False].copy()
+# 🚨 Validate mapped-only rows have Final Category
+missing_final_cat = (
+    mapped_only_df['Final Category'].isna() |
+    mapped_only_df['Final Category'].astype(str).str.strip().eq("")
+)
 
-# 🚨 Safety validation: Ensure all mapped rows have Final Category
-missing_final_cat = df_mapped['Final Category'].isna() | df_mapped['Final Category'].astype(str).str.strip().eq("")
 if missing_final_cat.any():
-    raise ValueError(f"[ERROR] {missing_final_cat.sum()} rows are marked as needs_model=False but are missing Final Category.")
+    raise ValueError(f"[ERROR] {missing_final_cat.sum()} rows are marked as needs_model=False but missing Final Category.")
