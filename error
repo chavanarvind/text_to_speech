@@ -1,160 +1,68 @@
-import os
-import glob
-import argparse
-import pandas as pd
-from azureml.core import Run
+[INFO] Processing: part-00000-0042fc95-a813-4a78-a5ea-9d565974a2b5-c000.snappy.parquet
+[INFO] Initial rows in input: 7824679
+[INFO] After dropping NA/duplicates: 270380
+[DEBUG] mapping_df columns after strip: ['Direct Mapping', 'Final Category', 'Final Subcategory']
+[DEBUG] mapping_df dtypes before merge:
+Direct Mapping       object
+Final Category       object
+Final Subcategory    object
+dtype: object
+[INFO] Mapping DF has 503 rows
+[STAGE 1] Matched rows: 237064
+[DEBUG] stage1_df columns: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score']
+[STAGE 2] Matched rows: 1655
+[DEBUG] stage2_df columns: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score']
+[INFO] Total mapped rows: 238719
+[DEBUG] mapped_df columns before Final Filled flags: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score']
+[DEBUG] mapped_df columns after Final Filled flags: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score', 'Final Category Filled', 'Final Subcategory Filled', 'needs_model']
+[WARNING] Total unmapped rows: 82297
+[INFO] Fully mapped rows: 229621
+[INFO] Rows needing model: 91791
+[INFO] Saved key reference: part-00000-0042fc95-a813-4a78-a5ea-9d565974a2b5-c000.snappy.parquet
 
-# === Column to match ===
-JOIN_COL_1 = "CMPNT_CAT_CD_DESC"
-JOIN_COL_2 = "CMPNT_MATL_TYPE_CD"
-DIRECT_MAP_KEY_1 = "Direct Mapping"
-DIRECT_MAP_KEY_2 = "Direct Mapping"
+[INFO] Processing: part-00000-00bb3abb-2599-4885-a2cf-085958187528-c000.snappy.parquet
+[INFO] Initial rows in input: 7685106
+[INFO] After dropping NA/duplicates: 268610
+[DEBUG] mapping_df columns after strip: ['Direct Mapping', 'Final Category', 'Final Subcategory']
+[DEBUG] mapping_df dtypes before merge:
+Direct Mapping       object
+Final Category       object
+Final Subcategory    object
+dtype: object
+[INFO] Mapping DF has 503 rows
+[STAGE 1] Matched rows: 225212
+[DEBUG] stage1_df columns: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score']
+[STAGE 2] Matched rows: 1648
+[DEBUG] stage2_df columns: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score']
+[INFO] Total mapped rows: 226860
+[DEBUG] mapped_df columns before Final Filled flags: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score']
+[DEBUG] mapped_df columns after Final Filled flags: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score', 'Final Category Filled', 'Final Subcategory Filled', 'needs_model']
+[WARNING] Total unmapped rows: 92115
+[INFO] Fully mapped rows: 218145
+[INFO] Rows needing model: 101306
+[INFO] Saved key reference: part-00000-00bb3abb-2599-4885-a2cf-085958187528-c000.snappy.parquet
 
-# === Key Columns to output ===
-KEY_COLS = [
-    "ROW_NM", "SRC_SYS_CD", "MATL_NUM", "PLNT_CD", "CMPNT_MATL_NUM",
-    "BOM_LVL_DTLS_NUM", "TRU_MATL_NUM", "CMPNT_RM_SPEC_CD",
-    "CMPNT_PC_SPEC_CD", "CMPNT_DC_SPEC_CD", "RAW_MATL_TITLE_NM"
-]
-
-def process_file(file_path, mapping_df, mapped_dir, needs_model_dir, key_output_dir):
-    try:
-        print(f"\n[INFO] Processing: {os.path.basename(file_path)}")
-
-        # Load necessary columns
-        df = pd.read_parquet(file_path, columns=[
-            "CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD",
-            "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD"
-        ])
-        print(f"[INFO] Initial rows in input: {len(df)}")
-        df = df[df['CMPNT_MATL_DESC'].notna()].drop_duplicates()
-        print(f"[INFO] After dropping NA/duplicates: {len(df)}")
-
-        # Normalize text in input
-        df[JOIN_COL_1] = df[JOIN_COL_1].fillna("").astype(str).str.strip().str.upper()
-        df[JOIN_COL_2] = df[JOIN_COL_2].fillna("").astype(str).str.strip().str.upper()
-
-        # Clean mapping_df
-        mapping_df.columns = mapping_df.columns.str.strip()
-        print(f"[DEBUG] mapping_df columns after strip: {mapping_df.columns.tolist()}")
-        for col in ['Final Category', 'Final Subcategory']:
-            if col not in mapping_df.columns:
-                print(f"[WARNING] '{col}' not in mapping_df. Adding as None.")
-                mapping_df[col] = None
-
-        print(f"[DEBUG] mapping_df dtypes before merge:\n{mapping_df.dtypes}")
-
-        mapping_df[DIRECT_MAP_KEY_1] = mapping_df[DIRECT_MAP_KEY_1].fillna("").astype(str).str.strip().str.upper()
-        mapping_df[DIRECT_MAP_KEY_2] = mapping_df[DIRECT_MAP_KEY_2].fillna("").astype(str).str.strip().str.upper()
-
-        print(f"[INFO] Mapping DF has {len(mapping_df)} rows")
-
-        # Stage 1 match
-        stage1_df = df.merge(mapping_df, how="inner", left_on=JOIN_COL_1, right_on=DIRECT_MAP_KEY_1)
-        stage1_df['matching_reason'] = 'direct_mapping_category'
-        stage1_df['confidence_score'] = 1.0
-        print(f"[STAGE 1] Matched rows: {len(stage1_df)}")
-        print(f"[DEBUG] stage1_df columns: {stage1_df.columns.tolist()}")
-
-        # Stage 2 match
-        unmatched_df = df[~df['CMPNT_MATL_NUM'].isin(stage1_df['CMPNT_MATL_NUM'])]
-        stage2_df = unmatched_df.merge(mapping_df, how="inner", left_on=JOIN_COL_2, right_on=DIRECT_MAP_KEY_2)
-        stage2_df['matching_reason'] = 'direct_mapping_type_only'
-        stage2_df['confidence_score'] = 1.0
-        print(f"[STAGE 2] Matched rows: {len(stage2_df)}")
-        print(f"[DEBUG] stage2_df columns: {stage2_df.columns.tolist()}")
-
-        # Combine
-        mapped_df = pd.concat([stage1_df, stage2_df], ignore_index=True)
-        print(f"[INFO] Total mapped rows: {len(mapped_df)}")
-        print(f"[DEBUG] mapped_df columns before Final Filled flags: {mapped_df.columns.tolist()}")
-
-        # Ensure Final Category/Subcategory exist in mapped_df
-        for col in ['Final Category', 'Final Subcategory']:
-            if col not in mapped_df.columns:
-                print(f"[WARNING] '{col}' not in mapped_df after merge. Adding as None.")
-                mapped_df[col] = None
-
-        # Fill flags
-        try:
-            mapped_df['Final Category Filled'] = mapped_df['Final Category'].notna() & mapped_df['Final Category'].astype(str).str.strip().ne("")
-            mapped_df['Final Subcategory Filled'] = mapped_df['Final Subcategory'].notna() & mapped_df['Final Subcategory'].astype(str).str.strip().ne("")
-            mapped_df['needs_model'] = ~mapped_df['Final Category Filled'] | ~mapped_df['Final Subcategory Filled']
-        except Exception as e:
-            print(f"[ERROR] Failed during flag creation: {e}")
-            mapped_df['needs_model'] = True
-            mapped_df['Final Category Filled'] = False
-            mapped_df['Final Subcategory Filled'] = False
-
-        print(f"[DEBUG] mapped_df columns after Final Filled flags: {mapped_df.columns.tolist()}")
-
-        # Identify unmapped
-        mapped_ids = set(mapped_df['CMPNT_MATL_NUM'])
-        all_ids = set(df['CMPNT_MATL_NUM'])
-        unmapped_ids = all_ids - mapped_ids
-
-        if unmapped_ids:
-            print(f"[WARNING] Total unmapped rows: {len(unmapped_ids)}")
-            unmapped_df = df[df['CMPNT_MATL_NUM'].isin(unmapped_ids)].copy()
-            unmapped_df['Final Category'] = None
-            unmapped_df['Final Subcategory'] = None
-            unmapped_df['needs_model'] = True
-            unmapped_df['matching_reason'] = 'unmapped_fallback'
-            unmapped_df['confidence_score'] = 0.0
-            unmapped_df['Final Category Filled'] = False
-            unmapped_df['Final Subcategory Filled'] = False
-            for col in mapped_df.columns:
-                if col not in unmapped_df.columns:
-                    unmapped_df[col] = None
-            mapped_df = pd.concat([mapped_df, unmapped_df[mapped_df.columns]], ignore_index=True)
-
-        # Split
-        mapped_only_df = mapped_df[~mapped_df['needs_model']].copy()
-        needs_model_df = mapped_df[mapped_df['needs_model']].copy()
-
-        print(f"[INFO] Fully mapped rows: {len(mapped_only_df)}")
-        print(f"[INFO] Rows needing model: {len(needs_model_df)}")
-
-        # Save
-        os.makedirs(mapped_dir, exist_ok=True)
-        os.makedirs(needs_model_dir, exist_ok=True)
-        mapped_only_df.to_parquet(os.path.join(mapped_dir, os.path.basename(file_path)), index=False)
-        needs_model_df.to_parquet(os.path.join(needs_model_dir, os.path.basename(file_path)), index=False)
-
-        # Save key columns
-        full_cols = pd.read_parquet(file_path).columns
-        missing_cols = [col for col in KEY_COLS if col not in full_cols]
-        if not missing_cols:
-            key_df = pd.read_parquet(file_path, columns=KEY_COLS).drop_duplicates()
-            os.makedirs(key_output_dir, exist_ok=True)
-            key_df.to_parquet(os.path.join(key_output_dir, os.path.basename(file_path)), index=False)
-            print(f"[INFO] Saved key reference: {os.path.basename(file_path)}")
-        else:
-            print(f"[INFO] Skipped key output — missing columns: {missing_cols}")
-
-    except Exception as e:
-        print(f"[ERROR] Full failure on file {file_path}: {e}")
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input_path", type=str, required=True)
-    parser.add_argument("--mapping_csv", type=str, required=True)
-    parser.add_argument("--mapped_output", type=str, required=True)
-    parser.add_argument("--needs_model_output", type=str, required=True)
-    parser.add_argument("--key_output", type=str, required=True)
-    args = parser.parse_args()
-
-    run = Run.get_context()
-
-    csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
-    if not csv_files:
-        raise FileNotFoundError(f"No CSV file found in mapped directory: {args.mapping_csv}")
-
-    mapping_df = pd.read_csv(csv_files[0]).drop_duplicates()
-
-    all_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
-    for file_path in all_files[:3]:
-        process_file(file_path, mapping_df, args.mapped_output, args.needs_model_output, args.key_output)
-
-if __name__ == "__main__":
-    main()
+[INFO] Processing: part-00000-00bb5c5d-ffa7-4fff-9b9c-7fdfa729ffb8-c000.snappy.parquet
+[INFO] Initial rows in input: 7829100
+[INFO] After dropping NA/duplicates: 282354
+[DEBUG] mapping_df columns after strip: ['Direct Mapping', 'Final Category', 'Final Subcategory']
+[DEBUG] mapping_df dtypes before merge:
+Direct Mapping       object
+Final Category       object
+Final Subcategory    object
+dtype: object
+[INFO] Mapping DF has 503 rows
+[STAGE 1] Matched rows: 224954
+[DEBUG] stage1_df columns: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score']
+[STAGE 2] Matched rows: 1649
+[DEBUG] stage2_df columns: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score']
+[INFO] Total mapped rows: 226603
+[DEBUG] mapped_df columns before Final Filled flags: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score']
+[DEBUG] mapped_df columns after Final Filled flags: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score', 'Final Category Filled', 'Final Subcategory Filled', 'needs_model']
+[WARNING] Total unmapped rows: 91897
+[INFO] Fully mapped rows: 217889
+[INFO] Rows needing model: 104020
+[INFO] Saved key reference: part-00000-00bb5c5d-ffa7-4fff-9b9c-7fdfa729ffb8-c000.snappy.parquet
+Cleaning up all outstanding Run operations, waiting 300.0 seconds
+1 items cleaning up...
+Cleanup took 0.09452033042907715 seconds
