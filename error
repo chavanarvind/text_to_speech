@@ -1,11 +1,8 @@
-# step_1a_extract_and_merge_old.py
-
 import os
 import glob
 import argparse
 import pandas as pd
 from azureml.core import Run
-from multiprocessing import Pool, cpu_count
 
 # === Column to match ===
 JOIN_COL_1 = "CMPNT_CAT_CD_DESC"
@@ -13,100 +10,229 @@ JOIN_COL_2 = "CMPNT_MATL_TYPE_CD"
 DIRECT_MAP_KEY_1 = "Direct Mapping"
 DIRECT_MAP_KEY_2 = "Direct Mapping"
 
-# === Merge one file ===
-def process_file(file_path, mapping_df, mapped_dir, needs_model_dir):
-   
+# === Key Columns to output ===
+KEY_COLS = [
+    "ROW_NM", "SRC_SYS_CD", "MATL_NUM", "PLNT_CD", "CMPNT_MATL_NUM",
+    "BOM_LVL_DTLS_NUM", "TRU_MATL_NUM", "CMPNT_RM_SPEC_CD",
+    "CMPNT_PC_SPEC_CD", "CMPNT_DC_SPEC_CD", "RAW_MATL_TITLE_NM"
+]
 
+def process_file(file_path, mapping_df, mapped_dir, needs_model_dir, key_output_dir):
     try:
-        df = pd.read_parquet(file_path, columns=["CMPNT_MATL_NUM", 'CMPNT_MATL_DESC','CMPNT_MATL_TYPE_CD',
-    'CMPNT_CAT_CD_DESC',
-    'CMPNT_UOM_CD'])
-        df = df[df['CMPNT_MATL_DESC'].notna()]
-        df.drop_duplicates(inplace=True)
+        print(f"\n[INFO] Processing: {os.path.basename(file_path)}")
 
-        df[JOIN_COL_1] = df[JOIN_COL_1].fillna("").astype(str).str.strip()
-        df[JOIN_COL_2] = df[JOIN_COL_2].fillna("").astype(str).str.strip()
-        mapping_df[DIRECT_MAP_KEY_1] = mapping_df[DIRECT_MAP_KEY_1].astype(str).str.strip()
-        mapping_df[DIRECT_MAP_KEY_2] = mapping_df[DIRECT_MAP_KEY_2].astype(str).str.strip()
+        # Load necessary columns
+        df = pd.read_parquet(file_path, columns=[
+            "CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD",
+            "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD"
+        ])
+        df = df[df['CMPNT_MATL_DESC'].notna()].drop_duplicates()
 
-        # Stage 1 mapping: based on CMPNT_CAT_CD_DESC only
+        # Normalize text for matching
+        df[JOIN_COL_1] = df[JOIN_COL_1].fillna("").astype(str).str.strip().str.upper()
+        df[JOIN_COL_2] = df[JOIN_COL_2].fillna("").astype(str).str.strip().str.upper()
+        mapping_df[DIRECT_MAP_KEY_1] = mapping_df[DIRECT_MAP_KEY_1].fillna("").astype(str).str.strip().str.upper()
+        mapping_df[DIRECT_MAP_KEY_2] = mapping_df[DIRECT_MAP_KEY_2].fillna("").astype(str).str.strip().str.upper()
+
+        # === Debug: Check input uniqueness
+        print(f"[INFO] Unique CMPNT_CAT_CD_DESC in input: {df[JOIN_COL_1].nunique()}")
+        print(f"[INFO] Unique CMPNT_MATL_TYPE_CD in input: {df[JOIN_COL_2].nunique()}")
+
+        # === Debug: Overlap with mapping
+        category_overlap = set(df[JOIN_COL_1]) & set(mapping_df[DIRECT_MAP_KEY_1])
+        type_overlap = set(df[JOIN_COL_2]) & set(mapping_df[DIRECT_MAP_KEY_2])
+        print(f"[CHECK] Matching unique categories: {len(category_overlap)}")
+        print(f"[CHECK] Matching unique material types: {len(type_overlap)}")
+
+        # Stage 1 mapping
         stage1_df = df.merge(mapping_df, how="inner", left_on=[JOIN_COL_1], right_on=[DIRECT_MAP_KEY_1])
         stage1_df['matching_reason'] = 'direct_mapping_category'
         stage1_df['confidence_score'] = 1.0
-        print(stage1_df[stage1_df['matching_reason'] =='direct_mapping_category'].head(5))
-       
-        # Stage 2 mapping: based on CMPNT_MATL_TYPE_CD only (excluding already mapped)
-        df_not_mapped_in_stage1 = df[~df['CMPNT_MATL_NUM'].isin(stage1_df['CMPNT_MATL_NUM'])]
-        stage2_df = df_not_mapped_in_stage1.merge(mapping_df, how="inner", left_on=[JOIN_COL_2], right_on=[DIRECT_MAP_KEY_2])
+        print(f"[STAGE 1] Direct category mapping: {len(stage1_df)} rows matched")
+
+        if len(stage1_df) == 0:
+            print("[STAGE 1 WARNING] No matches found. Sample input category values:")
+            print(df[JOIN_COL_1].dropna().unique()[:5])
+            print("Sample mapping keys:")
+            print(mapping_df[DIRECT_MAP_KEY_1].dropna().unique()[:5])
+
+        # Stage 2 mapping
+        df_not_mapped = df[~df['CMPNT_MATL_NUM'].isin(stage1_df['CMPNT_MATL_NUM'])]
+        stage2_df = df_not_mapped.merge(mapping_df, how="inner", left_on=[JOIN_COL_2], right_on=[DIRECT_MAP_KEY_2])
         stage2_df['matching_reason'] = 'direct_mapping_type_only'
         stage2_df['confidence_score'] = 1.0
-        print([stage2_df['matching_reason'] =='direct_mapping_type_only'].head(5))
+        print(f"[STAGE 2] Fallback type-code mapping: {len(stage2_df)} rows matched")
 
-        # Combine both mappings
+        if len(stage2_df) == 0:
+            print("[STAGE 2 WARNING] No matches found. Sample input type values:")
+            print(df_not_mapped[JOIN_COL_2].dropna().unique()[:5])
+            print("Sample mapping type keys:")
+            print(mapping_df[DIRECT_MAP_KEY_2].dropna().unique()[:5])
+
+        # Combine mapped results
         mapped_df = pd.concat([stage1_df, stage2_df], ignore_index=True)
-        print("📌 Mapped counts:")
-        print(f"  🔹 Stage 1 (by category only): {len(stage1_df)}")
-        print(f"  🔹 Stage 2 (by material type only): {len(stage2_df)}")
-        print(f"  🔹 Total mapped rows combined: {len(mapped_df)}")
+        print(f"[INFO] Total mapped rows (Stage 1 + 2): {len(mapped_df)}")
 
-        # Show a few rows for confirmation
-        if len(mapped_df) > 0:
-         print(" Sample of mapped rows:")
-         print(mapped_df[['CMPNT_MATL_NUM', 'Final Category', 'Final Subcategory']].head())
-        else:
-         print("No mapping found for file:", os.path.basename(file_path))
+        # Identify fully unmapped rows
+        all_input_ids = set(df['CMPNT_MATL_NUM'])
+        mapped_ids = set(mapped_df['CMPNT_MATL_NUM'])
+        unmapped_ids = all_input_ids - mapped_ids
 
-        # Add mapping flags
+        unmapped_df = pd.DataFrame()
+        if unmapped_ids:
+            unmapped_df = df[df['CMPNT_MATL_NUM'].isin(unmapped_ids)].copy()
+            print(f"[WARNING] {len(unmapped_df)} rows could not be mapped at all.")
+
+            # Mark as needing model inference
+            unmapped_df['Final Category'] = None
+            unmapped_df['Final Subcategory'] = None
+            unmapped_df['needs_model'] = True
+            unmapped_df['matching_reason'] = 'unmapped_fallback'
+            unmapped_df['confidence_score'] = 0.0
+
+            for col in mapped_df.columns:
+                if col not in unmapped_df.columns:
+                    unmapped_df[col] = None
+
+        # Determine needs_model flags
         mapped_df['Final Category Filled'] = mapped_df['Final Category'].notna() & mapped_df['Final Category'].str.strip().ne("")
         mapped_df['Final Subcategory Filled'] = mapped_df['Final Subcategory'].notna() & mapped_df['Final Subcategory'].str.strip().ne("")
         mapped_df['needs_model'] = ~mapped_df['Final Category Filled'] | ~mapped_df['Final Subcategory Filled']
 
-        # Split into mapped and needing model
+        # Split mapped / model-needed rows
         mapped_only_df = mapped_df[~mapped_df['needs_model']].copy()
         needs_model_df = mapped_df[mapped_df['needs_model']].copy()
 
-        print(f"Fully mapped: {file_path}, records: {len(mapped_only_df)}")
-        print(f" Needs model (either cat/subcat): {file_path}, records: {len(needs_model_df)}")
+        # ✅ New debug for fully mapped rows
+        print(f"[INFO] Rows with both Final Category and Subcategory filled (fully mapped): {len(mapped_only_df)}")
+        print(mapped_only_df[['CMPNT_MATL_NUM', 'Final Category', 'Final Subcategory']].head(5))
 
-        # Output path
+        # ✅ Save fully mapped rows to CSV
+        os.makedirs("outputs/samples_by_source", exist_ok=True)
+        mapped_only_df.to_csv(
+            f"outputs/samples_by_source/fully_mapped_rows_{os.path.basename(file_path)}.csv",
+            index=False
+        )
+
+        # Append totally unmapped rows
+        if not unmapped_df.empty:
+            needs_model_df = pd.concat([needs_model_df, unmapped_df[mapped_df.columns]], ignore_index=True)
+
+        # Validate mapped_only_df
+        missing_final_cat = mapped_only_df['Final Category'].isna() | mapped_only_df['Final Category'].astype(str).str.strip().eq("")
+        if missing_final_cat.any():
+            raise ValueError(f"[ERROR] {missing_final_cat.sum()} mapped-only rows are missing Final Category!")
+
+        # Save needs_model sample
+        needs_model_df.head(100).to_csv("outputs/samples_by_source/needs_model_df.csv", index=False)
+
+        # Drop datetime columns
+        #mapped_only_df = mapped_only_df.drop(columns=mapped_only_df.select_dtypes(include=["datetime64[ns]"]).columns)
+        #needs_model_df = needs_model_df.drop(columns=needs_model_df.select_dtypes(include=["datetime64[ns]"]).columns)
+
+        # Save to parquet
         base_name = os.path.basename(file_path)
         os.makedirs(mapped_dir, exist_ok=True)
         os.makedirs(needs_model_dir, exist_ok=True)
-
         mapped_only_df.to_parquet(os.path.join(mapped_dir, base_name), index=False)
         needs_model_df.to_parquet(os.path.join(needs_model_dir, base_name), index=False)
 
-    except Exception as e:
-        print(f"❌ Failed to process {file_path}: {e}")
+        # Save key file if schema allows
+        full_columns = pd.read_parquet(file_path, engine='pyarrow').columns
+        if all(col in full_columns for col in KEY_COLS):
+            full_df = pd.read_parquet(file_path, columns=KEY_COLS)
+            key_df = full_df.drop_duplicates()
+            #key_df = key_df.drop(columns=key_df.select_dtypes(include=["datetime64[ns]"]).columns)
+            os.makedirs(key_output_dir, exist_ok=True)
+            key_df.to_parquet(os.path.join(key_output_dir, base_name), index=False)
+            print(f"[INFO] Saved key reference: {base_name}")
+        else:
+            print(f"[INFO] Skipping key file for {base_name}, missing one or more key columns.")
 
-# === Main script ===
+    except Exception as e:
+        print(f"[ERROR] Failed to process {file_path}: {e}")
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_path", type=str, required=True)
     parser.add_argument("--mapping_csv", type=str, required=True)
     parser.add_argument("--mapped_output", type=str, required=True)
     parser.add_argument("--needs_model_output", type=str, required=True)
+    parser.add_argument("--key_output", type=str, required=True)
     args = parser.parse_args()
 
     run = Run.get_context()
 
-    # === Locate CSV inside mounted directory ===
     csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
     if not csv_files:
         raise FileNotFoundError(f"No CSV file found in mapped directory: {args.mapping_csv}")
+    mapping_df = pd.read_csv(csv_files[0]).drop_duplicates()
 
-    mapping_path = csv_files[0]
-    print(f"📥 Reading mapping from: {mapping_path}")
-    mapping_df = pd.read_csv(mapping_path)
-    mapping_df = mapping_df.drop_duplicates()
-    print(f"📊 Mapping rows: {len(mapping_df)}")
+    all_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
 
-    # === Process input parquet files ===
-    all_files = glob.glob(os.path.join(args.input_path, "*.parquet"))[:3]
-    print(f"📁 Total input parquet files found: {len(all_files)}")
-
-    for file_path in all_files:
-        process_file(file_path, mapping_df, args.mapped_output, args.needs_model_output)
+    # Process only first 3 files for testing
+    for file_path in all_files[:3]:
+        process_file(file_path, mapping_df, args.mapped_output, args.needs_model_output, args.key_output)
 
 if __name__ == "__main__":
     main()
+
+
+[INFO] Processing: part-00000-0042fc95-a813-4a78-a5ea-9d565974a2b5-c000.snappy.parquet
+[INFO] Unique CMPNT_CAT_CD_DESC in input: 774
+[INFO] Unique CMPNT_MATL_TYPE_CD in input: 71
+[CHECK] Matching unique categories: 459
+[CHECK] Matching unique material types: 1
+[STAGE 1] Direct category mapping: 237064 rows matched
+[STAGE 2] Fallback type-code mapping: 1655 rows matched
+[INFO] Total mapped rows (Stage 1 + 2): 238719
+[WARNING] 82693 rows could not be mapped at all.
+[INFO] Rows with both Final Category and Subcategory filled (fully mapped): 229621
+       CMPNT_MATL_NUM Final Category            Final Subcategory
+0  000000900010000276            PKG  PKG - Promotional Materials
+1  000000900010000279            PKG  PKG - Promotional Materials
+2  000000900010018803            PKG  PKG - Promotional Materials
+3  000000900010018531            PKG  PKG - Promotional Materials
+4  000000900010018790            PKG  PKG - Promotional Materials
+[ERROR] Failed to process /mnt/azureml/cr/j/1bddb68f4b1647d9a2ba5b2ca2db4f91/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/76c74391-28a2-4676-9e00-59e6cdafc5a4/data_step1_out/part-00000-0042fc95-a813-4a78-a5ea-9d565974a2b5-c000.snappy.parquet: "['Final Category Filled', 'Final Subcategory Filled'] not in index"
+
+[INFO] Processing: part-00000-00bb3abb-2599-4885-a2cf-085958187528-c000.snappy.parquet
+[INFO] Unique CMPNT_CAT_CD_DESC in input: 730
+[INFO] Unique CMPNT_MATL_TYPE_CD in input: 71
+[CHECK] Matching unique categories: 425
+[CHECK] Matching unique material types: 1
+[STAGE 1] Direct category mapping: 225212 rows matched
+[STAGE 2] Fallback type-code mapping: 1648 rows matched
+[INFO] Total mapped rows (Stage 1 + 2): 226860
+[WARNING] 92591 rows could not be mapped at all.
+[INFO] Rows with both Final Category and Subcategory filled (fully mapped): 218145
+       CMPNT_MATL_NUM Final Category            Final Subcategory
+0  000000900010000276            PKG  PKG - Promotional Materials
+1  000000900010000279            PKG  PKG - Promotional Materials
+2  000000900010018803            PKG  PKG - Promotional Materials
+3  000000900010018531            PKG  PKG - Promotional Materials
+4  000000900010018790            PKG  PKG - Promotional Materials
+[ERROR] Failed to process /mnt/azureml/cr/j/1bddb68f4b1647d9a2ba5b2ca2db4f91/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/76c74391-28a2-4676-9e00-59e6cdafc5a4/data_step1_out/part-00000-00bb3abb-2599-4885-a2cf-085958187528-c000.snappy.parquet: "['Final Category Filled', 'Final Subcategory Filled'] not in index"
+
+[INFO] Processing: part-00000-00bb5c5d-ffa7-4fff-9b9c-7fdfa729ffb8-c000.snappy.parquet
+[INFO] Unique CMPNT_CAT_CD_DESC in input: 730
+[INFO] Unique CMPNT_MATL_TYPE_CD in input: 71
+[CHECK] Matching unique categories: 425
+[CHECK] Matching unique material types: 1
+[STAGE 1] Direct category mapping: 224954 rows matched
+[STAGE 2] Fallback type-code mapping: 1649 rows matched
+[INFO] Total mapped rows (Stage 1 + 2): 226603
+[WARNING] 95306 rows could not be mapped at all.
+[INFO] Rows with both Final Category and Subcategory filled (fully mapped): 217889
+       CMPNT_MATL_NUM Final Category            Final Subcategory
+0  000000900010000276            PKG  PKG - Promotional Materials
+1  000000900010000279            PKG  PKG - Promotional Materials
+2  000000900010018803            PKG  PKG - Promotional Materials
+3  000000900010018531            PKG  PKG - Promotional Materials
+4  000000900010018790            PKG  PKG - Promotional Materials
+[ERROR] Failed to process /mnt/azureml/cr/j/1bddb68f4b1647d9a2ba5b2ca2db4f91/cap/data-capability/wd/INPUT_data_step1_out_workspaceblobstore/azureml/76c74391-28a2-4676-9e00-59e6cdafc5a4/data_step1_out/part-00000-00bb5c5d-ffa7-4fff-9b9c-7fdfa729ffb8-c000.snappy.parquet: "['Final Category Filled', 'Final Subcategory Filled'] not in index"
+Cleaning up all outstanding Run operations, waiting 300.0 seconds
+1 items cleaning up...
+Cleanup took 0.11294412612915039 seconds
+
+
