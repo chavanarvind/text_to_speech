@@ -1,3 +1,7 @@
 @Chavan, Arvind [Non-Kenvue] Could you please confirm once the new output file is generated in the DEV container?
 
 Please find below container details for your reference.
+
+
+Virtual machine size
+Standard_NC16as_T4_v3 (16 cores, 110 GB RAM, 352 GB disk)
