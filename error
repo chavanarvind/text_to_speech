@@ -1,7 +1,8 @@
-@Chavan, Arvind [Non-Kenvue] Could you please confirm once the new output file is generated in the DEV container?
+The DEV pipeline has been successfully triggered. Based on current processing time, it may take approximately one and a half days to complete.
 
-Please find below container details for your reference.
+The final output file, along with the row count, will be available once the pipeline execution is complete.
 
+Will keep you posted once it's ready.
 
-Virtual machine size
-Standard_NC16as_T4_v3 (16 cores, 110 GB RAM, 352 GB disk)
+Best regards,
+Arvind
