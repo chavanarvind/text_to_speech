@@ -134,3 +134,27 @@ def process_file(file_path, mapping_df, mapped_dir, needs_model_dir, key_output_
 
     except Exception as e:
         print(f"[ERROR] Full failure on file {file_path}: {e}")
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_path", type=str, required=True)
+    parser.add_argument("--mapping_csv", type=str, required=True)
+    parser.add_argument("--mapped_output", type=str, required=True)
+    parser.add_argument("--needs_model_output", type=str, required=True)
+    parser.add_argument("--key_output", type=str, required=True)
+    args = parser.parse_args()
+
+    run = Run.get_context()
+
+    csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
+    if not csv_files:
+        raise FileNotFoundError(f"No CSV file found in mapped directory: {args.mapping_csv}")
+
+    mapping_df = pd.read_csv(csv_files[0]).drop_duplicates()
+
+    all_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
+    for file_path in all_files[:3]:
+        process_file(file_path, mapping_df, args.mapped_output, args.needs_model_output, args.key_output)
+
+if __name__ == "__main__":
+    main()
