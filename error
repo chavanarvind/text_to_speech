@@ -1,8 +1,36 @@
-Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
-  File "step_5_run_inference.py", line 261, in <module>
-    main(args.input_path, args.additional_mapped_dir, args.key_output_dir)
-  File "step_5_run_inference.py", line 75, in main
-    for f in os.listdir(additional_mapped_dir):
-FileNotFoundError: [Errno 2] No such file or directory: '/mnt/azureml/cr/j/3be39be0d7e742ebaab86cf9c503a474/cap/data-capability/wd/INPUT_data_step1a_mapped_workspaceblobstore/azureml/1d549949-deb1-4ca3-90a1-a4e1081afc08/data_step1a_mapped'
-
-
+Direct Mapping
+Final Category
+Final Subcategory
+Acetaminophen or par
+CHM
+Acetaminophen/aspiri
+CHM
+Acetaminophen/diphen
+CHM
+Acetylsalicylic Acid
+CHM
+CHM - Acids / Buffers / Salts
+Acids / Buffers / Sa
+CHM
+CHM - Acids / Buffers / Salts
+Acids/Buffers/Salts
+CHM
+CHM - Acids / Buffers / Salts
+ACTIVE INGREDIENTS
+CHM
+CHM - Actives
+Active Substances
+CHM
+CHM - Actives
+Actives
+CHM
+CHM - Actives
+ACTIVES
+CHM
+CHM - Actives
+Adhesive dry bandage
+FNW
+FNW - Adhesives
+ADVERT/PROMO ITEMS
+PKG
+PKG - Promotional Mat
