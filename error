@@ -1,36 +1,11 @@
-import os
-import glob
-import argparse
-import pandas as pd
-from azureml.core import Run
-
-# === Column to match ===
-JOIN_COL_1 = "CMPNT_CAT_CD_DESC"
-JOIN_COL_2 = "CMPNT_MATL_TYPE_CD"
-DIRECT_MAP_KEY_1 = "Direct Mapping"
-DIRECT_MAP_KEY_2 = "Direct Mapping"
-
-# === Key Columns to output ===
-KEY_COLS = [
-    "ROW_NM", "SRC_SYS_CD", "MATL_NUM", "PLNT_CD", "CMPNT_MATL_NUM",
-    "BOM_LVL_DTLS_NUM", "TRU_MATL_NUM", "CMPNT_RM_SPEC_CD",
-    "CMPNT_PC_SPEC_CD", "CMPNT_DC_SPEC_CD", "RAW_MATL_TITLE_NM"
-]
-
 def process_file(file_path, mapping_df, mapped_dir, needs_model_dir, key_output_dir):
     try:
-        # Load only the required columns for mapping
+        # Load required columns
         df = pd.read_parquet(file_path, columns=[
             "CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD",
             "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD"
         ])
-        df = df[df['CMPNT_MATL_DESC'].notna()]
-        print(df[df['CMPNT_MATL_NUM']=='000000000009455900'])
-        print(df[df['CMPNT_MATL_NUM']=='9455900'])
-    
-
-        
-        df.drop_duplicates(inplace=True)
+        df = df[df['CMPNT_MATL_DESC'].notna()].drop_duplicates()
 
         # Preprocess for join
         df[JOIN_COL_1] = df[JOIN_COL_1].fillna("").astype(str).str.strip()
@@ -42,53 +17,72 @@ def process_file(file_path, mapping_df, mapped_dir, needs_model_dir, key_output_
         stage1_df = df.merge(mapping_df, how="inner", left_on=[JOIN_COL_1], right_on=[DIRECT_MAP_KEY_1])
         stage1_df['matching_reason'] = 'direct_mapping_category'
         stage1_df['confidence_score'] = 1.0
-        
 
         # Stage 2 mapping
         df_not_mapped = df[~df['CMPNT_MATL_NUM'].isin(stage1_df['CMPNT_MATL_NUM'])]
         stage2_df = df_not_mapped.merge(mapping_df, how="inner", left_on=[JOIN_COL_2], right_on=[DIRECT_MAP_KEY_2])
         stage2_df['matching_reason'] = 'direct_mapping_type_only'
         stage2_df['confidence_score'] = 1.0
-       
 
-        # Combine results
+        # Combine mapped results
         mapped_df = pd.concat([stage1_df, stage2_df], ignore_index=True)
+
+        # === 🔍 Identify fully unmapped rows (no match in Stage 1 or 2) ===
+        all_input_ids = set(df['CMPNT_MATL_NUM'])
+        mapped_ids = set(mapped_df['CMPNT_MATL_NUM'])
+        unmapped_ids = all_input_ids - mapped_ids
+
+        unmapped_df = pd.DataFrame()
+        if unmapped_ids:
+            unmapped_df = df[df['CMPNT_MATL_NUM'].isin(unmapped_ids)].copy()
+            print(f"[WARNING] {len(unmapped_df)} rows could not be mapped (Stage 1 or 2).")
+
+            # Mark as needing model inference
+            unmapped_df['Final Category'] = None
+            unmapped_df['Final Subcategory'] = None
+            unmapped_df['needs_model'] = True
+            unmapped_df['matching_reason'] = 'unmapped_fallback'
+            unmapped_df['confidence_score'] = 0.0
+
+            # Add missing columns from mapped_df
+            for col in mapped_df.columns:
+                if col not in unmapped_df.columns:
+                    unmapped_df[col] = None
+
+        # === Mark rows for model inference ===
         mapped_df['Final Category Filled'] = mapped_df['Final Category'].notna() & mapped_df['Final Category'].str.strip().ne("")
         mapped_df['Final Subcategory Filled'] = mapped_df['Final Subcategory'].notna() & mapped_df['Final Subcategory'].str.strip().ne("")
         mapped_df['needs_model'] = ~mapped_df['Final Category Filled'] | ~mapped_df['Final Subcategory Filled']
-        
-        print(" Mapped counts:")
-        print(f"   Stage 1 (by category only): {len(stage1_df)}")
-        print(f"   Stage 2 (by material type only): {len(stage2_df)}")
-        print(f"   Total mapped rows combined: {len(mapped_df)}")
 
-        # Split mapped and needs model
+        # === Split mapped and prediction-needed ===
         mapped_only_df = mapped_df[~mapped_df['needs_model']].copy()
         needs_model_df = mapped_df[mapped_df['needs_model']].copy()
-        print(mapped_only_df[mapped_only_df['CMPNT_MATL_NUM']=='000000000009455900'])
-        print(needs_model_df[needs_model_df['CMPNT_MATL_NUM']=='000000000009455900'])
-        print(mapped_only_df[mapped_only_df['CMPNT_MATL_NUM']=='9455900'])
-        print(needs_model_df[needs_model_df['CMPNT_MATL_NUM']=='9455900'])
-        missing_final_cat = (mapped_only_df['Final Category'].isna() | mapped_only_df['Final Category'].astype(str).str.strip().eq(""))
 
+        # === Append totally unmapped rows ===
+        if not unmapped_df.empty:
+            needs_model_df = pd.concat([needs_model_df, unmapped_df[mapped_df.columns]], ignore_index=True)
+
+        # === Validate ===
+        missing_final_cat = (mapped_only_df['Final Category'].isna() | mapped_only_df['Final Category'].astype(str).str.strip().eq(""))
         if missing_final_cat.any():
-         raise ValueError(f"[ERROR] {missing_final_cat.sum()} rows are marked as needs_model=False but missing Final Category.")
-        # Save sample for inspection
+            raise ValueError(f"[ERROR] {missing_final_cat.sum()} rows are marked as needs_model=False but missing Final Category.")
+
+        # Save sample preview
         os.makedirs("outputs/samples_by_source", exist_ok=True)
         needs_model_df.head(100).to_csv("outputs/needs_model_df.csv", index=False)
 
-        # Drop datetime columns to avoid Parquet casting issues
+        # Drop datetime columns before saving
         mapped_only_df = mapped_only_df.drop(columns=mapped_only_df.select_dtypes(include=["datetime64[ns]"]).columns)
         needs_model_df = needs_model_df.drop(columns=needs_model_df.select_dtypes(include=["datetime64[ns]"]).columns)
 
-        # Write output files
+        # Save outputs
         base_name = os.path.basename(file_path)
         os.makedirs(mapped_dir, exist_ok=True)
         os.makedirs(needs_model_dir, exist_ok=True)
         mapped_only_df.to_parquet(os.path.join(mapped_dir, base_name), index=False)
         needs_model_df.to_parquet(os.path.join(needs_model_dir, base_name), index=False)
 
-        # === Conditionally load full file and save key file if columns exist ===
+        # === Save key file if valid ===
         full_columns = pd.read_parquet(file_path, engine='pyarrow').columns
         if all(col in full_columns for col in KEY_COLS):
             full_df = pd.read_parquet(file_path, columns=KEY_COLS)
@@ -98,32 +92,7 @@ def process_file(file_path, mapping_df, mapped_dir, needs_model_dir, key_output_
             key_df.to_parquet(os.path.join(key_output_dir, base_name), index=False)
             print(f"Saved key reference: {base_name}")
         else:
-            print(f" Skipping key file for {base_name}, missing one or more key columns.")
+            print(f"Skipping key file for {base_name}, missing one or more key columns.")
 
     except Exception as e:
         print(f"Failed to process {file_path}: {e}")
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input_path", type=str, required=True)
-    parser.add_argument("--mapping_csv", type=str, required=True)
-    parser.add_argument("--mapped_output", type=str, required=True)
-    parser.add_argument("--needs_model_output", type=str, required=True)
-    parser.add_argument("--key_output", type=str, required=True)
-    args = parser.parse_args()
-
-    run = Run.get_context()
-
-    csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
-    if not csv_files:
-        raise FileNotFoundError(f"No CSV file found in mapped directory: {args.mapping_csv}")
-    mapping_df = pd.read_csv(csv_files[0]).drop_duplicates()
-
-    all_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
-
-    # Process only first 3 files for testing
-    for file_path in all_files[:3]:
-        process_file(file_path, mapping_df, args.mapped_output, args.needs_model_output, args.key_output)
-
-if __name__ == "__main__":
-    main()
