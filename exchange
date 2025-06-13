@@ -1,9 +1,10 @@
+# Step 5 output path (predicted files)
 final_output_to_adls = OutputFileDatasetConfig(
     name='final_predictions_to_adls',
     destination=(default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/")
 )
 
-# Final merged output to ADLS from Step 6
+# Step 6 output path (final merged output after dedup + key mapping)
 final_merged_output = OutputFileDatasetConfig(
     name='final_merged_predictions',
     destination=(default_ds, f"hbom_category_prediction/final_output_{today}/")
