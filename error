@@ -2,23 +2,15 @@
 
 # Intermediate outputs
 step1a_key_output_temp = OutputFileDatasetConfig(name='step1a_key_output_temp')
-final_output_to_adls = OutputFileDatasetConfig(
-    name='final_predictions_to_adls',
-    destination=(default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/inference_per_file/")
-)
-final_merged_output = OutputFileDatasetConfig(
-    name='final_merged_predictions',
-    destination=(default_ds, f"hbom_category_prediction/final_output_{today}/")
-)
 
 # === Step 5 Output: Raw inference per file ===
-inference_output = OutputFileDatasetConfig(
-    name='inference_file_outputs',
+final_output_to_adls = OutputFileDatasetConfig(  # <- used in step 5
+    name='final_predictions_to_adls',
     destination=(default_ds, f"hbom_category_prediction_inference_per_file/hbom_category_prediction_{today}/")
 )
 
 # === Step 6 Output: Final merged and deduplicated predictions ===
-final_merged_output = OutputFileDatasetConfig(
+final_merged_output = OutputFileDatasetConfig(  # <- used in step 6
     name='final_merged_predictions',
     destination=(default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/")
 )
