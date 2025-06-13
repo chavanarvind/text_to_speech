@@ -1,1 +1,12 @@
-Step 4 - Feature Engineering--- azureml-blobstore-975b0280-8ce5-42df-bdeb-51637f5ddbc7/azureml/dc062719-579e-4b04-9ed6-d3df49183cae/data_step4_out
+# --- Mount inputs using actual blob storage paths from last run ---
+step4_mount = Dataset.File.from_files(
+    (default_ds, "azureml/dc062719-579e-4b04-9ed6-d3df49183cae/data_step4_out/")
+).as_named_input('data_step4_out').as_mount()
+
+mapped_mount = Dataset.File.from_files(
+    (default_ds, "azureml/dc062719-579e-4b04-9ed6-d3df49183cae/data_step1a_mapped/")
+).as_named_input('mapped_output').as_mount()
+
+key_mount = Dataset.File.from_files(
+    (default_ds, "azureml/dc062719-579e-4b04-9ed6-d3df49183cae/step1a_key_output_temp/")
+).as_named_input('key_output').as_mount()
