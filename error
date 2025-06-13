@@ -1,16 +1,13 @@
-UserErrorException:
-	Message: 
-Error Code: ScriptExecution.StreamAccess.NotFound
-Native Error: error in streaming from input data sources
-	StreamError(NotFound)
-=> stream not found
-	NotFound
-Error Message: The requested stream was not found. Please make sure the request uri is correct.| session_id=f3ff75ca-670c-4036-bedc-46c5e1c31d8d
-	InnerException None
-	ErrorResponse 
-{
-    "error": {
-        "code": "UserError",
-        "message": "\nError Code: ScriptExecution.StreamAccess.NotFound\nNative Error: error in streaming from input data sources\n\tStreamError(NotFound)\n=> stream not found\n\tNotFound\nError Message: The requested stream was not found. Please make sure the request uri is correct.| session_id=f3ff75ca-670c-4036-bedc-46c5e1c31d8d"
-    }
-}
+step4_mount = Dataset.File.from_files(
+    (default_ds, "/mnt/azureml/cr/j/bd16a31376f24e00845ad6040f9554a6/cap/data-capability/wd/INPUT_data_step4_out_workspaceblobstore/azureml/dc062719-579e-4b04-9ed6-d3df49183cae/data_step4_out/")
+).as_named_input('data_step4_out').as_mount()
+
+#azureml-blobstore-975b0280-8ce5-42df-bdeb-51637f5ddbc7/azureml/7fe88368-db07-4410-8817-a40204a52f43/data_step1a_mapped
+mapped_mount = Dataset.File.from_files(
+    (default_ds, "azureml/7fe88368-db07-4410-8817-a40204a52f43/data_step1a_mapped/")
+).as_named_input('mapped_output').as_mount()
+
+#azureml-blobstore-975b0280-8ce5-42df-bdeb-51637f5ddbc7/dataset/7fe88368-db07-4410-8817-a40204a52f43/step1a_key_output_temp/
+key_mount = Dataset.File.from_files(
+    (default_ds, "azureml/7fe88368-db07-4410-8817-a40204a52f43/step1a_key_output_temp/")
+).as_named_input('key_output').as_mount()
