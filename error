@@ -1,8 +1,16 @@
-CMPNT_MATL_NUM	string	Unique component material number (primary identifier)
-AI_FINAL_CATEGORY	string	Predicted or mapped final category label
-AI_FINAL_SUBCATEGORY	string	Predicted or mapped subcategory label
-AI_FINAL_CATEGORY_CONFIDENCE	float64	Model confidence score for category (0.0–1.0)
-AI_FINAL_SUBCATEGORY_CONFIDENCE	float64	Model confidence score for subcategory (0.0–1.0)
-AI_MATCHING_REASON_FINAL_CATEGORY	string	Model or mapping logic used for final category (e.g., model name or mapping tag)
-AI_MATCHING_REASON_FINAL_SUBCATEGORY	string	Model or fallback logic used for subcategory assignment
-source_file	string	Original file name from which the row was sourced
+Hi [Recipient's Name],
+
+Hope you're doing well.
+
+I wanted to confirm the structure for the weekly output as follows:
+
+A new folder named in the format hbom_category_prediction_DDMMYYYY/ will be generated every week under the main hbom_category_prediction directory.
+
+Each of these weekly folders will contain 1000+ Parquet files, representing the output for that week.
+
+There will be no single consolidated output file — the output will be distributed across multiple Parquet files within each folder.
+
+Let me know if you'd like us to explore an option for consolidated output or have any other questions.
+
+Best regards,
+Arvind
