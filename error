@@ -1,15 +1,16 @@
-import os
-
-# Define the folder path and the target file name
-folder_path = '/path/to/your/folder'
-target_file = 'your_target_file.parquet'
-
-# List all files in the folder
-file_list = os.listdir(folder_path)
-
-# Find the position of the target file
-if target_file in file_list:
-    position = file_list.index(target_file) + 1  # Position is 1-based
-    print(f"The file '{target_file}' is at position {position}.")
-else:
-    print(f"The file '{target_file}' was not found in the folder.")
+UserErrorException:
+	Message: 
+Error Code: ScriptExecution.StreamAccess.NotFound
+Native Error: error in streaming from input data sources
+	StreamError(NotFound)
+=> stream not found
+	NotFound
+Error Message: The requested stream was not found. Please make sure the request uri is correct.| session_id=f3ff75ca-670c-4036-bedc-46c5e1c31d8d
+	InnerException None
+	ErrorResponse 
+{
+    "error": {
+        "code": "UserError",
+        "message": "\nError Code: ScriptExecution.StreamAccess.NotFound\nNative Error: error in streaming from input data sources\n\tStreamError(NotFound)\n=> stream not found\n\tNotFound\nError Message: The requested stream was not found. Please make sure the request uri is correct.| session_id=f3ff75ca-670c-4036-bedc-46c5e1c31d8d"
+    }
+}
