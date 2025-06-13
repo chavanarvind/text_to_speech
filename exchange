@@ -1,16 +1,1 @@
-UserErrorException:
-	Message: 
-Error Code: ScriptExecution.StreamAccess.NotFound
-Native Error: error in streaming from input data sources
-	StreamError(NotFound)
-=> stream not found
-	NotFound
-Error Message: The requested stream was not found. Please make sure the request uri is correct.| session_id=fd4f81c6-32b3-42a5-a971-e0ab06095bec
-	InnerException None
-	ErrorResponse 
-{
-    "error": {
-        "code": "UserError",
-        "message": "\nError Code: ScriptExecution.StreamAccess.NotFound\nNative Error: error in streaming from input data sources\n\tStreamError(NotFound)\n=> stream not found\n\tNotFound\nError Message: The requested stream was not found. Please make sure the request uri is correct.| session_id=fd4f81c6-32b3-42a5-a971-e0ab06095bec"
-    }
-}
+Step 4 - Feature Engineering--- azureml-blobstore-975b0280-8ce5-42df-bdeb-51637f5ddbc7/azureml/dc062719-579e-4b04-9ed6-d3df49183cae/data_step4_out
