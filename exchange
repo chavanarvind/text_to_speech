@@ -1,6 +1,4 @@
-step_5_run_inference_per_file.py
-
-
+#step_5_run_inference_per_file.py
 
 import os
 import argparse
@@ -23,10 +21,9 @@ def main(input_path, additional_mapped_dir, key_output_dir, final_output_dir):
     run = Run.get_context()
     ws = run.experiment.workspace
 
-    os.makedirs("outputs", exist_ok=True)
     os.makedirs(final_output_dir, exist_ok=True)
 
-    log("🔁 Loading base category model and encoders...")
+    log("🔁 Loading main category model and encoders...")
     model_dir = Model.get_model_path("RPM_Category_model_full_cat", _workspace=ws)
     model = joblib.load(os.path.join(model_dir, "final_model.joblib"))
     ordinal = joblib.load(os.path.join(model_dir, "ordinal_encoder.pkl"))
@@ -48,7 +45,7 @@ def main(input_path, additional_mapped_dir, key_output_dir, final_output_dir):
             "scaler": joblib.load(os.path.join(model_path, "scaler.pkl")),
         }
 
-    log("📁 Loading mapped pre-extracted rows...")
+    log("📁 Loading pre-tagged mapped rows from additional_mapped_dir...")
     mapped_dfs = []
     for f in os.listdir(additional_mapped_dir):
         if f.endswith(".parquet"):
@@ -61,6 +58,7 @@ def main(input_path, additional_mapped_dir, key_output_dir, final_output_dir):
             df['Subcategory_Score'] = 1.0
             df['Subcategory_Model'] = 'direct_mapping'
             df['Predicted_Subcategory'] = df['Final Subcategory']
+            df['prediction_flag_subcategory'] = 'Mapped'
             df['source_file'] = f
             mapped_dfs.append(df)
 
@@ -68,16 +66,35 @@ def main(input_path, additional_mapped_dir, key_output_dir, final_output_dir):
         if not f.endswith(".parquet"):
             continue
 
-        log(f"🔎 Processing: {f}")
+        log(f"🔎 Processing file: {f}")
         df = pd.read_parquet(os.path.join(input_path, f))
-        df_pred = df[df.get('needs_model') == True].copy()
+        log(f"📄 Total rows in file: {len(df)}")
 
+        df_mapped_direct = df[df.get('needs_model') == False].copy()
+        log(f"✅ Directly mapped rows (needs_model=False): {len(df_mapped_direct)}")
+
+        if not df_mapped_direct.empty:
+            df_mapped_direct['Final_Prediction'] = df_mapped_direct['Final Category']
+            df_mapped_direct['Score'] = 1.0
+            df_mapped_direct['prediction_flag'] = 'Mapped'
+            df_mapped_direct['inferred_category_model'] = 'direct_mapping'
+            df_mapped_direct['Final Subcategory'] = df_mapped_direct.get('Final Subcategory', df_mapped_direct['Final Category'])
+            df_mapped_direct['Subcategory_Score'] = 1.0
+            df_mapped_direct['Subcategory_Model'] = 'direct_mapping'
+            df_mapped_direct['Predicted_Subcategory'] = df_mapped_direct['Final Subcategory']
+            df_mapped_direct['prediction_flag_subcategory'] = 'Mapped'
+            df_mapped_direct['source_file'] = f
+        else:
+            df_mapped_direct = pd.DataFrame()
+
+        df_pred = df[df.get('needs_model') == True].copy()
         df_needs_category = df_pred[df_pred['Final Category'].isnull()].copy()
+        log(f"🧠 Rows needing category prediction: {len(df_needs_category)}")
+
         df_no_category_needed = df_pred[~df_pred.index.isin(df_needs_category.index)].copy()
         df_no_category_needed['Final_Prediction'] = df_no_category_needed['Final Category']
 
         if not df_needs_category.empty:
-            log(f"🧠 Predicting {len(df_needs_category)} categories...")
             descs = df_needs_category['CMPNT_MATL_DESC_CLEAN'].astype(str).tolist()
             embeddings = encode_descriptions(encoder, descs)
 
@@ -102,15 +119,18 @@ def main(input_path, additional_mapped_dir, key_output_dir, final_output_dir):
 
         df_combined = pd.concat([df_needs_category, df_no_category_needed], ignore_index=True)
 
-        log("🔍 Running subcategory inference...")
-        subcat_frames = []
+        log(f"🔍 Preparing subcategory prediction...")
+        for cat in ['CHM', 'PKG', 'FNW']:
+            count = (df_combined['Final_Prediction'] == cat).sum()
+            log(f"   ↳ Category {cat}: {count} rows for subcategory model")
 
+        subcat_frames = []
         for cat in ['CHM', 'PKG', 'FNW']:
             subset = df_combined[df_combined['Final_Prediction'] == cat].copy()
             if subset.empty:
                 continue
 
-            log(f"   ↳ Subcategory model {cat}: {len(subset)} rows")
+            log(f"   🔬 Running subcategory model for: {cat} ({len(subset)} rows)")
             sub_model = subcategory_models[cat]["model"]
             sub_encoder = subcategory_models[cat]["encoder"]
             sub_scaler = subcategory_models[cat]["scaler"]
@@ -144,14 +164,14 @@ def main(input_path, additional_mapped_dir, key_output_dir, final_output_dir):
         fallback['Subcategory_Score'] = 0.9
         fallback['Subcategory_Model'] = 'fallback'
         fallback['prediction_flag_subcategory'] = 'Fallback'
+        log(f"🛑 Fallback category rows: {len(fallback)}")
 
-        final_df = pd.concat(subcat_frames + [fallback], ignore_index=True)
+        final_df = pd.concat([df_mapped_direct] + subcat_frames + [fallback], ignore_index=True)
         final_df['source_file'] = f
 
-        # Save file-specific result
         output_path = os.path.join(final_output_dir, f"predicted_{f}")
         final_df.to_parquet(output_path, index=False)
-        log(f"✅ Saved: {output_path}")
+        log(f"💾 Saved prediction: {output_path} (total rows: {len(final_df)})")
 
         del df, df_pred, df_combined, final_df
         gc.collect()
@@ -160,7 +180,7 @@ def main(input_path, additional_mapped_dir, key_output_dir, final_output_dir):
         mapped_df = pd.concat(mapped_dfs, ignore_index=True)
         mapped_path = os.path.join(final_output_dir, "mapped_combined_result.parquet")
         mapped_df.to_parquet(mapped_path, index=False)
-        log(f"✅ Saved mapped rows: {mapped_path}")
+        log(f"💾 Saved mapped combined result: {mapped_path}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
