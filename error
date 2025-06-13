@@ -1,62 +1,69 @@
----high conf mapping code log
-Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.scriptrun = azureml.core.script_run:ScriptRun._from_run_dto with exception (packaging 23.2 (/opt/conda/envs/ptca/lib/python3.8/site-packages), Requirement.parse('packaging<=23.0,>=20.0')).
+#step_6_finalize_output
 
-[INFO] Processing: part-00000-0042fc95-a813-4a78-a5ea-9d565974a2b5-c000.snappy.parquet
-[INFO] Initial rows in input: 7824679
-[INFO] After dropping NA/duplicates: 270380
-[DEBUG] mapping_df columns after strip: ['Direct Mapping', 'Final Category', 'Final Subcategory']
-[DEBUG] mapping_df dtypes before merge:
-Direct Mapping       object
-Final Category       object
-Final Subcategory    object
-dtype: object
-[INFO] Mapping DF has 503 rows
-[STAGE 1] Matched rows: 237064
-[DEBUG] stage1_df columns: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score']
-[STAGE 2] Matched rows: 1655
-[DEBUG] stage2_df columns: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score']
-[INFO] Total mapped rows: 238719
-[DEBUG] mapped_df columns before Final Filled flags: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score']
-[DEBUG] mapped_df columns after Final Filled flags: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score', 'Final Category Filled', 'Final Subcategory Filled', 'needs_model']
-[WARNING] Total unmapped rows: 82297
-[INFO] Fully mapped rows: 229621
-[INFO] Rows needing model: 91791
-[INFO] Saved key reference: part-00000-0042fc95-a813-4a78-a5ea-9d565974a2b5-c000.snappy.parquet
+import os
+import argparse
+import pandas as pd
+from datetime import datetime
+from azureml.core import Run
 
-[INFO] Processing: part-00000-00bb3abb-2599-4885-a2cf-085958187528-c000.snappy.parquet
-[INFO] Initial rows in input: 7685106
-[INFO] After dropping NA/duplicates: 268610
-[DEBUG] mapping_df columns after strip: ['Direct Mapping', 'Final Category', 'Final Subcategory']
-[DEBUG] mapping_df dtypes before merge:
-Direct Mapping       object
-Final Category       object
-Final Subcategory    object
-dtype: object
-[INFO] Mapping DF has 503 rows
-[STAGE 1] Matched rows: 225212
-[DEBUG] stage1_df columns: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score']
-[STAGE 2] Matched rows: 1648
-[DEBUG] stage2_df columns: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score']
-[INFO] Total mapped rows: 226860
-[DEBUG] mapped_df columns before Final Filled flags: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score']
-[DEBUG] mapped_df columns after Final Filled flags: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score', 'Final Category Filled', 'Final Subcategory Filled', 'needs_model']
-[WARNING] Total unmapped rows: 92115
-[INFO] Fully mapped rows: 218145
-[INFO] Rows needing model: 101306
-[INFO] Saved key reference: part-00000-00bb3abb-2599-4885-a2cf-085958187528-c000.snappy.parquet
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.11548852920532227 seconds
-but in new infarance log --
-[2025-06-13 18:11:06] 📁 Loading pre-tagged mapped rows from additional_mapped_dir...
-[2025-06-13 18:11:07] 🔎 Processing file: part-00000-0042fc95-a813-4a78-a5ea-9d565974a2b5-c000.snappy.parquet
-[2025-06-13 18:11:07] 📄 Total rows in file: 91791
-[2025-06-13 18:11:07] ✅ Directly mapped rows (needs_model=False): 0
-[2025-06-13 18:11:07] 🧠 Rows needing category prediction: 82693
+def log(msg):
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
 
-[2025-06-13 18:14:00] 🛑 Fallback category rows: 16796
-[2025-06-13 18:14:01] 💾 Saved prediction: /mnt/azureml/cr/j/b7f9836d333a4a5da375c58ea7b85669/cap/data-capability/wd/final_predictions_to_adls/predicted_part-00000-0042fc95-a813-4a78-a5ea-9d565974a2b5-c000.snappy.parquet (total rows: 91791)
-[2025-06-13 18:14:01] 🔎 Processing file: part-00000-00bb3abb-2599-4885-a2cf-085958187528-c000.snappy.parquet
-[2025-06-13 18:14:01] 📄 Total rows in file: 101306
-[2025-06-13 18:14:01] ✅ Directly mapped rows (needs_model=False): 0
-[2025-06-13 18:14:01] 🧠 Rows needing category prediction: 92591
+REQUIRED_COLUMNS = [
+    "CMPNT_MATL_NUM",
+    "Final_Prediction",
+    "Final Subcategory",
+    "Score",
+    "Subcategory_Score",
+    "inferred_category_model",
+    "Subcategory_Model"
+]
+
+RENAMED_COLUMNS = {
+    "Final_Prediction": "AI_FINAL_CATEGORY",
+    "Final Subcategory": "AI_FINAL_SUBCATEGORY",
+    "Score": "AI_FINAL_CATEGORY_CONFIDENCE",
+    "Subcategory_Score": "AI_FINAL_SUBCATEGORY_CONFIDENCE",
+    "inferred_category_model": "AI_MATCHING_REASON_FINAL_CATEGORY",
+    "Subcategory_Model": "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
+}
+
+def main(inference_output_dir, key_output_dir, final_output_dir):
+    run = Run.get_context()
+
+    all_predictions = []
+
+    log(f"Reading inference files from: {inference_output_dir}")
+    for file in os.listdir(inference_output_dir):
+        if file.endswith(".parquet"):
+            df = pd.read_parquet(os.path.join(inference_output_dir, file))
+            all_predictions.append(df)
+
+    if not all_predictions:
+        raise Exception("No inference files found.")
+
+    df = pd.concat(all_predictions, ignore_index=True)
+    df = df[REQUIRED_COLUMNS]
+    df = df.rename(columns=RENAMED_COLUMNS)
+
+    # Deduplicate
+    df = df.drop_duplicates(subset="CMPNT_MATL_NUM")
+
+    log(f"✅ Final unique records: {len(df)}")
+    os.makedirs(final_output_dir, exist_ok=True)
+
+    for file in os.listdir(key_output_dir):
+        if file.endswith(".parquet"):
+            key_df = pd.read_parquet(os.path.join(key_output_dir, file))
+            merged = key_df.merge(df, how="left", on="CMPNT_MATL_NUM")
+            merged.to_parquet(os.path.join(final_output_dir, file), index=False)
+            log(f"🔁 Merged with key file: {file}")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--inference_output_dir", required=True)
+    parser.add_argument("--key_output_dir", required=True)
+    parser.add_argument("--final_output_dir", required=True)
+    args = parser.parse_args()
+
+    main(args.inference_output_dir, args.key_output_dir, args.final_output_dir)
