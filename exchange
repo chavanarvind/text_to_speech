@@ -1,3 +1,69 @@
+#resume_inference_pipeline.py
+
+from azureml.core import Workspace, Experiment, Environment, Datastore, Dataset
+from azureml.pipeline.core import Pipeline
+from azureml.pipeline.steps import PythonScriptStep
+from azureml.core.runconfig import RunConfiguration
+from azureml.data import OutputFileDatasetConfig
+from datetime import datetime
+
+# --- Configuration ---
+SUBSCRIPTION_ID = "a8d518a9-4587-4ba2-9a60-68b980c2f000"
+RESOURCE_GROUP = "AZR-WDZ-DTO-AML-Development"
+WORKSPACE_NAME = "AML-DTO-Marmot-dev"
+COMPUTE_NAME = "llm-gpu-cluster-2"
+ENV_NAME = "Bom_X_Evaluator"
+DATASTORE_NAME = "xbomrefadlsg2"
+today = datetime.today().strftime("%d%m%Y")
+
+# --- Connect to Workspace ---
+ws = Workspace(subscription_id=SUBSCRIPTION_ID,
+               resource_group=RESOURCE_GROUP,
+               workspace_name=WORKSPACE_NAME)
+
+# --- Resources ---
+env = Environment.get(workspace=ws, name=ENV_NAME)
+default_ds = Datastore.get(ws, DATASTORE_NAME)
+
+run_config = RunConfiguration()
+run_config.target = COMPUTE_NAME
+run_config.environment = env
+
+# --- Mount inputs from Blob Storage ---
+step4_mount = Dataset.File.from_files((default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/step4_out/")).as_named_input('data_step4_out').as_mount()
+mapped_mount = Dataset.File.from_files((default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/step1a_mapped/")).as_named_input('mapped_output').as_mount()
+key_mount = Dataset.File.from_files((default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/key_output/")).as_named_input('key_output').as_mount()
+
+# --- Step 5 Output (one file per prediction result) ---
+inference_output = OutputFileDatasetConfig(
+    name='inference_file_outputs',
+    destination=(default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/inference_per_file/")
+)
+
+# --- Step 6 Output (final merged result) ---
+final_merged_output = OutputFileDatasetConfig(
+    name='final_merged_predictions',
+    destination=(default_ds, f"hbom_category_prediction/final_output_{today}/")
+)
+
+# === Step 5: Inference per file ===
+inference_step = PythonScriptStep(
+    name="Step 5 - Inference per file",
+    script_name="step_5_run_inference_per_file.py",
+    source_directory="scripts",
+    inputs=[step4_mount, mapped_mount, key_mount],
+    arguments=[
+        "--input_path", step4_mount,
+        "--additional_mapped_dir", mapped_mount,
+        "--key_output_dir", key_mount,
+        "--final_output_dir", inference_output
+    ],
+    outputs=[inference_output],
+    runconfig=run_config,
+    compute_target=COMPUTE_NAME,
+    allow_reuse=False
+)
+
 # === Step 6: Finalize Output (Concat + Priority + Merge with Keys) ===
 finalize_output_step = PythonScriptStep(
     name="Step 6 - Finalize and Merge",
@@ -11,6 +77,16 @@ finalize_output_step = PythonScriptStep(
     ],
     outputs=[final_merged_output],
     runconfig=run_config,
-    compute_target=compute_name,
+    compute_target=COMPUTE_NAME,
     allow_reuse=False
 )
+
+
+
+# === Build and Submit the Pipeline ===
+pipeline = Pipeline(workspace=ws, steps=[inference_step, finalize_output_step])
+pipeline.validate()
+
+experiment = Experiment(ws, "inference_and_finalize_pipeline")
+run = experiment.submit(pipeline)
+run.wait_for_completion(show_output=True)
