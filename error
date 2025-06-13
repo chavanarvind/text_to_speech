@@ -1,15 +1,58 @@
-step3 = PythonScriptStep(
-    name="Step 3 - Expand Abbreviations",
-    script_name="step_3_expand_abbreviation.py",
-    source_directory="scripts",
-    inputs=[step1a_unmapped, abbrev_mount],  # ✅ corrected
-    arguments=[
-        "--input_path", step1a_unmapped,
-        "--abbrev_map", abbrev_mount,  # ✅ corrected
-        "--output_path", step2_out
-    ],
-    outputs=[step2_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
+in run infarance i see
+
+[2025-06-13 18:11:06] 📁 Loading pre-tagged mapped rows from additional_mapped_dir...
+[2025-06-13 18:11:07] 🔎 Processing file: part-00000-0042fc95-a813-4a78-a5ea-9d565974a2b5-c000.snappy.parquet
+[2025-06-13 18:11:07] 📄 Total rows in file: 91791
+[2025-06-13 18:11:07] ✅ Directly mapped rows (needs_model=False): 0
+[2025-06-13 18:11:07] 🧠 Rows needing category prediction: 82693
+
+
+and in high conf merge
+Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.scriptrun = azureml.core.script_run:ScriptRun._from_run_dto with exception (packaging 23.2 (/opt/conda/envs/ptca/lib/python3.8/site-packages), Requirement.parse('packaging<=23.0,>=20.0')).
+
+[INFO] Processing: part-00000-0042fc95-a813-4a78-a5ea-9d565974a2b5-c000.snappy.parquet
+[INFO] Initial rows in input: 7824679
+[INFO] After dropping NA/duplicates: 270380
+[DEBUG] mapping_df columns after strip: ['Direct Mapping', 'Final Category', 'Final Subcategory']
+[DEBUG] mapping_df dtypes before merge:
+Direct Mapping       object
+Final Category       object
+Final Subcategory    object
+dtype: object
+[INFO] Mapping DF has 503 rows
+[STAGE 1] Matched rows: 237064
+[DEBUG] stage1_df columns: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score']
+[STAGE 2] Matched rows: 1655
+[DEBUG] stage2_df columns: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score']
+[INFO] Total mapped rows: 238719
+[DEBUG] mapped_df columns before Final Filled flags: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score']
+[DEBUG] mapped_df columns after Final Filled flags: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score', 'Final Category Filled', 'Final Subcategory Filled', 'needs_model']
+[WARNING] Total unmapped rows: 82297
+[INFO] Fully mapped rows: 229621
+[INFO] Rows needing model: 91791
+[INFO] Saved key reference: part-00000-0042fc95-a813-4a78-a5ea-9d565974a2b5-c000.snappy.parquet
+
+[INFO] Processing: part-00000-00bb3abb-2599-4885-a2cf-085958187528-c000.snappy.parquet
+[INFO] Initial rows in input: 7685106
+[INFO] After dropping NA/duplicates: 268610
+[DEBUG] mapping_df columns after strip: ['Direct Mapping', 'Final Category', 'Final Subcategory']
+[DEBUG] mapping_df dtypes before merge:
+Direct Mapping       object
+Final Category       object
+Final Subcategory    object
+dtype: object
+[INFO] Mapping DF has 503 rows
+[STAGE 1] Matched rows: 225212
+[DEBUG] stage1_df columns: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score']
+[STAGE 2] Matched rows: 1648
+[DEBUG] stage2_df columns: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score']
+[INFO] Total mapped rows: 226860
+[DEBUG] mapped_df columns before Final Filled flags: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score']
+[DEBUG] mapped_df columns after Final Filled flags: ['CMPNT_MATL_NUM', 'CMPNT_MATL_DESC', 'CMPNT_MATL_TYPE_CD', 'CMPNT_CAT_CD_DESC', 'CMPNT_UOM_CD', 'Direct Mapping', 'Final Category', 'Final Subcategory', 'matching_reason', 'confidence_score', 'Final Category Filled', 'Final Subcategory Filled', 'needs_model']
+[WARNING] Total unmapped rows: 92115
+[INFO] Fully mapped rows: 218145
+[INFO] Rows needing model: 101306
+[INFO] Saved key reference: part-00000-00bb3abb-2599-4885-a2cf-085958187528-c000.snappy.parquet
+Cleaning up all outstanding Run operations, waiting 300.0 seconds
+1 items cleaning up...
+Cleanup took 0.11548852920532227 seconds
