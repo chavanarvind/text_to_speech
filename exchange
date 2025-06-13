@@ -1,85 +1,16 @@
-# step_6_finalize_output.py
-
-import os
-import argparse
-import pandas as pd
-from datetime import datetime
-
-def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
-
-def main(inference_output_dir, key_output_dir, final_merged_output_dir):
-    os.makedirs("outputs/final", exist_ok=True)
-
-    all_dfs = []
-    for f in os.listdir(inference_output_dir):
-        if f.endswith(".parquet"):
-            df = pd.read_parquet(os.path.join(inference_output_dir, f))
-            df['source_file'] = f
-            all_dfs.append(df)
-
-    final_df = pd.concat(all_dfs, ignore_index=True)
-    log(f"Total rows from inference: {len(final_df)}")
-
-    # Apply priority logic
-    final_df['category_priority'] = final_df['prediction_flag'].map({
-        'Mapped_PreExtracted': 2,
-        'Mapped': 2,
-        'High Confidence': 1,
-        'Low Confidence': 0
-    }).fillna(0)
-
-    final_df['subcategory_priority'] = final_df['prediction_flag_subcategory'].map({
-        'Mapped': 2,
-        'High Confidence': 1,
-        'Low Confidence': 0,
-        'Fallback': -1
-    }).fillna(0)
-
-    final_df = final_df.sort_values(
-        by=['CMPNT_MATL_NUM', 'category_priority', 'subcategory_priority'],
-        ascending=[True, False, False]
-    )
-
-    final_df = final_df.drop_duplicates(subset='CMPNT_MATL_NUM', keep='first')
-    log(f"Final row count after deduplication: {len(final_df)}")
-
-    # Rename columns
-    final_df = final_df.rename(columns={
-        "Final_Prediction": "AI_FINAL_CATEGORY",
-        "Final Subcategory": "AI_FINAL_SUBCATEGORY",
-        "Score": "AI_FINAL_CATEGORY_CONFIDENCE",
-        "Subcategory_Score": "AI_FINAL_SUBCATEGORY_CONFIDENCE",
-        "inferred_category_model": "AI_MATCHING_REASON_FINAL_CATEGORY",
-        "Subcategory_Model": "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
-    })
-
-    # Merge with key files
-    os.makedirs(final_merged_output_dir, exist_ok=True)
-    for key_file in os.listdir(key_output_dir):
-        if key_file.endswith(".parquet"):
-            key_df = pd.read_parquet(os.path.join(key_output_dir, key_file))
-            merged_df = key_df.merge(
-                final_df[[
-                    "CMPNT_MATL_NUM",
-                    "AI_FINAL_CATEGORY",
-                    "AI_FINAL_SUBCATEGORY",
-                    "AI_FINAL_CATEGORY_CONFIDENCE",
-                    "AI_FINAL_SUBCATEGORY_CONFIDENCE",
-                    "AI_MATCHING_REASON_FINAL_CATEGORY",
-                    "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
-                ]],
-                how="left",
-                on="CMPNT_MATL_NUM"
-            )
-            merged_df.to_parquet(os.path.join(final_merged_output_dir, key_file), index=False)
-            log(f"Merged and saved: {key_file}")
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--inference_output_dir", required=True)
-    parser.add_argument("--key_output_dir", required=True)
-    parser.add_argument("--final_merged_output_dir", required=True)
-    args = parser.parse_args()
-
-    main(args.inference_output_dir, args.key_output_dir, args.final_merged_output_dir)
+UserErrorException:
+	Message: 
+Error Code: ScriptExecution.StreamAccess.NotFound
+Native Error: error in streaming from input data sources
+	StreamError(NotFound)
+=> stream not found
+	NotFound
+Error Message: The requested stream was not found. Please make sure the request uri is correct.| session_id=fd4f81c6-32b3-42a5-a971-e0ab06095bec
+	InnerException None
+	ErrorResponse 
+{
+    "error": {
+        "code": "UserError",
+        "message": "\nError Code: ScriptExecution.StreamAccess.NotFound\nNative Error: error in streaming from input data sources\n\tStreamError(NotFound)\n=> stream not found\n\tNotFound\nError Message: The requested stream was not found. Please make sure the request uri is correct.| session_id=fd4f81c6-32b3-42a5-a971-e0ab06095bec"
+    }
+}
