@@ -1,28 +1,67 @@
-# Output folders
+import os
+import argparse
+import pandas as pd
+from datetime import datetime
+from azureml.core import Run
 
-# Intermediate outputs
-step1a_key_output_temp = OutputFileDatasetConfig(name='step1a_key_output_temp')
+def log(msg):
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
 
-# === Step 5 Output: Raw inference per file ===
-final_output_to_adls = OutputFileDatasetConfig(  # <- used in step 5
-    name='final_predictions_to_adls',
-    destination=(default_ds, f"hbom_category_prediction_inference_per_file/hbom_category_prediction_{today}/")
-)
+REQUIRED_COLUMNS = [
+    "CMPNT_MATL_NUM",
+    "Final_Prediction",
+    "Final Subcategory",
+    "Score",
+    "Subcategory_Score",
+    "inferred_category_model",
+    "Subcategory_Model"
+]
 
-# === Step 6 Output: Final merged and deduplicated predictions ===
-final_merged_output = OutputFileDatasetConfig(  # <- used in step 6
-    name='final_merged_predictions',
-    destination=(default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/")
-)
+RENAMED_COLUMNS = {
+    "Final_Prediction": "AI_FINAL_CATEGORY",
+    "Final Subcategory": "AI_FINAL_SUBCATEGORY",
+    "Score": "AI_FINAL_CATEGORY_CONFIDENCE",
+    "Subcategory_Score": "AI_FINAL_SUBCATEGORY_CONFIDENCE",
+    "inferred_category_model": "AI_MATCHING_REASON_FINAL_CATEGORY",
+    "Subcategory_Model": "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
+}
 
-# Upload reference CSVs
-high_conf_dataset = Dataset.File.from_files((default_ds, 'high_conf_map')).as_named_input('high_conf_map').as_mount()
-abbrev_dataset = Dataset.File.from_files((default_ds, 'abbrev_map')).as_named_input('abbrev_map').as_mount()
+def main(inference_output_dir, key_output_dir, final_output_dir):
+    run = Run.get_context()
 
-# PipelineData for steps
-step1_out = PipelineData(name="data_step1_out", is_directory=True)
-step1a_mapped = PipelineData(name="data_step1a_mapped", is_directory=True)
-step1a_unmapped = PipelineData(name="data_step1a_unmapped", is_directory=True)
-step2_out = PipelineData(name="data_step2_out", is_directory=True)
-step3_out = PipelineData(name="data_step3_out", is_directory=True)
-step4_out = PipelineData(name="data_step4_out", is_directory=True)
+    all_predictions = []
+
+    log(f"Reading inference files from: {inference_output_dir}")
+    for file in os.listdir(inference_output_dir):
+        if file.endswith(".parquet"):
+            df = pd.read_parquet(os.path.join(inference_output_dir, file))
+            all_predictions.append(df)
+
+    if not all_predictions:
+        raise Exception("No inference files found.")
+
+    df = pd.concat(all_predictions, ignore_index=True)
+    df = df[REQUIRED_COLUMNS]
+    df = df.rename(columns=RENAMED_COLUMNS)
+
+    # Deduplicate
+    df = df.drop_duplicates(subset="CMPNT_MATL_NUM")
+
+    log(f"✅ Final unique records: {len(df)}")
+    os.makedirs(final_output_dir, exist_ok=True)
+
+    for file in os.listdir(key_output_dir):
+        if file.endswith(".parquet"):
+            key_df = pd.read_parquet(os.path.join(key_output_dir, file))
+            merged = key_df.merge(df, how="left", on="CMPNT_MATL_NUM")
+            merged.to_parquet(os.path.join(final_output_dir, file), index=False)
+            log(f"🔁 Merged with key file: {file}")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--inference_output_dir", required=True)
+    parser.add_argument("--key_output_dir", required=True)
+    parser.add_argument("--final_output_dir", required=True)
+    args = parser.parse_args()
+
+    main(args.inference_output_dir, args.key_output_dir, args.final_output_dir)
