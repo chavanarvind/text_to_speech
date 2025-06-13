@@ -1,11 +1,16 @@
-# Step 5 output path (predicted files)
-final_output_to_adls = OutputFileDatasetConfig(
-    name='final_predictions_to_adls',
-    destination=(default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/")
-)
-
-# Step 6 output path (final merged output after dedup + key mapping)
-final_merged_output = OutputFileDatasetConfig(
-    name='final_merged_predictions',
-    destination=(default_ds, f"hbom_category_prediction/final_output_{today}/")
+# === Step 6: Finalize Output (Concat + Priority + Merge with Keys) ===
+finalize_output_step = PythonScriptStep(
+    name="Step 6 - Finalize and Merge",
+    script_name="step_6_finalize_output.py",
+    source_directory="scripts",
+    inputs=[final_output_to_adls, step1a_key_output_temp],
+    arguments=[
+        "--inference_output_dir", final_output_to_adls,
+        "--key_output_dir", step1a_key_output_temp,
+        "--final_merged_output_dir", final_merged_output
+    ],
+    outputs=[final_merged_output],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
 )
