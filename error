@@ -1,10 +1,15 @@
-# --- Updated Pipeline Config Blocks for Step 5 and Step 6 ---
+# Output folders
 
-from azureml.data import OutputFileDatasetConfig
-from datetime import datetime
-
-# Today's date
-today = datetime.today().strftime("%d%m%Y")
+# Intermediate outputs
+step1a_key_output_temp = OutputFileDatasetConfig(name='step1a_key_output_temp')
+final_output_to_adls = OutputFileDatasetConfig(
+    name='final_predictions_to_adls',
+    destination=(default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/inference_per_file/")
+)
+final_merged_output = OutputFileDatasetConfig(
+    name='final_merged_predictions',
+    destination=(default_ds, f"hbom_category_prediction/final_output_{today}/")
+)
 
 # === Step 5 Output: Raw inference per file ===
 inference_output = OutputFileDatasetConfig(
@@ -18,9 +23,14 @@ final_merged_output = OutputFileDatasetConfig(
     destination=(default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/")
 )
 
-# Then use these variables in the corresponding PythonScriptStep definitions:
-# inference_step and finalize_output_step respectively.
+# Upload reference CSVs
+high_conf_dataset = Dataset.File.from_files((default_ds, 'high_conf_map')).as_named_input('high_conf_map').as_mount()
+abbrev_dataset = Dataset.File.from_files((default_ds, 'abbrev_map')).as_named_input('abbrev_map').as_mount()
 
-# Example usage in PythonScriptStep:
-# PythonScriptStep(..., outputs=[inference_output], ...)
-# PythonScriptStep(..., outputs=[final_merged_output], ...)
+# PipelineData for steps
+step1_out = PipelineData(name="data_step1_out", is_directory=True)
+step1a_mapped = PipelineData(name="data_step1a_mapped", is_directory=True)
+step1a_unmapped = PipelineData(name="data_step1a_unmapped", is_directory=True)
+step2_out = PipelineData(name="data_step2_out", is_directory=True)
+step3_out = PipelineData(name="data_step3_out", is_directory=True)
+step4_out = PipelineData(name="data_step4_out", is_directory=True)
