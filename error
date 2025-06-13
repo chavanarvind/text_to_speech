@@ -1,16 +1,15 @@
-Hi [Recipient's Name],
+import os
 
-Hope you're doing well.
+# Define the folder path and the target file name
+folder_path = '/path/to/your/folder'
+target_file = 'your_target_file.parquet'
 
-I wanted to confirm the structure for the weekly output as follows:
+# List all files in the folder
+file_list = os.listdir(folder_path)
 
-A new folder named in the format hbom_category_prediction_DDMMYYYY/ will be generated every week under the main hbom_category_prediction directory.
-
-Each of these weekly folders will contain 1000+ Parquet files, representing the output for that week.
-
-There will be no single consolidated output file — the output will be distributed across multiple Parquet files within each folder.
-
-Let me know if you'd like us to explore an option for consolidated output or have any other questions.
-
-Best regards,
-Arvind
+# Find the position of the target file
+if target_file in file_list:
+    position = file_list.index(target_file) + 1  # Position is 1-based
+    print(f"The file '{target_file}' is at position {position}.")
+else:
+    print(f"The file '{target_file}' was not found in the folder.")
