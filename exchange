@@ -1,90 +1,173 @@
-#resume_inference_pipeline.py
+step_5_run_inference_per_file.py
 
-from azureml.core import Workspace, Experiment, Environment, Datastore, Dataset
-from azureml.pipeline.core import Pipeline
-from azureml.pipeline.steps import PythonScriptStep
-from azureml.core.runconfig import RunConfiguration
-from azureml.data import OutputFileDatasetConfig
+
+
+import os
+import argparse
+import pandas as pd
+import numpy as np
+import torch
+import joblib
+import gc
 from datetime import datetime
+from sentence_transformers import SentenceTransformer
+from azureml.core import Run, Model
 
-# --- Configuration ---
-SUBSCRIPTION_ID = "a8d518a9-4587-4ba2-9a60-68b980c2f000"
-RESOURCE_GROUP = "AZR-WDZ-DTO-AML-Development"
-WORKSPACE_NAME = "AML-DTO-Marmot-dev"
-COMPUTE_NAME = "llm-gpu-cluster-2"
-ENV_NAME = "Bom_X_Evaluator"
-DATASTORE_NAME = "xbomrefadlsg2"
-today = datetime.today().strftime("%d%m%Y")
+def log(msg):
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
 
-# --- Connect to Workspace ---
-ws = Workspace(subscription_id=SUBSCRIPTION_ID,
-               resource_group=RESOURCE_GROUP,
-               workspace_name=WORKSPACE_NAME)
+def encode_descriptions(encoder, texts, batch_size=64):
+    return encoder.encode(texts, batch_size=batch_size, show_progress_bar=True, convert_to_numpy=True)
 
-# --- Resources ---
-env = Environment.get(workspace=ws, name=ENV_NAME)
-default_ds = Datastore.get(ws, DATASTORE_NAME)
+def main(input_path, additional_mapped_dir, key_output_dir, final_output_dir):
+    run = Run.get_context()
+    ws = run.experiment.workspace
 
-run_config = RunConfiguration()
-run_config.target = COMPUTE_NAME
-run_config.environment = env
+    os.makedirs("outputs", exist_ok=True)
+    os.makedirs(final_output_dir, exist_ok=True)
 
-# --- Mount inputs from Blob Storage ---
-step4_mount = Dataset.File.from_files((default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/step4_out/")).as_named_input('data_step4_out').as_mount()
-mapped_mount = Dataset.File.from_files((default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/step1a_mapped/")).as_named_input('mapped_output').as_mount()
-key_mount = Dataset.File.from_files((default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/key_output/")).as_named_input('key_output').as_mount()
+    log("🔁 Loading base category model and encoders...")
+    model_dir = Model.get_model_path("RPM_Category_model_full_cat", _workspace=ws)
+    model = joblib.load(os.path.join(model_dir, "final_model.joblib"))
+    ordinal = joblib.load(os.path.join(model_dir, "ordinal_encoder.pkl"))
+    scaler = joblib.load(os.path.join(model_dir, "scaler.pkl"))
 
-# --- Step 5 Output (one file per prediction result) ---
-inference_output = OutputFileDatasetConfig(
-    name='inference_file_outputs',
-    destination=(default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/inference_per_file/")
-)
+    encoder = SentenceTransformer(
+        'pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb',
+        device='cuda' if torch.cuda.is_available() else 'cpu'
+    )
+    encoder.max_seq_length = 128
 
-# --- Step 6 Output (final merged result) ---
-final_merged_output = OutputFileDatasetConfig(
-    name='final_merged_predictions',
-    destination=(default_ds, f"hbom_category_prediction/final_output_{today}/")
-)
+    log("📦 Loading subcategory models once...")
+    subcategory_models = {}
+    for cat in ['CHM', 'PKG', 'FNW']:
+        model_path = Model.get_model_path(f"RPM_Category_model_full_{cat}_V1", _workspace=ws)
+        subcategory_models[cat] = {
+            "model": joblib.load(os.path.join(model_path, "final_model.joblib")),
+            "encoder": joblib.load(os.path.join(model_path, "ordinal_encoder.pkl")),
+            "scaler": joblib.load(os.path.join(model_path, "scaler.pkl")),
+        }
 
-# === Step 5: Inference per file ===
-inference_step = PythonScriptStep(
-    name="Step 5 - Inference per file",
-    script_name="step_5_run_inference_per_file.py",
-    source_directory="scripts",
-    inputs=[step4_mount, mapped_mount, key_mount],
-    arguments=[
-        "--input_path", step4_mount,
-        "--additional_mapped_dir", mapped_mount,
-        "--key_output_dir", key_mount,
-        "--final_output_dir", inference_output
-    ],
-    outputs=[inference_output],
-    runconfig=run_config,
-    compute_target=COMPUTE_NAME,
-    allow_reuse=False
-)
+    log("📁 Loading mapped pre-extracted rows...")
+    mapped_dfs = []
+    for f in os.listdir(additional_mapped_dir):
+        if f.endswith(".parquet"):
+            df = pd.read_parquet(os.path.join(additional_mapped_dir, f))
+            df['Score'] = 1.0
+            df['prediction_flag'] = 'Mapped_PreExtracted'
+            df['inferred_category_model'] = 'direct_mapping_step_1a'
+            df['Final_Prediction'] = df.get('Final Category')
+            df['Final Subcategory'] = df.get('Final Subcategory', df.get('Final Category'))
+            df['Subcategory_Score'] = 1.0
+            df['Subcategory_Model'] = 'direct_mapping'
+            df['Predicted_Subcategory'] = df['Final Subcategory']
+            df['source_file'] = f
+            mapped_dfs.append(df)
 
-# === Step 6: Final merge, priority logic, and mapping ===
-finalize_output_step = PythonScriptStep(
-    name="Step 6 - Final Merge & Mapping",
-    script_name="step_6_finalize_output.py",
-    source_directory="scripts",
-    inputs=[inference_output, key_mount],
-    arguments=[
-        "--inference_output_dir", inference_output,
-        "--key_output_dir", key_mount,
-        "--final_merged_output_dir", final_merged_output
-    ],
-    outputs=[final_merged_output],
-    runconfig=run_config,
-    compute_target=COMPUTE_NAME,
-    allow_reuse=False
-)
+    for f in os.listdir(input_path):
+        if not f.endswith(".parquet"):
+            continue
 
-# === Build and Submit the Pipeline ===
-pipeline = Pipeline(workspace=ws, steps=[inference_step, finalize_output_step])
-pipeline.validate()
+        log(f"🔎 Processing: {f}")
+        df = pd.read_parquet(os.path.join(input_path, f))
+        df_pred = df[df.get('needs_model') == True].copy()
 
-experiment = Experiment(ws, "inference_and_finalize_pipeline")
-run = experiment.submit(pipeline)
-run.wait_for_completion(show_output=True)
+        df_needs_category = df_pred[df_pred['Final Category'].isnull()].copy()
+        df_no_category_needed = df_pred[~df_pred.index.isin(df_needs_category.index)].copy()
+        df_no_category_needed['Final_Prediction'] = df_no_category_needed['Final Category']
+
+        if not df_needs_category.empty:
+            log(f"🧠 Predicting {len(df_needs_category)} categories...")
+            descs = df_needs_category['CMPNT_MATL_DESC_CLEAN'].astype(str).tolist()
+            embeddings = encode_descriptions(encoder, descs)
+
+            X = np.hstack([
+                embeddings,
+                scaler.transform(df_needs_category[['CMPNT_MATL_DESC_LEN']]),
+                ordinal.transform(df_needs_category[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+            ])
+
+            probs = model.predict_proba(X)
+            preds = model.predict(X)
+            scores = np.max(probs, axis=1)
+
+            df_needs_category['Score'] = scores
+            df_needs_category['Predicted'] = preds
+            df_needs_category['Final_Prediction'] = np.where(scores < 0.6, 'Other', preds)
+            df_needs_category['prediction_flag'] = np.where(scores < 0.6, 'Low Confidence', 'High Confidence')
+            df_needs_category['inferred_category_model'] = 'lightgbm_Bert_RPM_Category_model'
+
+            del descs, embeddings, probs, preds, X
+            gc.collect()
+
+        df_combined = pd.concat([df_needs_category, df_no_category_needed], ignore_index=True)
+
+        log("🔍 Running subcategory inference...")
+        subcat_frames = []
+
+        for cat in ['CHM', 'PKG', 'FNW']:
+            subset = df_combined[df_combined['Final_Prediction'] == cat].copy()
+            if subset.empty:
+                continue
+
+            log(f"   ↳ Subcategory model {cat}: {len(subset)} rows")
+            sub_model = subcategory_models[cat]["model"]
+            sub_encoder = subcategory_models[cat]["encoder"]
+            sub_scaler = subcategory_models[cat]["scaler"]
+
+            descs = subset['CMPNT_MATL_DESC_CLEAN'].astype(str).tolist()
+            embeddings = encode_descriptions(encoder, descs)
+
+            X_sub = np.hstack([
+                embeddings,
+                sub_scaler.transform(subset[['CMPNT_MATL_DESC_LEN']]),
+                sub_encoder.transform(subset[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+            ])
+
+            probs = sub_model.predict_proba(X_sub)
+            preds = sub_model.predict(X_sub)
+            scores = np.max(probs, axis=1)
+
+            subset['Final Subcategory'] = np.where(scores < 0.6, 'Other', preds)
+            subset['Predicted_Subcategory'] = preds
+            subset['Subcategory_Score'] = scores
+            subset['prediction_flag_subcategory'] = np.where(scores < 0.6, 'Low Confidence', 'High Confidence')
+            subset['Subcategory_Model'] = f"RPM_Category_model_full_{cat}_V1"
+
+            subcat_frames.append(subset)
+
+            del descs, embeddings, probs, preds, X_sub
+            gc.collect()
+
+        fallback = df_combined[~df_combined['Final_Prediction'].isin(['CHM', 'PKG', 'FNW'])].copy()
+        fallback['Final Subcategory'] = fallback['Final_Prediction']
+        fallback['Subcategory_Score'] = 0.9
+        fallback['Subcategory_Model'] = 'fallback'
+        fallback['prediction_flag_subcategory'] = 'Fallback'
+
+        final_df = pd.concat(subcat_frames + [fallback], ignore_index=True)
+        final_df['source_file'] = f
+
+        # Save file-specific result
+        output_path = os.path.join(final_output_dir, f"predicted_{f}")
+        final_df.to_parquet(output_path, index=False)
+        log(f"✅ Saved: {output_path}")
+
+        del df, df_pred, df_combined, final_df
+        gc.collect()
+
+    if mapped_dfs:
+        mapped_df = pd.concat(mapped_dfs, ignore_index=True)
+        mapped_path = os.path.join(final_output_dir, "mapped_combined_result.parquet")
+        mapped_df.to_parquet(mapped_path, index=False)
+        log(f"✅ Saved mapped rows: {mapped_path}")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_path", required=True)
+    parser.add_argument("--additional_mapped_dir", required=True)
+    parser.add_argument("--key_output_dir", required=True)
+    parser.add_argument("--final_output_dir", required=True)
+    args = parser.parse_args()
+
+    main(args.input_path, args.additional_mapped_dir, args.key_output_dir, args.final_output_dir)
