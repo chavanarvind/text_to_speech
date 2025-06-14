@@ -1,2 +1,5 @@
-na_records = df[df['comp_mat_num'].isna()]
-print(na_records)
+import pandas as pd
+pd.set_option('display.max_columns', None)
+
+# Show rows where comp_mat_num is NaN
+df[df['comp_mat_num'].isna()]
