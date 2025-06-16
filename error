@@ -1,13 +1,30 @@
-inference_dataset = Dataset.File.from_files(
-    DataPath(ds, "bom-xref/hbom_category_prediction_inference_per_file/hbom_category_prediction_14062025/*.parquet")
-)
-inference_input = inference_dataset.as_named_input('inference_output_dir').as_mount()
-
-
-
+from azureml.core import Workspace, Dataset, Datastore
 from azureml.data.datapath import DataPath
 
-inference_input = DataPath(
-    datastore=ds,
-    path_on_datastore="bom-xref/hbom_category_prediction_inference_per_file/hbom_category_prediction_14062025/"
+# === Step 1: Connect to your Azure ML workspace (same as your pipeline config)
+ws = Workspace(
+    subscription_id="a8d518a9-4587-4ba2-9a60-68b980c2f000",
+    resource_group="AZR-WDZ-DTO-AML-Development",
+    workspace_name="AML-DTO-Marmot-dev"
 )
+
+print("✅ Connected to workspace.")
+
+# === Step 2: Get your ADLS Gen2 datastore
+ds = Datastore.get(ws, "xbomrefadlsg2")
+print("✅ Datastore loaded:", ds.name)
+
+# === Step 3: Create dataset using wildcard to match .parquet files
+folder_path = "bom-xref/hbom_category_prediction_inference_per_file/hbom_category_prediction_14062025/*.parquet"
+print(f"🔍 Looking for files at: {folder_path}")
+
+dataset = Dataset.File.from_files(DataPath(ds, folder_path))
+
+# === Step 4: Try to download a few files locally
+try:
+    print("⬇️ Attempting to download files to ./sanity_download ...")
+    dataset.download(target_path="./sanity_download", overwrite=True)
+    print("✅ SUCCESS: Files downloaded to ./sanity_download")
+except Exception as e:
+    print("❌ ERROR: Could not access or download files.")
+    print("Details:", str(e))
