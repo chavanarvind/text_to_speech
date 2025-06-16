@@ -1,72 +1,91 @@
-# pipeline_runner_finalize_only.py
-
-from azureml.core import Workspace, Experiment, Environment, Dataset
-from azureml.pipeline.core import Pipeline
-from azureml.pipeline.steps import PythonScriptStep
-from azureml.core.runconfig import RunConfiguration
-from azureml.core.datastore import Datastore
-from azureml.data.datapath import DataPath
-from azureml.data import OutputFileDatasetConfig
+import os
+import argparse
+import pandas as pd
 from datetime import datetime
+from azureml.core import Run
 
-today = datetime.today().strftime("%d%m%Y")
+def log(msg):
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
 
-# === Workspace Setup ===
-SUBSCRIPTION_ID = "a8d518a9-4587-4ba2-9a60-68b980c2f000"
-RESOURCE_GROUP = "AZR-WDZ-DTO-AML-Development"
-WORKSPACE_NAME = "AML-DTO-Marmot-dev"
+REQUIRED_COLUMNS = [
+    "CMPNT_MATL_NUM",
+    "Final_Prediction",
+    "Final Subcategory",
+    "Score",
+    "Subcategory_Score",
+    "inferred_category_model",
+    "Subcategory_Model"
+]
 
-ws = Workspace(
-    subscription_id=SUBSCRIPTION_ID,
-    resource_group=RESOURCE_GROUP,
-    workspace_name=WORKSPACE_NAME
-)
+RENAMED_COLUMNS = {
+    "Final_Prediction": "AI_FINAL_CATEGORY",
+    "Final Subcategory": "AI_FINAL_SUBCATEGORY",
+    "Score": "AI_FINAL_CATEGORY_CONFIDENCE",
+    "Subcategory_Score": "AI_FINAL_SUBCATEGORY_CONFIDENCE",
+    "inferred_category_model": "AI_MATCHING_REASON_FINAL_CATEGORY",
+    "Subcategory_Model": "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
+}
 
-compute_name = "llm-gpu-cluster-2"
-env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
-run_config = RunConfiguration()
-run_config.target = compute_name
-run_config.environment = env
+def apply_priority_and_deduplicate(df):
+    df['category_priority'] = df['prediction_flag'].map({
+        'Mapped_PreExtracted': 2,
+        'Mapped': 2,
+        'High Confidence': 1,
+        'Low Confidence': 0
+    }).fillna(0)
 
-# === Datastore & Paths ===
-ds = Datastore.get(ws, "xbomrefadlsg2")
+    df['subcategory_priority'] = df['prediction_flag_subcategory'].map({
+        'Mapped': 2,
+        'High Confidence': 1,
+        'Low Confidence': 0,
+        'Fallback': -1
+    }).fillna(0)
 
-# ✅ Use actual inference output path
-inference_dataset = Dataset.File.from_files(
-    DataPath(ds, "bom-xref/hbom_category_prediction_inference_per_file/hbom_category_prediction_14062025/")
-)
-inference_input = inference_dataset.as_named_input('inference_output_dir').as_mount()
+    df = df.sort_values(
+        by=['CMPNT_MATL_NUM', 'category_priority', 'subcategory_priority'],
+        ascending=[True, False, False]
+    )
+    return df.drop_duplicates(subset="CMPNT_MATL_NUM", keep="first")
 
-# ✅ Key output directory (same as previous pipeline)
-key_dataset = Dataset.File.from_files(DataPath(ds, "step1a_key_output_temp/"))
-key_input = key_dataset.as_named_input('key_output_dir').as_mount()
+def main(inference_output_dir, key_output_dir, final_output_dir):
+    run = Run.get_context()
 
-# ✅ Final output path
-final_output_dir = OutputFileDatasetConfig(
-    name="step6_final_output",
-    destination=(ds, f"hbom_category_prediction/final_output_{today}/")
-)
+    os.makedirs(final_output_dir, exist_ok=True)
 
-# === Finalization Step ===
-finalize_step = PythonScriptStep(
-    name="Step 6 - Finalize Output Per File",
-    script_name="step_6_finalize_output_optimized.py",
-    source_directory="scripts",  # Ensure script is placed here
-    inputs=[inference_input, key_input],
-    arguments=[
-        "--inference_output_dir", inference_input,
-        "--key_output_dir", key_input,
-        "--final_output_dir", final_output_dir
-    ],
-    outputs=[final_output_dir],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
+    log(f"🔍 Starting per-file processing...")
+    inference_files = [f for f in os.listdir(inference_output_dir) if f.endswith(".parquet")]
 
-# === Run only this step ===
-pipeline = Pipeline(workspace=ws, steps=[finalize_step])
-pipeline.validate()
-experiment = Experiment(ws, "step6_only_pipeline")
-pipeline_run = experiment.submit(pipeline)
-pipeline_run.wait_for_completion(show_output=True)
+    if not inference_files:
+        raise Exception("❌ No inference .parquet files found!")
+
+    for file in inference_files:
+        inf_path = os.path.join(inference_output_dir, file)
+        key_path = os.path.join(key_output_dir, file)
+
+        if not os.path.exists(key_path):
+            log(f"⚠️ Skipping: No key file found for {file}")
+            continue
+
+        log(f"📄 Processing file: {file}")
+        df = pd.read_parquet(inf_path)
+
+        df = apply_priority_and_deduplicate(df)
+        df = df[REQUIRED_COLUMNS].rename(columns=RENAMED_COLUMNS)
+
+        key_df = pd.read_parquet(key_path).drop_duplicates()
+
+        merged = key_df.merge(df, how="left", on="CMPNT_MATL_NUM")
+
+        out_path = os.path.join(final_output_dir, file)
+        merged.to_parquet(out_path, index=False)
+
+        log(f"✅ Saved merged file: {out_path} (rows: {len(merged)})")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--inference_output_dir", required=True)
+    parser.add_argument("--key_output_dir", required=True)
+    parser.add_argument("--final_output_dir", required=True)
+    args = parser.parse_args()
+
+    main(args.inference_output_dir, args.key_output_dir, args.final_output_dir)
