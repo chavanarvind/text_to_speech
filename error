@@ -53,7 +53,7 @@ def apply_priority_and_deduplicate(df):
 def main(inference_output_dir, key_output_dir, final_output_dir):
     run = Run.get_context()
     os.makedirs(final_output_dir, exist_ok=True)
-    log("Starting to build global prediction table...")
+    log("🔄 Starting to build global prediction table...")
 
     global_df = pd.DataFrame()
 
@@ -62,7 +62,7 @@ def main(inference_output_dir, key_output_dir, final_output_dir):
             continue
 
         file_path = os.path.join(inference_output_dir, file)
-        log(f"📄 Reading: {file}")
+        log(f"📄 Reading inference file: {file}")
 
         try:
             df = pd.read_parquet(file_path)
@@ -75,35 +75,36 @@ def main(inference_output_dir, key_output_dir, final_output_dir):
             global_df = pd.concat([global_df, df], ignore_index=True)
             global_df = apply_priority_and_deduplicate(global_df)
 
-            log(f"✅ Global table updated (rows: {len(global_df)})")
+            log(f"✅ Global prediction table updated (rows: {len(global_df)})")
 
         except Exception as e:
             log(f"❌ Failed to process file: {file}")
             log(f"   Reason: {str(e)}")
 
-    all_keys = []
+    if global_df.empty:
+        raise Exception("❌ No valid prediction files found to build global prediction table!")
+
+    # Rename columns for merge
+    global_df = global_df.rename(columns=RENAMED_COLUMNS)
+
     for file in os.listdir(key_output_dir):
-        if file.endswith(".parquet"):
-            try:
-                key_df = pd.read_parquet(os.path.join(key_output_dir, file))
-                all_keys.append(key_df.drop_duplicates())
-            except Exception as e:
-                log(f" Failed to read key file: {file}")
-                log(f"   Reason: {str(e)}")
+        if not file.endswith(".parquet"):
+            continue
 
-    if not all_keys:
-        raise Exception(" No valid key files found!")
+        try:
+            key_path = os.path.join(key_output_dir, file)
+            key_df = pd.read_parquet(key_path)
+            key_df = key_df.drop_duplicates()
 
-    key_df = pd.concat(all_keys, ignore_index=True).drop_duplicates()
-    final_df = key_df.merge(
-        global_df.rename(columns=RENAMED_COLUMNS),
-        how="left",
-        on="CMPNT_MATL_NUM"
-    )
+            merged_df = key_df.merge(global_df, how="left", on="CMPNT_MATL_NUM")
 
-    out_path = os.path.join(final_output_dir, "final_prediction_output.parquet")
-    final_df.to_parquet(out_path, index=False)
-    log(f" Final merged output saved: {out_path} (rows: {len(final_df)})")
+            out_path = os.path.join(final_output_dir, file)
+            merged_df.to_parquet(out_path, index=False)
+            log(f"✅ Saved merged output for key file: {file} (rows: {len(merged_df)})")
+
+        except Exception as e:
+            log(f"❌ Failed to process key file: {file}")
+            log(f"   Reason: {str(e)}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
