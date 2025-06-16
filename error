@@ -1,3 +1,57 @@
-dataset = Dataset.File.from_files(DataPath(
-    ds, "bom-xref/hbom_category_prediction_inference_per_file/hbom_category_prediction_14062025/**/*.parquet"
-))
+# pipeline_runner_finalize_using_registered_datasets.py
+
+from azureml.core import Workspace, Experiment, Environment, Dataset
+from azureml.pipeline.core import Pipeline
+from azureml.pipeline.steps import PythonScriptStep
+from azureml.core.runconfig import RunConfiguration
+from azureml.data import OutputFileDatasetConfig
+from datetime import datetime
+
+# === Connect to workspace ===
+ws = Workspace(
+    subscription_id="a8d518a9-4587-4ba2-9a60-68b980c2f000",
+    resource_group="AZR-WDZ-DTO-AML-Development",
+    workspace_name="AML-DTO-Marmot-dev"
+)
+
+compute_name = "llm-gpu-cluster-2"
+env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
+run_config = RunConfiguration()
+run_config.target = compute_name
+run_config.environment = env
+
+today = datetime.today().strftime("%d%m%Y")
+
+# === Use registered datasets ===
+raw_input = Dataset.get_by_name(ws, "raw_predictions").as_named_input("inference_output_dir").as_mount()
+key_input = Dataset.get_by_name(ws, "hbom_key_files").as_named_input("key_output_dir").as_mount()
+
+# === Final output location ===
+final_output_dir = OutputFileDatasetConfig(
+    name="step6_final_output",
+    destination=(ws.get_default_datastore(), f"hbom_category_prediction/final_output_{today}/")
+)
+
+# === Define Step 6 script ===
+finalize_step = PythonScriptStep(
+    name="Step 6 - Finalize Output",
+    script_name="step_6_finalize_output_global_debug.py",
+    source_directory="scripts",  # Place script here
+    inputs=[raw_input, key_input],
+    arguments=[
+        "--inference_output_dir", raw_input,
+        "--key_output_dir", key_input,
+        "--final_output_dir", final_output_dir
+    ],
+    outputs=[final_output_dir],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
+
+# === Build and submit pipeline ===
+pipeline = Pipeline(workspace=ws, steps=[finalize_step])
+pipeline.validate()
+experiment = Experiment(ws, "step6_only_pipeline")
+pipeline_run = experiment.submit(pipeline)
+pipeline_run.wait_for_completion(show_output=True)
