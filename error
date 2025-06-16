@@ -1,16 +1,1 @@
-UserErrorException:
-	Message: 
-Error Code: ScriptExecution.StreamAccess.NotFound
-Native Error: error in streaming from input data sources
-	StreamError(NotFound)
-=> stream not found
-	NotFound
-Error Message: The requested stream was not found. Please make sure the request uri is correct.| session_id=f2c5cb49-1b13-4aa9-b3da-f20df5a17613
-	InnerException None
-	ErrorResponse 
-{
-    "error": {
-        "code": "UserError",
-        "message": "\nError Code: ScriptExecution.StreamAccess.NotFound\nNative Error: error in streaming from input data sources\n\tStreamError(NotFound)\n=> stream not found\n\tNotFound\nError Message: The requested stream was not found. Please make sure the request uri is correct.| session_id=f2c5cb49-1b13-4aa9-b3da-f20df5a17613"
-    }
-}
+Dataset.File.from_files(DataPath(ds, "bom-xref/hbom_category_prediction_inference_per_file/hbom_category_prediction_14062025/*.parquet"))
