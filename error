@@ -1,3 +1,1 @@
-git commit -m "Initial commit"
-git remote add origin https://sourcecode.kenvue.com/scm/~achava05/rpm_category_prediction.git
-git push -u origin HEAD:main
+df[df["CMPNT_MATL_NUM"].isnull()]
