@@ -1,1 +1,27 @@
-Standard_NC16as_T4_v3 (16 cores, 110 GB RAM, 352 GB disk)
+# Initialize workspace
+ws = get_workspace(use_sp_auth=(len(sys.argv) > 3), args=sys.argv)
+compute_name = "llm-gpu-cluster-2"
+env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
+default_ds = ws.datastores["xbomrefadlsg2"]
+
+run_config = RunConfiguration()
+run_config.target = compute_name
+run_config.environment = env
+
+today = datetime.today().strftime("%d%m%Y")
+
+# Output folders
+
+# Intermediate outputs
+step1a_key_output_temp = OutputFileDatasetConfig(name='step1a_key_output_temp')
+
+# === Step 5 Output: Raw inference per file ===
+final_output_to_adls = OutputFileDatasetConfig(  # <- used in step 5
+    name='final_predictions_to_adls',
+    destination=(default_ds, f"hbom_category_prediction_inference_per_file/hbom_category_prediction_{today}/")
+)
+
+# === Step 6 Output: Final merged and deduplicated predictions ===
+final_merged_output = OutputFileDatasetConfig(  # <- used in step 6
+    name='final_merged_predictions',
+    destination=(default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/")
