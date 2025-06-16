@@ -1,18 +1,57 @@
-inference_output_dir = DataPath(ds, "hbom_category_prediction/hbom_category_prediction_{}/".format(today))
-key_output_dir = DataPath(ds, "step1a_key_output_temp/")
-bom-xref/hbom_category_prediction_inference_per_file/hbom_category_prediction_14062025/
-from azureml.core import Dataset
+# pipeline_runner_finalize_only.py
 
-inference_dataset = Dataset.File.from_files(DataPath(ds, f"hbom_category_prediction/hbom_category_prediction_{today}/"))
-key_dataset = Dataset.File.from_files(DataPath(ds, "step1a_key_output_temp/"))
+from azureml.core import Workspace, Experiment, Environment, Dataset
+from azureml.pipeline.core import Pipeline
+from azureml.pipeline.steps import PythonScriptStep
+from azureml.core.runconfig import RunConfiguration
+from azureml.core.datastore import Datastore
+from azureml.data.datapath import DataPath
+from azureml.data import OutputFileDatasetConfig
+from datetime import datetime
 
+today = datetime.today().strftime("%d%m%Y")
+
+# === Workspace Setup ===
+SUBSCRIPTION_ID = "a8d518a9-4587-4ba2-9a60-68b980c2f000"
+RESOURCE_GROUP = "AZR-WDZ-DTO-AML-Development"
+WORKSPACE_NAME = "AML-DTO-Marmot-dev"
+
+ws = Workspace(
+    subscription_id=SUBSCRIPTION_ID,
+    resource_group=RESOURCE_GROUP,
+    workspace_name=WORKSPACE_NAME
+)
+
+compute_name = "llm-gpu-cluster-2"
+env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
+run_config = RunConfiguration()
+run_config.target = compute_name
+run_config.environment = env
+
+# === Datastore & Paths ===
+ds = Datastore.get(ws, "xbomrefadlsg2")
+
+# ✅ Use actual inference output path
+inference_dataset = Dataset.File.from_files(
+    DataPath(ds, "bom-xref/hbom_category_prediction_inference_per_file/hbom_category_prediction_14062025/")
+)
 inference_input = inference_dataset.as_named_input('inference_output_dir').as_mount()
+
+# ✅ Key output directory (same as previous pipeline)
+key_dataset = Dataset.File.from_files(DataPath(ds, "step1a_key_output_temp/"))
 key_input = key_dataset.as_named_input('key_output_dir').as_mount()
 
+# ✅ Final output path
+final_output_dir = OutputFileDatasetConfig(
+    name="step6_final_output",
+    destination=(ds, f"hbom_category_prediction/final_output_{today}/")
+)
+
+# === Finalization Step ===
 finalize_step = PythonScriptStep(
     name="Step 6 - Finalize Output Per File",
     script_name="step_6_finalize_output_optimized.py",
-    source_directory="scripts",
+    source_directory="scripts",  # Ensure script is placed here
     inputs=[inference_input, key_input],
     arguments=[
         "--inference_output_dir", inference_input,
@@ -24,3 +63,10 @@ finalize_step = PythonScriptStep(
     compute_target=compute_name,
     allow_reuse=False
 )
+
+# === Run only this step ===
+pipeline = Pipeline(workspace=ws, steps=[finalize_step])
+pipeline.validate()
+experiment = Experiment(ws, "step6_only_pipeline")
+pipeline_run = experiment.submit(pipeline)
+pipeline_run.wait_for_completion(show_output=True)
