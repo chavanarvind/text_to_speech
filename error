@@ -1,14 +1,26 @@
-raceback (most recent call last):
-  File ".\pipeline_runner_finalize_only.py", line 42, in <module>
-    finalize_step = PythonScriptStep(
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\pipeline\steps\python_script_step.py", line 218, in __init__
-    super(PythonScriptStep, self).__init__(
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\pipeline\core\_python_script_step_base.py", line 86, in __init__
-    super(_PythonScriptStepBase, self).__init__(name, inputs, outputs, arguments, fix_port_name_collisions=True)       
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\pipeline\core\builder.py", line 143, in __init__
-    PipelineStep._validate_io_types(inputs, outputs, resource_inputs)
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\pipeline\core\builder.py", line 227, in _validate_io_types
-    validate_input_type(input)
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\pipeline\core\builder.py", line 214, in validate_input_type
-    raise ValueError("Unexpected input type: %s" % type(input))
-ValueError: Unexpected input type: <class 'azureml.data.datapath.DataPath'>
+inference_output_dir = DataPath(ds, "hbom_category_prediction/hbom_category_prediction_{}/".format(today))
+key_output_dir = DataPath(ds, "step1a_key_output_temp/")
+
+from azureml.core import Dataset
+
+inference_dataset = Dataset.File.from_files(DataPath(ds, f"hbom_category_prediction/hbom_category_prediction_{today}/"))
+key_dataset = Dataset.File.from_files(DataPath(ds, "step1a_key_output_temp/"))
+
+inference_input = inference_dataset.as_named_input('inference_output_dir').as_mount()
+key_input = key_dataset.as_named_input('key_output_dir').as_mount()
+
+finalize_step = PythonScriptStep(
+    name="Step 6 - Finalize Output Per File",
+    script_name="step_6_finalize_output_optimized.py",
+    source_directory="scripts",
+    inputs=[inference_input, key_input],
+    arguments=[
+        "--inference_output_dir", inference_input,
+        "--key_output_dir", key_input,
+        "--final_output_dir", final_output_dir
+    ],
+    outputs=[final_output_dir],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
