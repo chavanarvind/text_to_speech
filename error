@@ -1,15 +1,6 @@
-from azureml.core import Workspace, Datastore
-
-ws = Workspace(
-    subscription_id="a8d518a9-4587-4ba2-9a60-68b980c2f000",
-    resource_group="AZR-WDZ-DTO-AML-Development",
-    workspace_name="AML-DTO-Marmot-dev"
-)
-
-ds = Datastore.get(ws, "xbomrefadlsg2")
-
-# Browse the blob path directly (non-streamed)
-print("📂 Listing blob content:")
-paths = ds.path("bom-xref/hbom_category_prediction_inference_per_file/hbom_category_prediction_14062025/").get_files()
-for path in paths:
-    print("   └─", path)
+📂 Listing blob content:
+Traceback (most recent call last):
+  File ".\download_data.py", line 13, in <module>
+    paths = ds.path("bom-xref/hbom_category_prediction_inference_per_file/hbom_category_prediction_14062025/").get_files()
+AttributeError: 'AzureDataLakeGen2Datastore' object has no attribute 'path'
+(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline> 
