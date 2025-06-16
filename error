@@ -1,25 +1,3 @@
-✅ Connected to workspace.
-✅ Datastore loaded: xbomrefadlsg2
-🔍 Looking for files at: bom-xref/hbom_category_prediction_inference_per_file/hbom_category_prediction_14062025/*.parquet
-⬇️ Attempting to download files to ./sanity_download ...
-{'infer_column_types': 'False', 'activity': 'download'}
-{'infer_column_types': 'False', 'activity': 'download', 'activityApp': 'FileDataset'}
-❌ ERROR: Could not access or download files.
-Details: UserErrorException:
-        Message: Execution failed with error message: The requested stream was not found. Please make sure the request uri is correct.| session_id=e6cce15c-c568-4183-abcc-583eb954e655 ErrorCode: ScriptExecution.StreamAccess.NotFound      
-        InnerException
-Error Code: ScriptExecution.StreamAccess.NotFound
-Native Error: Dataflow visit error: ExecutionError(StreamError(NotFound))
-        VisitError(ExecutionError(StreamError(NotFound)))
-=> Failed with execution error: error in streaming from input data sources
-        ExecutionError(StreamError(NotFound))
-Error Message: The requested stream was not found. Please make sure the request uri is correct.| session_id=e6cce15c-c568-4183-abcc-583eb954e655
-        ErrorResponse
-{
-    "error": {
-        "code": "UserError",
-        "message": "Execution failed with error message: The requested stream was not found. Please make sure the request uri is correct.| session_id=e6cce15c-c568-4183-abcc-583eb954e655 ErrorCode: ScriptExecution.StreamAccess.NotFound"  
-    }
-}
-(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline> 
->> cd C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline
+dataset = Dataset.File.from_files(DataPath(
+    ds, "bom-xref/hbom_category_prediction_inference_per_file/hbom_category_prediction_14062025/**/*.parquet"
+))
