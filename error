@@ -1,111 +1,52 @@
-import os
-import argparse
-import pandas as pd
-import psutil
-from datetime import datetime
-from azureml.core import Run
+Skip to sidebar navigation
+Skip to content
+Linked Applications
+Your work
+Projects
+Repositories
+Search for code, commits or repositories
+Search for code, commits or repositories...
+Help
+Inbox
+Logged in as Chavan, Arvind [Non-Kenvue] (AChava05)
+Chavan, Arvind [Non-Kenvue]
+Clone
 
-def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
 
-REQUIRED_COLUMNS = [
-    "CMPNT_MATL_NUM",
-    "Final_Prediction",
-    "Final Subcategory",
-    "Score",
-    "Subcategory_Score",
-    "inferred_category_model",
-    "Subcategory_Model",
-    "prediction_flag",
-    "prediction_flag_subcategory"
-]
+Source
+Repository settings
 
-RENAMED_COLUMNS = {
-    "Final_Prediction": "AI_FINAL_CATEGORY",
-    "Final Subcategory": "AI_FINAL_SUBCATEGORY",
-    "Score": "AI_FINAL_CATEGORY_CONFIDENCE",
-    "Subcategory_Score": "AI_FINAL_SUBCATEGORY_CONFIDENCE",
-    "inferred_category_model": "AI_MATCHING_REASON_FINAL_CATEGORY",
-    "Subcategory_Model": "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
-}
+You have an empty repository
+To get started you will need to run these commands in your terminal.
 
-def apply_priority_and_deduplicate(df):
-    df['category_priority'] = df['prediction_flag'].map({
-        'Mapped_PreExtracted': 2,
-        'Mapped': 2,
-        'High Confidence': 1,
-        'Low Confidence': 0
-    }).fillna(0)
+New to Git? Learn the basic Git commands
+Configure Git for the first time
+git config --global user.name "Chavan, Arvind [Non-Kenvue]"
+git config --global user.email "AChava05@kenvue.com"
+Working with your repository
+I just want to clone this repository
+If you want to simply clone this empty repository then run this command in your terminal.
 
-    df['subcategory_priority'] = df['prediction_flag_subcategory'].map({
-        'Mapped': 2,
-        'High Confidence': 1,
-        'Low Confidence': 0,
-        'Fallback': -1
-    }).fillna(0)
+git clone https://sourcecode.kenvue.com/scm/~achava05/rpm_category_prediction.git
+My code is ready to be pushed
+If you already have code ready to be pushed to this repository then run this in your terminal.
 
-    df = df.sort_values(
-        by=['CMPNT_MATL_NUM', 'category_priority', 'subcategory_priority'],
-        ascending=[True, False, False]
-    )
+cd existing-project
+git init
+git add --all
+git commit -m "Initial Commit"
+git remote add origin https://sourcecode.kenvue.com/scm/~achava05/rpm_category_prediction.git
+git push -u origin HEAD:main
+My code is already tracked by Git
+If your code is already tracked by Git then set this repository as your "origin" to push to.
 
-    return df.drop_duplicates(subset="CMPNT_MATL_NUM", keep="first")
-
-def main(inference_output_dir, key_output_dir, final_output_dir):
-    run = Run.get_context()
-    os.makedirs(final_output_dir, exist_ok=True)
-
-    log("📂 Loading all inference parquet files using folder-level read...")
-    try:
-        global_df = pd.read_parquet(inference_output_dir)
-        log(f"✅ Loaded global predictions parquet folder (rows: {len(global_df)})")
-    except Exception as e:
-        log(f"❌ Failed to load inference parquet directory")
-        log(f"   Reason: {str(e)}")
-        return
-
-    # Filter required columns
-    global_df = global_df[[col for col in REQUIRED_COLUMNS if col in global_df.columns]]
-    global_df = apply_priority_and_deduplicate(global_df)
-    global_df = global_df.rename(columns=RENAMED_COLUMNS)
-
-    # Save once to disk for reuse
-    global_df_path = os.path.join(final_output_dir, "global_predictions.parquet")
-    global_df.to_parquet(global_df_path, index=False)
-    log(f"✅ Saved global prediction table to: {global_df_path}")
-
-    # Process each key file individually
-    for file in os.listdir(key_output_dir):
-        if not file.endswith(".parquet"):
-            continue
-
-        try:
-            log(f"📂 Processing key file: {file}")
-            log(f"💾 Memory usage before load: {psutil.virtual_memory().percent}%")
-
-            key_path = os.path.join(key_output_dir, file)
-            key_df = pd.read_parquet(key_path).drop_duplicates()
-
-            # Load global predictions fresh for each key file
-            global_df = pd.read_parquet(global_df_path)
-
-            merged_df = key_df.merge(global_df, how="left", on="CMPNT_MATL_NUM")
-
-            out_path = os.path.join(final_output_dir, file)
-            merged_df.to_parquet(out_path, index=False)
-
-            log(f"✅ Merged output saved: {out_path} (rows: {len(merged_df)})")
-            log(f"💾 Memory usage after save: {psutil.virtual_memory().percent}%")
-
-        except Exception as e:
-            log(f"❌ Failed to process key file: {file}")
-            log(f"   Reason: {str(e)}")
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--inference_output_dir", required=True)
-    parser.add_argument("--key_output_dir", required=True)
-    parser.add_argument("--final_output_dir", required=True)
-    args = parser.parse_args()
-
-    main(args.inference_output_dir, args.key_output_dir, args.final_output_dir)
+cd existing-project
+git remote set-url origin https://sourcecode.kenvue.com/scm/~achava05/rpm_category_prediction.git
+git push -u origin --all
+git push origin --tags
+All done with the commands?
+Refresh
+Git repository management powered by a free Atlassian Bitbucket evaluation license
+Atlassian Bitbucket v8.9.9DocumentationRequest a featureAboutContact Atlassian
+Generated by node-3 (8f36352c-db6b-4ef2-b7b2-46b522209ac9). Cluster contains 3 nodes.
+Atlassian
