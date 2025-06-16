@@ -1,25 +1,15 @@
-🔌 Connecting to Azure ML workspace...
-🔍 Trying to access files at: bom-xref/hbom_category_prediction_inference_per_file/hbom_category_prediction_14062025/*.parquet
-❌ Failed to list dataset paths.
-'FileDataset' object has no attribute '_get_path'
-⬇️ Downloading sample files...
-{'infer_column_types': 'False', 'activity': 'download'}
-{'infer_column_types': 'False', 'activity': 'download', 'activityApp': 'FileDataset'}
-❌ Download failed.
-UserErrorException:
-        Message: Execution failed with error message: The requested stream was not found. Please make sure the request uri is correct.| session_id=553e01c4-0b76-4b83-9ef7-a93be6717bb8 ErrorCode: ScriptExecution.StreamAccess.NotFound      
-        InnerException
-Error Code: ScriptExecution.StreamAccess.NotFound
-Native Error: Dataflow visit error: ExecutionError(StreamError(NotFound))
-        VisitError(ExecutionError(StreamError(NotFound)))
-=> Failed with execution error: error in streaming from input data sources
-        ExecutionError(StreamError(NotFound))
-Error Message: The requested stream was not found. Please make sure the request uri is correct.| session_id=553e01c4-0b76-4b83-9ef7-a93be6717bb8
-        ErrorResponse
-{
-    "error": {
-        "code": "UserError",
-        "message": "Execution failed with error message: The requested stream was not found. Please make sure the request uri is correct.| session_id=553e01c4-0b76-4b83-9ef7-a93be6717bb8 ErrorCode: ScriptExecution.StreamAccess.NotFound"  
-    }
-}
-(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline> 
+from azureml.core import Workspace, Datastore
+
+ws = Workspace(
+    subscription_id="a8d518a9-4587-4ba2-9a60-68b980c2f000",
+    resource_group="AZR-WDZ-DTO-AML-Development",
+    workspace_name="AML-DTO-Marmot-dev"
+)
+
+ds = Datastore.get(ws, "xbomrefadlsg2")
+
+# Browse the blob path directly (non-streamed)
+print("📂 Listing blob content:")
+paths = ds.path("bom-xref/hbom_category_prediction_inference_per_file/hbom_category_prediction_14062025/").get_files()
+for path in paths:
+    print("   └─", path)
