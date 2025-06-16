@@ -1,6 +1,13 @@
-📂 Listing blob content:
-Traceback (most recent call last):
-  File ".\download_data.py", line 13, in <module>
-    paths = ds.path("bom-xref/hbom_category_prediction_inference_per_file/hbom_category_prediction_14062025/").get_files()
-AttributeError: 'AzureDataLakeGen2Datastore' object has no attribute 'path'
-(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline> 
+inference_dataset = Dataset.File.from_files(
+    DataPath(ds, "bom-xref/hbom_category_prediction_inference_per_file/hbom_category_prediction_14062025/*.parquet")
+)
+inference_input = inference_dataset.as_named_input('inference_output_dir').as_mount()
+
+
+
+from azureml.data.datapath import DataPath
+
+inference_input = DataPath(
+    datastore=ds,
+    path_on_datastore="bom-xref/hbom_category_prediction_inference_per_file/hbom_category_prediction_14062025/"
+)
