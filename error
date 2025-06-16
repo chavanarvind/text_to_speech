@@ -1,18 +1,10 @@
-UserErrorException:
-	Message: 
-Error Code: ScriptExecution.StreamAccess.Unexpected
-Native Error: error in streaming from input data sources
-	StreamError(Unknown("Dataflow at inmemory://dataflow/25536f4859677d27cbc21d7946038532 is not valid.", Some(DataflowInvalid("inmemory://dataflow/25536f4859677d27cbc21d7946038532", VisitError(ExecutionError(StreamError(NotFound)))))))
-=> Dataflow at inmemory://dataflow/25536f4859677d27cbc21d7946038532 is not valid.
-	Unknown("Dataflow at inmemory://dataflow/25536f4859677d27cbc21d7946038532 is not valid.", Some(DataflowInvalid("inmemory://dataflow/25536f4859677d27cbc21d7946038532", VisitError(ExecutionError(StreamError(NotFound))))))
-=> Dataflow at inmemory://dataflow/25536f4859677d27cbc21d7946038532 is not valid.
-	DataflowInvalid("inmemory://dataflow/25536f4859677d27cbc21d7946038532", VisitError(ExecutionError(StreamError(NotFound))))
-Error Message: Got unexpected error: Dataflow at inmemory://dataflow/25536f4859677d27cbc21d7946038532 is not valid.. DataflowInvalid("inmemory://dataflow/25536f4859677d27cbc21d7946038532", VisitError(ExecutionError(StreamError(NotFound))))| session_id=e4ab1675-d2fc-489f-b168-0e09718de0ad
-	InnerException None
-	ErrorResponse 
-{
-    "error": {
-        "code": "UserError",
-        "message": "\nError Code: ScriptExecution.StreamAccess.Unexpected\nNative Error: error in streaming from input data sources\n\tStreamError(Unknown(\"Dataflow at inmemory://dataflow/25536f4859677d27cbc21d7946038532 is not valid.\", Some(DataflowInvalid(\"inmemory://dataflow/25536f4859677d27cbc21d7946038532\", VisitError(ExecutionError(StreamError(NotFound)))))))\n=> Dataflow at inmemory://dataflow/25536f4859677d27cbc21d7946038532 is not valid.\n\tUnknown(\"Dataflow at inmemory://dataflow/25536f4859677d27cbc21d7946038532 is not valid.\", Some(DataflowInvalid(\"inmemory://dataflow/25536f4859677d27cbc21d7946038532\", VisitError(ExecutionError(StreamError(NotFound))))))\n=> Dataflow at inmemory://dataflow/25536f4859677d27cbc21d7946038532 is not valid.\n\tDataflowInvalid(\"inmemory://dataflow/25536f4859677d27cbc21d7946038532\", VisitError(ExecutionError(StreamError(NotFound))))\nError Message: Got unexpected error: Dataflow at inmemory://dataflow/25536f4859677d27cbc21d7946038532 is not valid.. DataflowInvalid(\"inmemory://dataflow/25536f4859677d27cbc21d7946038532\", VisitError(ExecutionError(StreamError(NotFound))))| session_id=e4ab1675-d2fc-489f-b168-0e09718de0ad"
-    }
-}
+from azureml.core import Workspace, Dataset, Datastore
+from azureml.data.datapath import DataPath
+
+ws = Workspace.from_config()
+ds = Datastore.get(ws, "xbomrefadlsg2")
+
+dataset = Dataset.File.from_files(DataPath(ds, "bom-xref/hbom_category_prediction_inference_per_file/hbom_category_prediction_14062025/*.parquet"))
+
+# Check that files exist
+print(dataset.to_path())  # <- should print list of file paths
