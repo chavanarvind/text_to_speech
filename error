@@ -1,3 +1,3 @@
-PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\RPM_Claasification_Pipeline> git add --all
-error: 'rpm_category_prediction/' does not have a commit checked out
-fatal: adding files failed
+git commit -m "Initial commit"
+git remote add origin https://sourcecode.kenvue.com/scm/~achava05/rpm_category_prediction.git
+git push -u origin HEAD:main
