@@ -1,10 +1,15 @@
-from azureml.core import Workspace, Dataset, Datastore
-from azureml.data.datapath import DataPath
-
-ws = Workspace.from_config()
-ds = Datastore.get(ws, "xbomrefadlsg2")
-
-dataset = Dataset.File.from_files(DataPath(ds, "bom-xref/hbom_category_prediction_inference_per_file/hbom_category_prediction_14062025/*.parquet"))
-
-# Check that files exist
-print(dataset.to_path())  # <- should print list of file paths
+ File ".\download_data.py", line 4, in <module>
+    ws = Workspace.from_config()
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\core\workspace.py", line 280, in from_config
+    raise UserErrorException(
+azureml.exceptions._azureml_exception.UserErrorException: UserErrorException:
+        Message: The workspace configuration file config.json, could not be found in C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline or its parent directories. Please check whether the workspace configuration file exists, or provide the full path to the configuration file as an argument. You can download a configuration file for your workspace, via http://ml.azure.com and clicking on the name of your workspace in the right top.
+        InnerException None
+        ErrorResponse
+{
+    "error": {
+        "code": "UserError",
+        "message": "The workspace configuration file config.json, could not be found in C:\\Users\\AChava05\\OneDrive - Kenvue\\AChava05\\azureml_bom_work\\run_pipeline or its parent directories. Please check whether the workspace configuration file exists, or provide the full path to the configuration file as an argument. You can download a configuration file for your workspace, via http://ml.azure.com and clicking on the name of your workspace in the right top."        
+    }
+}
+(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline>
