@@ -108,9 +108,9 @@ if __name__ == "__main__":
     parser.add_argument("--final_output_dir", required=True)
     args = parser.parse_args()
 
-
+ main(args.inference_output_dir, args.key_output_dir, args.final_output_dir)
 
 
 SRC_SYS_CD	MATL_NUM	PLNT_CD	CMPNT_MATL_NUM	AI_FINAL_CATEGORY	AI_FINAL_SUBCATEGORY	AI_FINAL_CATEGORY_CONFIDENCE	AI_FINAL_SUBCATEGORY_CONFIDENCE	AI_MATCHING_REASON_FINAL_CATEGORY	AI_MATCHING_REASON_FINAL_SUBCATEGORY	prediction_flag	prediction_flag_subcategory	category_priority	subcategory_priority
 
-    main(args.inference_output_dir, args.key_output_dir, args.final_output_dir)
+   
