@@ -1,15 +1,27 @@
-from azureml.core import Workspace, Datastore, Dataset
-from azureml.data.datapath import DataPath
-
-# Use hardcoded workspace config (same as your pipeline)
-ws = Workspace(
-    subscription_id="a8d518a9-4587-4ba2-9a60-68b980c2f000",
-    resource_group="AZR-WDZ-DTO-AML-Development",
-    workspace_name="AML-DTO-Marmot-dev"
-)
-
-ds = Datastore.get(ws, "xbomrefadlsg2")
-
-dataset = Dataset.File.from_files(DataPath(ds, "bom-xref/hbom_category_prediction_inference_per_file/hbom_category_prediction_14062025/*.parquet"))
-
-print(dataset.to_path())
+:ScriptRun._from_run_dto with exception (azure-mgmt-network 26.0.0 (c:\users\achava05\onedrive - kenvue\achava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages), Requirement.parse('azure-mgmt-network<=25.2.0')).
+{'infer_column_types': 'False', 'activity': 'to_path'}
+{'infer_column_types': 'False', 'activity': 'to_path', 'activityApp': 'FileDataset'}
+Traceback (most recent call last):
+  File ".\download_data.py", line 15, in <module>
+    print(dataset.to_path())
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\data\_loggerfactory.py", line 140, in wrapper
+    return func(*args, **kwargs)
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\data\file_dataset.py", line 105, in to_path
+    return self._dataflow.to_path(activity='to_path', source='FileDataset')
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\dataprep\api\_loggerfactory.py", line 279, in wrapper
+    return func(*args, **kwargs)
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\dataprep\api\engineless_dataflow.py", line 1318, in to_path
+    records = dataflow._to_pyrecords(use_new_flow=True)
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\dataprep\api\_loggerfactory.py", line 279, in wrapper
+    return func(*args, **kwargs)
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\dataprep\api\engineless_dataflow.py", line 1426, in _to_pyrecords
+    records = ex.to_pyrecords(self._to_yaml_string(), to_dprep_span_context(span.get_context()).span_id)
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\dataprep\api\_rslex_executor.py", line 41, in to_pyrecords
+    return Executor().execute_dataflow_to_pyrecords(script, traceparent)
+azureml.dataprep.api.errorhandlers.ExecutionError:
+Error Code: ScriptExecution.StreamAccess.NotFound
+Native Error: Dataflow visit error: ExecutionError(StreamError(NotFound))
+        VisitError(ExecutionError(StreamError(NotFound)))
+=> Failed with execution error: error in streaming from input data sources
+        ExecutionError(StreamError(NotFound))
+Error Message: The requested stream was not found. Please make sure the request uri is correct.| session_id=64f1c4ba-6337-4123-8187-c294556150c6
