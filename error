@@ -1,6 +1,6 @@
 inference_output_dir = DataPath(ds, "hbom_category_prediction/hbom_category_prediction_{}/".format(today))
 key_output_dir = DataPath(ds, "step1a_key_output_temp/")
-
+bom-xref/hbom_category_prediction_inference_per_file/hbom_category_prediction_14062025/
 from azureml.core import Dataset
 
 inference_dataset = Dataset.File.from_files(DataPath(ds, f"hbom_category_prediction/hbom_category_prediction_{today}/"))
