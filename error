@@ -1,27 +1,45 @@
-:ScriptRun._from_run_dto with exception (azure-mgmt-network 26.0.0 (c:\users\achava05\onedrive - kenvue\achava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages), Requirement.parse('azure-mgmt-network<=25.2.0')).
-{'infer_column_types': 'False', 'activity': 'to_path'}
-{'infer_column_types': 'False', 'activity': 'to_path', 'activityApp': 'FileDataset'}
-Traceback (most recent call last):
-  File ".\download_data.py", line 15, in <module>
-    print(dataset.to_path())
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\data\_loggerfactory.py", line 140, in wrapper
-    return func(*args, **kwargs)
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\data\file_dataset.py", line 105, in to_path
-    return self._dataflow.to_path(activity='to_path', source='FileDataset')
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\dataprep\api\_loggerfactory.py", line 279, in wrapper
-    return func(*args, **kwargs)
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\dataprep\api\engineless_dataflow.py", line 1318, in to_path
-    records = dataflow._to_pyrecords(use_new_flow=True)
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\dataprep\api\_loggerfactory.py", line 279, in wrapper
-    return func(*args, **kwargs)
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\dataprep\api\engineless_dataflow.py", line 1426, in _to_pyrecords
-    records = ex.to_pyrecords(self._to_yaml_string(), to_dprep_span_context(span.get_context()).span_id)
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\dataprep\api\_rslex_executor.py", line 41, in to_pyrecords
-    return Executor().execute_dataflow_to_pyrecords(script, traceparent)
-azureml.dataprep.api.errorhandlers.ExecutionError:
-Error Code: ScriptExecution.StreamAccess.NotFound
-Native Error: Dataflow visit error: ExecutionError(StreamError(NotFound))
-        VisitError(ExecutionError(StreamError(NotFound)))
-=> Failed with execution error: error in streaming from input data sources
-        ExecutionError(StreamError(NotFound))
-Error Message: The requested stream was not found. Please make sure the request uri is correct.| session_id=64f1c4ba-6337-4123-8187-c294556150c6
+from azureml.core import Workspace, Dataset, Datastore
+from azureml.data.datapath import DataPath
+
+# === Workspace setup (same as your pipeline) ===
+SUBSCRIPTION_ID = "a8d518a9-4587-4ba2-9a60-68b980c2f000"
+RESOURCE_GROUP = "AZR-WDZ-DTO-AML-Development"
+WORKSPACE_NAME = "AML-DTO-Marmot-dev"
+
+# Connect
+print("🔌 Connecting to Azure ML workspace...")
+ws = Workspace(
+    subscription_id=SUBSCRIPTION_ID,
+    resource_group=RESOURCE_GROUP,
+    workspace_name=WORKSPACE_NAME
+)
+
+# Get datastore
+ds = Datastore.get(ws, "xbomrefadlsg2")
+
+# ✅ Use wildcard to match files
+parquet_path = "bom-xref/hbom_category_prediction_inference_per_file/hbom_category_prediction_14062025/*.parquet"
+
+print(f"🔍 Trying to access files at: {parquet_path}")
+dataset = Dataset.File.from_files(DataPath(ds, parquet_path))
+
+# === Sanity check 1: List file paths (low-level check) ===
+try:
+    file_paths = dataset._get_path()
+    print("✅ Resolved dataset files:")
+    for p in file_paths[:10]:
+        print("   └─", p)
+    if not file_paths:
+        print("⚠️ No files matched in the dataset.")
+except Exception as e:
+    print("❌ Failed to list dataset paths.")
+    print(e)
+
+# === Sanity check 2: Try downloading 1 sample file ===
+try:
+    print("⬇️ Downloading sample files...")
+    dataset.download(target_path="./preview_data", overwrite=True)
+    print("✅ Downloaded sample files to ./preview_data")
+except Exception as e:
+    print("❌ Download failed.")
+    print(e)
