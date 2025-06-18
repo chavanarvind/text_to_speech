@@ -1,2 +1,45 @@
-git check-ignore -v *.csv
-git push origin master
+PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\src\reference_tables> Get-ChildItem -Filter *.csv
+
+
+    Directory: C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\src\reference_tables
+
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---l         1/31/2025   1:00 PM            842 EPR_priority_confidence.csv
+-a---l         8/19/2024   9:11 PM          48192 feedback_poc.csv
+-a---l          6/2/2025   5:49 PM         528345 lims.csv
+-a---l          6/5/2025   6:46 PM          94329 NLP_list_ERP.csv
+-a---l         5/29/2025  12:41 AM          38880 off_spec_items.csv
+-a---l         1/30/2025   8:47 PM        4590730 pendulum_formatted_v2.csv
+-a---l         8/19/2024   9:11 PM         332330 pendulum_fortrea_full.csv
+-a---l        11/21/2024  11:54 AM         125441 Pomezia_Xref.csv
+-a---l          6/2/2025   5:24 PM          69109 Potential PC_DC Spec list - NLP_1.csv
+-a---l         4/24/2025   1:19 PM         261897 rejections_fortrea.csv
+-a---l          6/2/2025   5:33 PM         336393 VDR_TRU.csv
+-a---l         8/19/2024   9:11 PM         198706 xmatches_fortrea_full.csv
+-a---l        11/27/2024  10:27 PM           1072 Xref_Request_for_SJC.csv
+
+
+(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\src\reference_tables> git log --stat
+commit da4900eefd7afa8a409737c9df518fe629fb3a11 (HEAD -> master)
+Author: Chavan, Arvind [Non-Kenvue] <AChava05@kenvue.com>
+Date:   Wed Jun 18 13:00:55 2025 +0530
+
+    Added all CSV files
+
+ EPR_priority_confidence.csv           |    20 +
+ NLP_list_ERP.csv                      |   833 +
+ Pomezia_Xref.csv                      |  5679 ++++
+ Potential PC_DC Spec list - NLP_1.csv |   598 +
+ VDR_TRU.csv                           |  6651 ++++
+ Xref_Request_for_SJC.csv              |    20 +
+ feedback_poc.csv                      |   394 +
+ lims.csv                              | 19522 +++++++++++
+ off_spec_items.csv                    |   835 +
+ pendulum_formatted_v2.csv             | 58372 ++++++++++++++++++++++++++++++++
+ pendulum_fortrea_full.csv             |  2849 ++
+ rejections_fortrea.csv                |  1362 +
+ xmatches_fortrea_full.csv             |  1994 ++
+ 13 files changed, 99129 insertions(+)
+(END)
