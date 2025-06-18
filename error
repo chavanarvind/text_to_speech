@@ -1,1 +1,4 @@
-git push -f origin bom_update_arvind:main
+(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work> git push -f origin bom_update_arvind:main
+error: src refspec bom_update_arvind does not match any
+error: failed to push some refs to 'https://sourcecode.kenvue.com/scm/asx-jedo/bom-x-ref.git'
+(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work> 
