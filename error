@@ -1,1 +1,1 @@
-git push -f origin bom_ref_updated:refs/heads/main
+git push -f origin bom_update_arvind:main
