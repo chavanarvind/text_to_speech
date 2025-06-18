@@ -1,1 +1,2 @@
-git push -f origin bom_ref_updated:main
+git checkout bom_ref_updated
+git ls-tree -r HEAD --name-only | findstr ".csv"
