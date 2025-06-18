@@ -1,14 +1,22 @@
-step2 = PythonScriptStep(
-    name="Step 2 - Generate Key Files",
-    script_name="script_2_generate_key_files_only.py",
+# === Output location for final .parquet ===
+final_merged_output = OutputFileDatasetConfig(
+    name="final_merged_predictions",
+    destination=(ds, f"hbom_category_prediction/hbom_category_prediction_{today}/")
+)
+
+# === Step 6: Finalize Output ===
+finalize_step = PythonScriptStep(
+    name="Step 6 - Finalize Output (Priority + Dedup)",
+    script_name="step_6_finalize_output_global_debug.py",
     source_directory="scripts",
     arguments=[
-        "--input_path", hbom_raw_output,
-        "--key_output", key_output
+        "--inference_output_dir", raw_input,
+        "--key_output_dir", key_input,
+        "--final_output_dir", final_merged_output
     ],
-    inputs=[hbom_raw_output],
-    outputs=[key_output],
-    compute_target=compute_target,
+    inputs=[raw_input, key_input],
+    outputs=[final_merged_output],
+    compute_target=compute_name,
     runconfig=run_config,
     allow_reuse=False
 )
