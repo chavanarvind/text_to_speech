@@ -1,0 +1,10 @@
+cd path/to/bom_code_updated  # your project root folder
+git init
+git add reference_tables/    # only stage the specific folder
+git commit -m "Initial commit with reference_tables folder"
+
+# Add remote (use your repo's actual URL)
+git remote add origin https://sourcecode.kenvue.com/scm/~achava05/bom_code_updated.git
+
+# Push to the main branch
+git push -u origin main
