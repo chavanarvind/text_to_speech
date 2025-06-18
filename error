@@ -1,3 +1,2 @@
-(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work> git remote -v                               
-origin  https://sourcecode.kenvue.com/scm/asx-jedo/bom-x-ref.git (fetch)
-origin  https://sourcecode.kenvue.com/scm/asx-jedo/bom-x-ref.git (push)
+# Stage all CSV files under current folder and subfolders
+Get-ChildItem -Path . -Recurse -Filter *.csv | ForEach-Object { git add $_.FullName }
