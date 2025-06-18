@@ -1,43 +1,8 @@
-# Existing block that runs the match
-matches_NLP_list_ERP, erp_to_match, tru_to_match, previous_round = match_by_reference_table(
-    erp_to_match,
-    tru_to_match,
-    xmatches_NLP_list_ERP_with_text,
-    previous_round,
-    'matches_NLP_list_ERP suggested X-match',
-    bundles
-)
-check_duplicates(matches_NLP_list_ERP)
-print(matches_NLP_list_ERP)
-
-# === QC STARTS HERE ===
-import os
-
-# Step 0: Load NLP_List_ERP
-df_nlp_erp = pd.read_csv(f'{NLP_list_ERP_folder}/reference_tables/NLP_list_ERP.csv', dtype=str)
-df_nlp_erp["CMPNT_MATL_NUM"] = df_nlp_erp["CMPNT_MATL_NUM"].str.strip().str.strip('"').str.strip()
-
-# Step 1: Check what’s missing from matches_NLP_list_ERP
-matched_ids = matches_NLP_list_ERP["CMPNT_MATL_NUM"].dropna().unique().tolist()
-missing_records = df_nlp_erp[~df_nlp_erp["CMPNT_MATL_NUM"].isin(matched_ids)]
-
-# Step 2: Check if those records exist in ERP
-missing_in_erp = missing_records[~missing_records["CMPNT_MATL_NUM"].isin(erp["CMPNT_MATL_NUM"])]
-
-# Step 3: Check description & alpha % for diagnostics
-qc_desc = missing_records.merge(
-    erp[["CMPNT_MATL_NUM", "ERP_PART_DESC", "text_for_matching_erp", "perc_alpha_char_erp"]],
-    on="CMPNT_MATL_NUM", how="left"
-)
-qc_desc["desc_length"] = qc_desc["text_for_matching_erp"].str.len()
-
-# Step 4: Check if embeddings were generated
-erp_embeddings = erp_embeddings.drop_duplicates()
-missing_with_embeddings = qc_desc.merge(erp_embeddings, on="CMPNT_MATL_NUM", how="left")
-
-# Step 5: Save logs
-os.makedirs("log/qc_nlp_list", exist_ok=True)
-missing_records.to_csv("log/qc_nlp_list/unmatched_in_final.csv", index=False)
-qc_desc.to_csv("log/qc_nlp_list/qc_text_check.csv", index=False)
-missing_with_embeddings.to_csv("log/qc_nlp_list/qc_with_embeddings.csv", index=False)
-# === QC ENDS HERE ===
+(most recent call last):
+  File "cross_hound/matcher.py", line 1515, in <module>
+    main(input_dir=args.get('input_dir'),
+  File "cross_hound/matcher.py", line 1340, in main
+    matched, unmatched = full_matching_routine(data_version, db_style, device,
+  File "cross_hound/matcher.py", line 845, in full_matching_routine
+    human_feedback_folder = os.path.dirname(os.path.realpath(__file__))
+UnboundLocalError: local variable 'os' referenced before assignment
