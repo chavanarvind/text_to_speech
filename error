@@ -1,21 +1,6 @@
-Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error:     matched, unmatched = full_matching_routine(data_version, db_style, device,
-  File "cross_hound/matcher.py", line 1119, in full_matching_routine
-    xmatches_NLP_list_ERP = pd.read_csv(f'{NLP_list_ERP_folder}/reference_tables/NLP_list_ERP.csv',dtype=str, quotechar='"')
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 912, in read_csv
-    return _read(filepath_or_buffer, kwds)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 577, in _read
-    parser = TextFileReader(filepath_or_buffer, **kwds)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 1407, in __init__
-    self._engine = self._make_engine(f, self.engine)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 1679, in _make_engine
-    return mapping[engine](f, **self.options)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/io/parsers/c_parser_wrapper.py", line 93, in __init__
-    self._reader = parsers.TextReader(src, **kwds)
-  File "pandas/_libs/parsers.pyx", line 548, in pandas._libs.parsers.TextReader.__cinit__
-  File "pandas/_libs/parsers.pyx", line 637, in pandas._libs.parsers.TextReader._get_header
-  File "pandas/_libs/parsers.pyx", line 848, in pandas._libs.parsers.TextReader._tokenize_rows
-  File "pandas/_libs/parsers.pyx", line 859, in pandas._libs.parsers.TextReader._check_tokenize_status
-  File "pandas/_libs/parsers.pyx", line 2017, in pandas._libs.parsers.raise_parser_error
-UnicodeDecodeError: 'utf-8' codec can't decode byte 0xb2 in position 286: invalid start byte
-
-
+xmatches_NLP_list_ERP = pd.read_csv(
+    f'{NLP_list_ERP_folder}/reference_tables/NLP_list_ERP.csv',
+    dtype=str,
+    quotechar='"',
+    encoding='ISO-8859-1'  # or encoding='latin1'
+)
