@@ -1,2 +1,11 @@
-git remote add origin https://sourcecode.kenvue.com/scm/asx-jedo/bom-x-ref.git
-git push -u origin master
+(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work> git push -u origin master
+fatal: Bitbucket DC OAuth Client ID must be defined
+Total 0 (delta 0), reused 0 (delta 0), pack-reused 0 (from 0)
+remote: 
+remote: Create pull request for master:
+remote:   https://sourcecode.kenvue.com/projects/ASX-JEDO/repos/bom-x-ref/pull-requests?create&sourceBranch=refs%2Fheads%2Fmaster
+remote:
+To https://sourcecode.kenvue.com/scm/asx-jedo/bom-x-ref.git
+ * [new branch]      master -> master
+branch 'master' set up to track 'origin/master'.
+(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work> 
