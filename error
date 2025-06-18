@@ -1,4 +1,6 @@
-Get-ChildItem -Path . -Recurse -Filter *.csv | ForEach-Object { git add $_.FullName }
-git status
-git commit -m "Add/update all CSV files"
-git push origin master
+(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\src\reference_tables> Get-ChildItem -Path . -Recurse -Filter *.csv | ForEach-Object { git add $_.FullName }
+(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\src\reference_tables> git status
+
+On branch master
+nothing to commit, working tree clean
+(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\src\reference_tables> 
