@@ -1,7 +1,7 @@
 # script_2_generate_key_files_only.py
 # ------------------------------------
-# Extracts consistent key columns from raw BOM parquet files.
-# Handles missing columns gracefully by filling with None.
+# Extracts key columns from BOM parquet files.
+# Adds 'File_Name' column based on actual file name.
 
 import os
 import glob
@@ -9,7 +9,7 @@ import argparse
 import pandas as pd
 from azureml.core import Run
 
-# ✅ Full set of key columns (from your input structure + screenshot)
+# Full set of key columns including 'File_Name'
 KEY_COLS = [
     "SRC_SYS_CD",
     "MATL_NUM",
@@ -27,17 +27,20 @@ def process_file(file_path, key_output_dir):
     try:
         print(f"\n[INFO] Processing: {os.path.basename(file_path)}")
 
-        # Read full Parquet input
+        # Load full Parquet data
         full_df = pd.read_parquet(file_path)
 
-        # Create consistent key_df
+        # Build key_df with all columns, fill missing with None
         key_df = pd.DataFrame()
         for col in KEY_COLS:
-            key_df[col] = full_df[col] if col in full_df.columns else None
+            if col == "File_Name":
+                key_df["File_Name"] = os.path.basename(file_path)  # add file name
+            else:
+                key_df[col] = full_df[col] if col in full_df.columns else None
 
         key_df = key_df.drop_duplicates()
 
-        # Save key file
+        # Save to output
         os.makedirs(key_output_dir, exist_ok=True)
         key_path = os.path.join(key_output_dir, os.path.basename(file_path))
         key_df.to_parquet(key_path, index=False)
