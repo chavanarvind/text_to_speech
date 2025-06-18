@@ -1,3 +1,4 @@
-cd C:\Users\AChava05\OneDrive - Kenvue\AChava05
-git clone https://sourcecode.kenvue.com/scm/asx-jedo/bom-x-ref.git
-cd bom-x-ref
+cd C:\Users\AChava05\OneDrive - Kenvue\AChava05\bom-x-ref
+git add run_pipeline/src/reference_tables/*.csv
+git commit -m "Add cleaned CSV reference files to reference_tables"
+git push origin main
