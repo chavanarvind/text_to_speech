@@ -1,2 +1,1 @@
-# Stage all CSV files under current folder and subfolders
-Get-ChildItem -Path . -Recurse -Filter *.csv | ForEach-Object { git add $_.FullName }
+git commit -m "Added all CSV files"
