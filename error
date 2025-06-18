@@ -1,5 +1,7 @@
-(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work> git branch
+bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work> git branch -a
 * bom_ref_updated
   main
   master
-(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work> 
+  remotes/origin/bom_ref_updated
+  remotes/origin/main
+  remotes/origin/master
