@@ -1,1 +1,4 @@
-"000000000000153931"
+df = pd.read_csv("your_file.csv", dtype={"comp_mat_no": str}, quotechar='"')
+
+# Optional safety: remove stray quotes if they are stored literally in the string
+df['comp_mat_no'] = df['comp_mat_no'].str.strip('"')
