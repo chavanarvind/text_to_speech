@@ -1,1 +1,2 @@
-Get-ChildItem -Filter *.csv
+git check-ignore -v *.csv
+git push origin master
