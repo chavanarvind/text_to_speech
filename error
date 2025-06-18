@@ -1,9 +1,1 @@
-hbom_raw_output = OutputFileDatasetConfig(
-    name="hbom_raw_data",
-    destination=(ds, f"bom_pipeline_output/harmonized_bom_data_{today}/")
-)
-
-hbom_raw_output = OutputFileDatasetConfig(
-    name="hbom_raw_data",
-    destination=(ws.get_default_datastore(), f"bom_pipeline_output/harmonized_bom_data_{today}/")
-)
+"000000000000153931"
