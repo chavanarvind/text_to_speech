@@ -1,1 +1,4 @@
-git push origin main
+rigin main
+error: src refspec main does not match any
+error: failed to push some refs to 'origin'
+(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\src\reference_tables> 
