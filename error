@@ -1,12 +1,14 @@
-import os
+Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
+  File "step_1a_direct_mapping.py", line 191, in <module>
+    main()
+  File "step_1a_direct_mapping.py", line 169, in main
+    cat_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Category')
+  File "step_1a_direct_mapping.py", line 59, in clean_mapping_df
+    mapping_df[value_col] = mapping_df[value_col].astype(str).str.strip()
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/frame.py", line 3760, in __getitem__
+    indexer = self.columns.get_loc(key)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 3654, in get_loc
+    raise KeyError(key) from err
+KeyError: 'Mapped_File_Category'
 
-def load_data(input_path, mapping_csv_dir):
-    df = pd.read_parquet(input_path)
 
-    # Locate the first CSV file in the mapping folder
-    csv_files = [f for f in os.listdir(mapping_csv_dir) if f.endswith(".csv")]
-    assert csv_files, f"No CSV files found in {mapping_csv_dir}"
-    csv_path = os.path.join(mapping_csv_dir, csv_files[0])
-
-    mapping_df = pd.read_csv(csv_path)
-    return df, mapping_df
