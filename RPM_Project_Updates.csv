@@ -1,0 +1,6 @@
+Project,Summary,Project Lead,Priority,Assignee,Created
+RPM Categorization,Access to required data in Databricks is completed. Sample of the target column has been shared. Predictive model skeleton development planned from 11th April. Azure Datastore access is pending and expected to close by 14th April.,Arvind Chavan,High,Arvind,"April, 2025"
+RPM Categorization,"Meeting held on 4th April to review the problem area, define expectations for category and subcategory mapping, and review input data source `sc_core.harmonized_bom_data_asset`. Final mapping of the target column is in progress.",Arvind Chavan,High,Team,"April, 2025"
+RPM Categorization,Coordination ongoing for validation of model output. Initial results from the NLP-based model expected in two sprints. Final timeline for delivery under discussion.,Arvind Chavan,High,"Arvind, Team","April, 2025"
+RPM Categorization,"Key next steps include finalizing target column mapping, preparing sample NLP model outputs including EDA, and coordinating output validation efforts.",Arvind Chavan,High,"Arvind, Team","April, 2025"
+RPM Categorization,Sample output generated using the NLP model. Initial pipeline successfully deployed in the development environment. Production deployment is planned for next week.,Arvind Chavan,High,Arvind,"June, 2025"
