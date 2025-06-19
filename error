@@ -1,11 +1,94 @@
-df = pd.read_parquet(file_path, columns=[
-    "CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD",
-    "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD"
-])
-print(f"[INFO] Initial rows in input: {len(df)}")
+# Minimal pipeline with Data Pull and Direct Mapping Only
 
-# Drop rows with missing descriptions, then deduplicate by CMPNT_MATL_NUM
-df = df[df['CMPNT_MATL_DESC'].notna()]
-df = df.sort_values(by="CMPNT_MATL_NUM")  # optional: stable sort
-df = df.drop_duplicates(subset=["CMPNT_MATL_NUM"])
-print(f"[INFO] After dropping NA and duplicates by CMPNT_MATL_NUM: {len(df)}")
+from azureml.core import Workspace, Environment, Experiment
+from azureml.pipeline.core import Pipeline, PipelineData
+from azureml.pipeline.steps import PythonScriptStep
+from azureml.core.runconfig import RunConfiguration
+from azureml.data.datapath import DataPath
+from azureml.data import OutputFileDatasetConfig
+from azureml.core import Dataset, Datastore
+
+from datetime import datetime
+
+today = datetime.today().strftime("%d%m%Y")
+
+# Workspace config
+SUBSCRIPTION_ID = "a8d518a9-4587-4ba2-9a60-68b980c2f000"
+RESOURCE_GROUP = "AZR-WDZ-DTO-AML-Development"
+WORKSPACE_NAME = "AML-DTO-Marmot-dev"
+
+ws = Workspace(
+    subscription_id=SUBSCRIPTION_ID,
+    resource_group=RESOURCE_GROUP,
+    workspace_name=WORKSPACE_NAME
+)
+
+compute_name = "llm-gpu-cluster-2"
+env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
+run_config = RunConfiguration()
+run_config.target = compute_name
+run_config.environment = env
+
+default_ds = ws.get_default_datastore()
+
+# === Shared Outputs ===
+data_step1_out = PipelineData(name="data_step1_out", is_directory=True)
+data_step1a_mapped = PipelineData(name="data_step1a_mapped", is_directory=True)
+data_step1a_key_output = OutputFileDatasetConfig(
+    name='data_step1a_key_output',
+    destination=(default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/")
+)
+
+# === Mapping CSV as input ===
+default_ds.upload_files(
+    files=['./local_data/high_conf_direct_mapping.csv'],
+    target_path='high_conf_map',
+    overwrite=True,
+    show_progress=True
+)
+high_conf_dataset = Dataset.File.from_files((default_ds, 'high_conf_map'))
+high_conf_mount = high_conf_dataset.as_named_input('high_conf_map').as_mount()
+
+# === Upload Only 2 Test Parquet Files for Input ===
+default_ds.upload_files(
+    files=[
+        './local_data/test_parquets/part_1.parquet',
+        './local_data/test_parquets/part_2.parquet'
+    ],
+    target_path='test_input_data',
+    overwrite=True,
+    show_progress=True
+)
+test_dataset = Dataset.File.from_files((default_ds, 'test_input_data'))
+test_input_mount = test_dataset.as_named_input('test_parquets').as_mount()
+
+# === Step 1: Dummy Pass-through (optional) ===
+# Skipped since we are directly mounting 2 test files
+
+direct_mapping_step = PythonScriptStep(
+    name="Step 1a - Direct Mapping Logic",
+    script_name="step_1a_direct_mapping.py",
+    source_directory="scripts",
+    inputs=[test_input_mount, high_conf_mount],
+    arguments=[
+        "--input_path", test_input_mount,
+        "--mapping_csv", high_conf_mount,
+        "--key_output", data_step1a_key_output,
+        "--final_output", data_step1a_mapped
+    ],
+    outputs=[data_step1a_mapped, data_step1a_key_output],
+    runconfig=run_config,
+    compute_target=compute_name,
+    allow_reuse=False
+)
+
+# === Build and Submit Pipeline ===
+pipeline = Pipeline(workspace=ws, steps=[
+    data_pull_step,
+    direct_mapping_step
+])
+
+pipeline.validate()
+experiment = Experiment(ws, "direct_mapping_pipeline")
+pipeline_run = experiment.submit(pipeline)
+pipeline_run.wait_for_completion(show_output=True)
