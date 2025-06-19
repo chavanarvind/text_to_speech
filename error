@@ -1,6 +1,15 @@
-   output_file = os.path.join(args.final_output, "final_output.parquet")
-    df.to_parquet(output_file, index=False)
-    print(f"[INFO] Saved final output to: {output_file}")
-    dataset = Dataset.Tabular.from_parquet_files([(datastore, f"mapped_data/final_output/{os.path.basename(output_path)}")])
-    dataset.register(ws, name="final_mapped_dataset", description="Final mapped output", create_new_version=True)
-    print("✅ Registered as 'final_mapped_dataset'")
+output_file = os.path.join(args.final_output, "final_output.parquet")
+df.to_parquet(output_file, index=False)
+print(f"[INFO] Saved final output to: {output_file}")
+
+# Optional: register dataset manually using known datastore path
+dataset = Dataset.Tabular.from_parquet_files(
+    path=[(ws.get_default_datastore(), f"hbom_category_prediction/hbom_category_prediction_{today}/final_output.parquet")]
+)
+dataset.register(
+    workspace=ws,
+    name="final_mapped_dataset",
+    description="Final mapped output",
+    create_new_version=True
+)
+print("✅ Registered as 'final_mapped_dataset'")
