@@ -1,1 +1,35 @@
-ServiceRequestError: <urllib3.connection.HTTPSConnection object at 0x7aabb51156c0>: Failed to establish a new connection: [Errno -2] Name or service not known
+import os
+from azureml.core import Workspace, Datastore, Dataset
+from datetime import datetime
+
+# === Config ===
+local_folder = "./data/final_merged_predictions_updated"
+target_blob_path = f"hbom_category_prediction/final_predictions_updated_{datetime.today().strftime('%d%m%Y')}"
+
+# === Step 1: Connect to workspace ===
+ws = Workspace.from_config()  # Assumes config.json is present
+print(f"✅ Connected to workspace: {ws.name}")
+
+# === Step 2: Get default datastore (workspaceblobstore) ===
+datastore = ws.get_default_datastore()
+print(f"✅ Using datastore: {datastore.name}")
+
+# === Step 3: Upload local files to blob store ===
+datastore.upload(
+    src_dir=local_folder,
+    target_path=target_blob_path,
+    overwrite=True,
+    show_progress=True
+)
+print(f"📤 Uploaded files to blob path: {target_blob_path}")
+
+# === Step 4: Register as a dataset ===
+dataset = Dataset.File.from_files(path=(datastore, target_blob_path))
+
+dataset = dataset.register(
+    workspace=ws,
+    name="final_merged_predictions_updated",
+    description="Final merged parquet files with updated categories",
+    create_new_version=True
+)
+print(f"✅ Registered dataset: final_merged_predictions_updated (version: {dataset.version})")
