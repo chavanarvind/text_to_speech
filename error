@@ -1,2 +1,4 @@
-matched_count = mask.sum()
-        print(f"🔍 {file} → {matched_count} rows matched for update.")
+workspace = Workspace(subscription_id, resource_group, workspace_name)
+
+dataset = Dataset.get_by_id(workspace, 'ed71c46e-10e1-4054-a500-c0fe100dc8b5')
+dataset.download(target_path='.', overwrite=False)
