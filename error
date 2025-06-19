@@ -1,27 +1,27 @@
-def load_data(parquet_dir, mapping_csv_dir):
-    # List all .parquet files in the input directory
-    parquet_files = [f for f in os.listdir(parquet_dir) if f.endswith(".parquet")]
-    if not parquet_files:
-        raise FileNotFoundError(f"No parquet files found in: {parquet_dir}")
+def finalize_output(df, output_path, ws):
+    df['AI_FINAL_CATEGORY'] = df['Mapped_File_Category']
+    df['AI_FINAL_CATEGORY_CONFIDENCE'] = df['Final Category Confidence Score']
+    df['AI_MATCHING_REASON_FINAL_CATEGORY'] = df['category_matching_reason']
+    df['AI_FINAL_SUBCATEGORY'] = df['Mapped_File_Subcategory']
+    df['AI_FINAL_SUBCATEGORY_CONFIDENCE'] = df['Final Subcategory Confidence Score']
+    df['AI_MATCHING_REASON_FINAL_SUBCATEG'] = df['subcategory_matching_reason']
 
-    # Process only the first parquet file
-    first_file = os.path.join(parquet_dir, parquet_files[0])
-    print(f"[INFO] Processing only: {first_file}")
+    df.drop(columns=[
+        'Mapped_File_Category', 'Final Category Confidence Score', 'category_matching_reason',
+        'Mapped_File_Subcategory', 'Final Subcategory Confidence Score', 'subcategory_matching_reason'
+    ], inplace=True, errors='ignore')
 
-    df = pd.read_parquet(first_file, columns=[
-        "CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD",
-        "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD"
-    ])
-    df = df[df['CMPNT_MATL_DESC'].notna()]
-    df = df.drop_duplicates(subset=["CMPNT_MATL_NUM"])
+    output_file = os.path.join(args.final_output, "final_output.parquet")
+    df.to_parquet(output_file, index=False)
+    print(f"[INFO] Saved final output to: {output_file}")
 
-    # Load the first CSV file from mapping folder
-    csv_files = [f for f in os.listdir(mapping_csv_dir) if f.endswith(".csv")]
-    if not csv_files:
-        raise FileNotFoundError(f"No CSV found in mapping dir: {mapping_csv_dir}")
-    
-    csv_path = os.path.join(mapping_csv_dir, csv_files[0])
-    print(f"[INFO] Using mapping CSV: {csv_path}")
-    mapping_df = pd.read_csv(csv_path)
-
-    return df, mapping_df
+   # Optional: register dataset manually using known datastore path
+    dataset = Dataset.Tabular.from_parquet_files(
+    path=[(ws.get_default_datastore(), f"hbom_category_prediction/hbom_category_prediction_{today}/final_output.parquet")])
+    dataset.register(
+    workspace=ws,
+    name="final_mapped_dataset",
+    description="Final mapped output",
+    create_new_version=True
+)
+print("✅ Registered as 'final_mapped_dataset'")
