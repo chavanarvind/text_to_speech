@@ -1,9 +1,6 @@
-# Filter rows where Matching Reason is None (or NaN)
-df_filtered = df[df['Matching Reason'].isna()]
-
-# Group by 'Final Category' and get unique values of another column (e.g., 'ERP_PART_DESC')
-# Replace 'ColumnName' with the column you want to see unique values from
-unique_values_per_category = df_filtered.groupby('Final Category')['ColumnName'].unique()
-
-# To display it nicely as a DataFrame
-result_df = unique_values_per_category.reset_index()
+unique_count_per_category = (
+    df_filtered
+    .groupby('Final Category')['ColumnName']  # <-- Replace with desired column
+    .nunique()
+    .reset_index(name='Unique Count')
+)
