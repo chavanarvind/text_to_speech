@@ -1,8 +1,1 @@
--> 3812     raise KeyError(key) from err
-   3813 except TypeError:
-   3814     # If we have a listlike key, _check_indexing_error will raise
-   3815     #  InvalidIndexError. Otherwise we fall through and re-raise
-   3816     #  the TypeError.
-   3817     self._check_indexing_error(key)
-
-KeyError: 'Direct Mapping'
+IsADirectoryError: [Errno 21] Failed to open local file './data/local_data'. Detail: [errno 21] Is a directory
