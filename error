@@ -1,14 +1,6 @@
-df.to_parquet(output_path, index=False)
-datastore.upload_files(
-    files=[output_path],
-    target_path="mapped_data/final_output/",
-    overwrite=True
-)
-
-output_file = os.path.join(args.final_output, "final_output.parquet")
-df.to_parquet(output_file, index=False)
-print(f"[INFO] Saved final output to: {output_file}")
-
-key_file = os.path.join(args.key_output, "key_reference.parquet")
-key_df.to_parquet(key_file, index=False)
-print(f"[INFO] Saved key reference to: {key_file}")
+   output_file = os.path.join(args.final_output, "final_output.parquet")
+    df.to_parquet(output_file, index=False)
+    print(f"[INFO] Saved final output to: {output_file}")
+    dataset = Dataset.Tabular.from_parquet_files([(datastore, f"mapped_data/final_output/{os.path.basename(output_path)}")])
+    dataset.register(ws, name="final_mapped_dataset", description="Final mapped output", create_new_version=True)
+    print("✅ Registered as 'final_mapped_dataset'")
