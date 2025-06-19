@@ -1,420 +1,93 @@
-#step_1_data_pull.py
-import os
-import argparse
-from azureml.core import Run, Dataset
-
-def main(output_path):
-    # Get run context and workspace
-    run = Run.get_context()
-    ws = run.experiment.workspace
-
-    # Get dataset by name
-    dataset = Dataset.get_by_name(ws, name='harmonized_bom_data_asset')
-
-    # Ensure output directory exists and download dataset
-    os.makedirs(output_path, exist_ok=True)
-    dataset.download(target_path=output_path, overwrite=True)
-
-    print(f" Dataset downloaded to: {output_path}")
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--output_path", type=str, required=True)
-    args = parser.parse_args()
-
-    main(args.output_path)
-
-#step_1a_extract_and_merge.py
-import os
-import glob
-import argparse
+from azureml.core import Workspace, Dataset, Datastore
 import pandas as pd
-from azureml.core import Run
-
-# === Column to match ===
-JOIN_COL_1 = "CMPNT_CAT_CD_DESC"
-JOIN_COL_2 = "CMPNT_MATL_TYPE_CD"
-DIRECT_MAP_KEY_1 = "Direct Mapping"
-DIRECT_MAP_KEY_2 = "Direct Mapping"
-
-# === Key Columns to output ===
-KEY_COLS = ["SRC_SYS_CD", "MATL_NUM", "PLNT_CD", "CMPNT_MATL_NUM"]
-
-def process_file(file_path, mapping_df, mapped_dir, needs_model_dir, key_output_dir):
-    try:
-        print(f"\n[INFO] Processing: {os.path.basename(file_path)}")
-
-        # Load necessary columns
-        df = pd.read_parquet(file_path, columns=[
-            "CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD",
-            "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD"
-        ])
-        print(f"[INFO] Initial rows in input: {len(df)}")
-        df = df[df['CMPNT_MATL_DESC'].notna()].drop_duplicates()
-        print(f"[INFO] After dropping NA/duplicates: {len(df)}")
-
-        # Normalize text in input
-        df[JOIN_COL_1] = df[JOIN_COL_1].fillna("").astype(str).str.strip().str.upper()
-        df[JOIN_COL_2] = df[JOIN_COL_2].fillna("").astype(str).str.strip().str.upper()
-
-        # Clean mapping_df
-        mapping_df.columns = mapping_df.columns.str.strip()
-        print(f"[DEBUG] mapping_df columns after strip: {mapping_df.columns.tolist()}")
-        for col in ['Final Category', 'Final Subcategory']:
-            if col not in mapping_df.columns:
-                print(f"[WARNING] '{col}' not in mapping_df. Adding as None.")
-                mapping_df[col] = None
-
-        print(f"[DEBUG] mapping_df dtypes before merge:\n{mapping_df.dtypes}")
-
-        mapping_df[DIRECT_MAP_KEY_1] = mapping_df[DIRECT_MAP_KEY_1].fillna("").astype(str).str.strip().str.upper()
-        mapping_df[DIRECT_MAP_KEY_2] = mapping_df[DIRECT_MAP_KEY_2].fillna("").astype(str).str.strip().str.upper()
-
-        print(f"[INFO] Mapping DF has {len(mapping_df)} rows")
-
-        # Stage 1 match
-        stage1_df = df.merge(mapping_df, how="inner", left_on=JOIN_COL_1, right_on=DIRECT_MAP_KEY_1)
-        stage1_df['matching_reason'] = 'direct_mapping_category'
-        stage1_df['confidence_score'] = 1.0
-        print(f"[STAGE 1] Matched rows: {len(stage1_df)}")
-        print(f"[DEBUG] stage1_df columns: {stage1_df.columns.tolist()}")
-
-        # Stage 2 match
-        unmatched_df = df[~df['CMPNT_MATL_NUM'].isin(stage1_df['CMPNT_MATL_NUM'])]
-        stage2_df = unmatched_df.merge(mapping_df, how="inner", left_on=JOIN_COL_2, right_on=DIRECT_MAP_KEY_2)
-        stage2_df['matching_reason'] = 'direct_mapping_type_only'
-        stage2_df['confidence_score'] = 1.0
-        print(f"[STAGE 2] Matched rows: {len(stage2_df)}")
-        print(f"[DEBUG] stage2_df columns: {stage2_df.columns.tolist()}")
-
-        # Combine
-        mapped_df = pd.concat([stage1_df, stage2_df], ignore_index=True)
-        print(f"[INFO] Total mapped rows: {len(mapped_df)}")
-        print(f"[DEBUG] mapped_df columns before Final Filled flags: {mapped_df.columns.tolist()}")
-
-        # Ensure Final Category/Subcategory exist in mapped_df
-        for col in ['Final Category', 'Final Subcategory']:
-            if col not in mapped_df.columns:
-                print(f"[WARNING] '{col}' not in mapped_df after merge. Adding as None.")
-                mapped_df[col] = None
-
-        # Fill flags
-        try:
-            mapped_df['Final Category Filled'] = mapped_df['Final Category'].notna() & mapped_df['Final Category'].astype(str).str.strip().ne("")
-            mapped_df['Final Subcategory Filled'] = mapped_df['Final Subcategory'].notna() & mapped_df['Final Subcategory'].astype(str).str.strip().ne("")
-            mapped_df['needs_model'] = ~mapped_df['Final Category Filled'] | ~mapped_df['Final Subcategory Filled']
-        except Exception as e:
-            print(f"[ERROR] Failed during flag creation: {e}")
-            mapped_df['needs_model'] = True
-            mapped_df['Final Category Filled'] = False
-            mapped_df['Final Subcategory Filled'] = False
-
-        print(f"[DEBUG] mapped_df columns after Final Filled flags: {mapped_df.columns.tolist()}")
-
-        # Identify unmapped
-        mapped_ids = set(mapped_df['CMPNT_MATL_NUM'])
-        all_ids = set(df['CMPNT_MATL_NUM'])
-        unmapped_ids = all_ids - mapped_ids
-
-        if unmapped_ids:
-            print(f"[WARNING] Total unmapped rows: {len(unmapped_ids)}")
-            unmapped_df = df[df['CMPNT_MATL_NUM'].isin(unmapped_ids)].copy()
-            unmapped_df['Final Category'] = None
-            unmapped_df['Final Subcategory'] = None
-            unmapped_df['needs_model'] = True
-            unmapped_df['matching_reason'] = 'unmapped_fallback'
-            unmapped_df['confidence_score'] = 0.0
-            unmapped_df['Final Category Filled'] = False
-            unmapped_df['Final Subcategory Filled'] = False
-            for col in mapped_df.columns:
-                if col not in unmapped_df.columns:
-                    unmapped_df[col] = None
-            mapped_df = pd.concat([mapped_df, unmapped_df[mapped_df.columns]], ignore_index=True)
-
-        # Split
-        mapped_only_df = mapped_df[~mapped_df['needs_model']].copy()
-        needs_model_df = mapped_df[mapped_df['needs_model']].copy()
-
-        print(f"[INFO] Fully mapped rows: {len(mapped_only_df)}")
-        print(f"[INFO] Rows needing model: {len(needs_model_df)}")
-
-        # Save
-        os.makedirs(mapped_dir, exist_ok=True)
-        os.makedirs(needs_model_dir, exist_ok=True)
-        mapped_only_df.to_parquet(os.path.join(mapped_dir, os.path.basename(file_path)), index=False)
-        needs_model_df.to_parquet(os.path.join(needs_model_dir, os.path.basename(file_path)), index=False)
-
-        # Save key columns
-        full_cols = pd.read_parquet(file_path).columns
-        missing_cols = [col for col in KEY_COLS if col not in full_cols]
-        if not missing_cols:
-            key_df = pd.read_parquet(file_path, columns=KEY_COLS).drop_duplicates()
-            os.makedirs(key_output_dir, exist_ok=True)
-            key_df.to_parquet(os.path.join(key_output_dir, os.path.basename(file_path)), index=False)
-            print(f"[INFO] Saved key reference: {os.path.basename(file_path)}")
-        else:
-            print(f"[INFO] Skipped key output — missing columns: {missing_cols}")
-
-    except Exception as e:
-        print(f"[ERROR] Full failure on file {file_path}: {e}")
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input_path", type=str, required=True)
-    parser.add_argument("--mapping_csv", type=str, required=True)
-    parser.add_argument("--mapped_output", type=str, required=True)
-    parser.add_argument("--needs_model_output", type=str, required=True)
-    parser.add_argument("--key_output", type=str, required=True)
-    args = parser.parse_args()
-
-    run = Run.get_context()
-
-    csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
-    if not csv_files:
-        raise FileNotFoundError(f"No CSV file found in mapped directory: {args.mapping_csv}")
-
-    mapping_df = pd.read_csv(csv_files[0]).drop_duplicates()
-
-    all_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
-    for file_path in all_files:
-        process_file(file_path, mapping_df, args.mapped_output, args.needs_model_output, args.key_output)
-
-if __name__ == "__main__":
-    main()
-
-#pipeline
-# pipeline_runner.py
-
-from azureml.core import Workspace, Environment, Experiment
-from azureml.pipeline.core import Pipeline, PipelineData
-from azureml.pipeline.steps import PythonScriptStep
-from azureml.core.runconfig import RunConfiguration
-from azureml.data.datapath import DataPath
-from azureml.data import OutputFileDatasetConfig
-from azureml.core import Dataset
-from azureml.core.authentication import ServicePrincipalAuthentication
 import os
-import sys
-from azureml.data.datapath import DataPath
-from azureml.core import Datastore
-
 from datetime import datetime
-today = datetime.today().strftime("%d%m%Y")
 
-# === Load workspace ===
-# === Hardcoded AML workspace config ===
+# === Azure ML Workspace Config ===
 SUBSCRIPTION_ID = "a8d518a9-4587-4ba2-9a60-68b980c2f000"
 RESOURCE_GROUP = "AZR-WDZ-DTO-AML-Development"
 WORKSPACE_NAME = "AML-DTO-Marmot-dev"
+DATASTORE_NAME = "xbomrefadlsg2"
 
-def get_workspace(use_sp_auth=False, args=None):
-    if use_sp_auth and args and len(args) >= 4:
-        print("Using Service Principal Authentication")
-        tenant_id = args[1]
-        client_id = args[2]
-        client_secret = args[3]
-
-        sp_auth = ServicePrincipalAuthentication(
-            tenant_id=tenant_id,
-            service_principal_id=client_id,
-            service_principal_password=client_secret
-        )
-
-        return Workspace(
-            subscription_id=SUBSCRIPTION_ID,
-            resource_group=RESOURCE_GROUP,
-            workspace_name=WORKSPACE_NAME,
-            auth=sp_auth
-        )
-    else:
-        print("Using default local authentication")
-        return Workspace(
-            subscription_id=SUBSCRIPTION_ID,
-            resource_group=RESOURCE_GROUP,
-            workspace_name=WORKSPACE_NAME
-        )
-
-# === Initialize workspace ===
-ws = get_workspace(use_sp_auth=(len(sys.argv) > 3), args=sys.argv)
-#ws = Workspace.from_config(path=".azureml/dev_config.json")
-compute_name = "llm-gpu-cluster-2"
-env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
-default_ds = Datastore.get(ws, "xbomrefadlsg2")
-
-run_config = RunConfiguration()
-run_config.target = compute_name
-run_config.environment = env
-
-# === Output and input shared folders ===
-data_step1_out = PipelineData(name="data_step1_out", is_directory=True)
-data_step1a_mapped = PipelineData(name="data_step1a_mapped", is_directory=True)
-data_step1a_unmapped = PipelineData(name="data_step1a_unmapped", is_directory=True)
-data_step2_out = PipelineData(name="data_step2_out", is_directory=True)
-data_step3_out = PipelineData(name="data_step3_out", is_directory=True)
-data_step4_out = PipelineData(name="data_step4_out", is_directory=True)
-#data_step1a_key_output = PipelineData(name="data_step1a_key_output", is_directory=True)
+# === Date and paths ===
 today = datetime.today().strftime("%d%m%Y")
+input_path = f"./data/final_merged_predictions"
+output_path = f"./data/final_merged_predictions_updated"
+blob_output_path = f"hbom_category_prediction/hbom_category_prediction_{today}_updated/"
 
-#default_ds = ws.get_default_datastore()
-today = datetime.today().strftime("%d%m%Y")
+os.makedirs(input_path, exist_ok=True)
+os.makedirs(output_path, exist_ok=True)
 
-# Temporary output from Step 1a
-step1a_key_output_temp = OutputFileDatasetConfig(name='step1a_key_output_temp')
+# === Load both mapping CSVs ===
+cat_map = pd.read_csv("./data/cmpnt_cat_category_mapping.csv",encoding='latin1')        # CMPNT_CAT_CD_DESC → AI_FINAL_CATEGORY
+subcat_map = pd.read_csv("./data/cmpnt_cat_subcategory_mapping.csv",encoding='latin1')  # CMPNT_CAT_CD_DESC → AI_FINAL_SUBCATEGORY
 
-# Final output to ADLS from Step 5
-final_output_to_adls = OutputFileDatasetConfig(
-    name='final_predictions_to_adls',
-    destination=(default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/")
-)
+# === Step 1: Download original dataset ===
+#dataset.download(target_path=input_path, overwrite=True)
+#print(f"📥 Downloaded dataset to: {input_path}")
 
+# === Step 2: Process and update ===
+for file in os.listdir(input_path):
+    if file.endswith(".parquet"):
+        input_file = os.path.join(input_path, file)
+        output_file = os.path.join(output_path, file)
 
-custom_output_path = DataPath(
-    datastore=default_ds,
-    path_on_datastore=f"hbom_category_prediction/hbom_category_prediction_{today}/"
-)
+        df = pd.read_parquet(input_file)
 
-today = datetime.today().strftime("%d%m%Y")
+        # Merge category mapping
+        df = df.merge(cat_map, on="CMPNT_CAT_CD_DESC", how="left", suffixes=("", "_cat_mapped"))
+        # Merge subcategory mapping
+        df = df.merge(subcat_map, on="CMPNT_CAT_CD_DESC", how="left", suffixes=("", "_subcat_mapped"))
 
-data_step1a_key_output = OutputFileDatasetConfig(
-    name='data_step1a_key_output',
-    destination=(default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/")
-)
+        # === CATEGORY UPDATE LOGIC ===
+        mask_cat = df["AI_FINAL_CATEGORY"].isna() & df["AI_FINAL_CATEGORY_cat_mapped"].notna()
+        print(f"🔍 {file} → {mask_cat.sum()} rows updated for CATEGORY.")
 
-# === Upload high_conf_mapping.csv from local folder to datastore ===
-#default_ds = ws.get_default_datastore()
+        df.loc[mask_cat, "AI_FINAL_CATEGORY"] = df.loc[mask_cat, "AI_FINAL_CATEGORY_cat_mapped"]
+        df.loc[mask_cat, "AI_MATCHING_REASON_FINAL_CATEGORY"] = "direct_mapping_lookup"
+        df.loc[mask_cat, "AI_FINAL_CATEGORY_CONFIDENCE"] = 1
 
-# === Upload high_conf_mapping.csv from local folder to datastore ===
-default_ds1 = ws.get_default_datastore()
+        # === SUBCATEGORY UPDATE LOGIC ===
+        mask_subcat = df["AI_FINAL_SUBCATEGORY"].isna() & df["AI_FINAL_SUBCATEGORY_subcat_mapped"].notna()
+        print(f"🔍 {file} → {mask_subcat.sum()} rows updated for SUBCATEGORY.")
 
-# Upload file as before
-default_ds1.upload_files(
-    files=['./local_data/high_conf_direct_mapping.csv'],
-    target_path='high_conf_map',   # <== IMPORTANT: Folder name
+        df.loc[mask_subcat, "AI_FINAL_SUBCATEGORY"] = df.loc[mask_subcat, "AI_FINAL_SUBCATEGORY_subcat_mapped"]
+        df.loc[mask_subcat, "AI_MATCHING_REASON_FINAL_SUBCATEGORY"] = "direct_mapping_lookup"
+        df.loc[mask_subcat, "AI_FINAL_SUBCATEGORY_CONFIDENCE"] = 1
+
+        # Drop helper columns
+        df.drop(columns=["AI_FINAL_CATEGORY_cat_mapped", "AI_FINAL_SUBCATEGORY_subcat_mapped"], errors='ignore', inplace=True)
+
+        df.to_parquet(output_file, index=False)
+        print(f"✅ Updated & saved: {file}")
+
+# === Step 3: Upload back to Azure ===
+print(f"⏫ Uploading updated files to: {blob_output_path}")
+ds.upload(
+    src_dir=output_path,
+    target_path=blob_output_path,
     overwrite=True,
     show_progress=True
 )
 
-# Register or create file dataset
-high_conf_dataset = Dataset.File.from_files((default_ds1, 'high_conf_map'))
-high_conf_mount = high_conf_dataset.as_named_input('high_conf_map').as_mount()
+print(f"🎉 All files uploaded to Azure at: {blob_output_path}")
 
-default_ds1.upload_files(
-    files=['./local_data/abbreviation_expension_updated.csv'],
-    target_path='abbrev_map',
-    overwrite=True,
-    show_progress=True
-)
-abbrev_dataset = Dataset.File.from_files((default_ds1, 'abbrev_map'))
-abbrev_mount = abbrev_dataset.as_named_input('abbrev_map').as_mount()
 
-# === Step 1: Data Pull ===
-data_pull_step = PythonScriptStep(
-    name="Step 1 - Pull Dataset",
-    script_name="step_1_data_pull.py",
-    source_directory="scripts",
-    arguments=["--output_path", data_step1_out],
-    outputs=[data_step1_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
 
-# === Step 1a: High Confidence Merge ===
-high_conf_merge_step = PythonScriptStep(
-    name="Step 1a - High Confidence Merge",
-    script_name="step_1a_extract_and_merge.py",
-    source_directory="scripts",
-    inputs=[data_step1_out, high_conf_mount],
-    arguments=[
-    "--input_path", data_step1_out,
-    "--mapping_csv", high_conf_mount,
-    "--mapped_output", data_step1a_mapped,
-    "--needs_model_output", data_step1a_unmapped,
-    "--key_output", step1a_key_output_temp
-],
-    outputs=[data_step1a_mapped, data_step1a_unmapped, step1a_key_output_temp],
 
-    #outputs=[data_step1a_mapped, data_step1a_unmapped],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
+⏫ Uploading updated files to: hbom_category_prediction/hbom_category_prediction_19062025_updated/
+Show less
+---------------------------------------------------------------------------
+AttributeError                            Traceback (most recent call last)
+Cell In[36], line 66
+     64 # === Step 3: Upload back to Azure ===
+     65 print(f"⏫ Uploading updated files to: {blob_output_path}")
+---> 66 ds.upload(
+     67     src_dir=output_path,
+     68     target_path=blob_output_path,
+     69     overwrite=True,
+     70     show_progress=True
+     71 )
+     73 print(f"🎉 All files uploaded to Azure at: {blob_output_path}")
 
-# === Step 2: Clean Text ===
-clean_text_step = PythonScriptStep(
-    name="Step 2 - Text Cleaning",
-    script_name="step_2_clean_text.py",
-    source_directory="scripts",
-    inputs=[data_step2_out],
-    arguments=["--input_path", data_step2_out, "--output_path", data_step3_out],
-    outputs=[data_step3_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Step 3: Abbreviation Expansion ===
-abbrev_expand_step = PythonScriptStep(
-    name="Step 3 - Expand Abbreviations",
-    script_name="step_3_expand_abbreviation.py",
-    source_directory="scripts",
-    inputs=[data_step1a_unmapped, abbrev_mount],  # ⬅️ changed from data_step2_out
-    arguments=[
-        "--input_path", data_step1a_unmapped,
-        "--abbrev_map", abbrev_mount,
-        "--output_path", data_step2_out   # output will now feed into cleaning step
-    ],
-    outputs=[data_step2_out],  # renamed for consistency
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Step 4: Feature Engineering ===
-feature_eng_step = PythonScriptStep(
-    name="Step 4 - Feature Engineering",
-    script_name="step_4_feature_engineering.py",
-    source_directory="scripts",
-    inputs=[data_step3_out],
-    arguments=["--input_path", data_step3_out, "--output_path", data_step4_out],
-    outputs=[data_step4_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Step 5: Run Inference ===
-inference_step = PythonScriptStep(
-    name="Step 5 - Run Inference",
-    script_name="step_5_run_inference.py",
-    source_directory="scripts",
-    inputs=[data_step4_out, data_step1a_mapped, step1a_key_output_temp],
-    arguments=[
-        "--input_path", data_step4_out,
-        "--additional_mapped_dir", data_step1a_mapped,
-        "--key_output_dir", step1a_key_output_temp,
-        "--final_output_dir", final_output_to_adls
-    ],
-    outputs=[final_output_to_adls],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
-
-# === Build pipeline ===
-pipeline = Pipeline(workspace=ws, steps=[
-    data_pull_step,
-    high_conf_merge_step,
-    abbrev_expand_step,
-    clean_text_step, 
-    feature_eng_step,
-    inference_step
-])
-
-pipeline.validate()
-
-# === Submit pipeline ===
-experiment = Experiment(ws, "full_inference_pipeline")
-pipeline_run = experiment.submit(pipeline)
-pipeline_run.wait_for_completion(show_output=True)
+AttributeError: 'AzureDataLakeGen2Datastore' object has no attribute 'upload'
