@@ -1,7 +1,4 @@
-=== DEBUG SUMMARY ===
-Total input rows processed: 285645
-Final Category Filled: 183180
-Final Subcategory Filled: 183180
-Rows needing model: 102465
- - Category model only: 102465
- - Subcategory model only: 102465
+print(f"[DEBUG] Original row count: {len(df)}")
+...
+# After all processing
+print(f"[DEBUG] Final row count: {len(df)}")
