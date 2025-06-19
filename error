@@ -1,81 +1,14 @@
-from azureml.core import Workspace, Dataset, Datastore
-import pandas as pd
-import os
-from datetime import datetime
-
-# === Azure ML Workspace Config ===
-SUBSCRIPTION_ID = "a8d518a9-4587-4ba2-9a60-68b980c2f000"
-RESOURCE_GROUP = "AZR-WDZ-DTO-AML-Development"
-WORKSPACE_NAME = "AML-DTO-Marmot-dev"
-DATASTORE_NAME = "xbomrefadlsg2"
-DATASET_NAME = "final_merged_predictions"
-
-# === Load workspace and datastore ===
-ws = Workspace(subscription_id=SUBSCRIPTION_ID,
-               resource_group=RESOURCE_GROUP,
-               workspace_name=WORKSPACE_NAME)
-ds = Datastore.get(ws, DATASTORE_NAME)
-dataset = Dataset.get_by_name(ws, DATASET_NAME)
-
-# === Date and paths ===
-today = datetime.today().strftime("%d%m%Y")
-input_path = f"./data/final_merged_predictions"
-output_path = f"./data/final_merged_predictions_updated"
-blob_output_path = f"hbom_category_prediction/hbom_category_prediction_{today}_updated/"
-
-os.makedirs(input_path, exist_ok=True)
-os.makedirs(output_path, exist_ok=True)
-
-# === Load both mapping CSVs ===
-cat_map = pd.read_csv("cmpnt_cat_category_mapping.csv")        # CMPNT_CAT_CD_DESC → AI_FINAL_CATEGORY
-subcat_map = pd.read_csv("cmpnt_cat_subcategory_mapping.csv")  # CMPNT_CAT_CD_DESC → AI_FINAL_SUBCATEGORY
-
-# === Step 1: Download original dataset ===
-dataset.download(target_path=input_path, overwrite=True)
-print(f"📥 Downloaded dataset to: {input_path}")
-
-# === Step 2: Process and update ===
-for file in os.listdir(input_path):
-    if file.endswith(".parquet"):
-        input_file = os.path.join(input_path, file)
-        output_file = os.path.join(output_path, file)
-
-        df = pd.read_parquet(input_file)
-
-        # Merge category mapping
-        df = df.merge(cat_map, on="CMPNT_CAT_CD_DESC", how="left", suffixes=("", "_cat_mapped"))
-        # Merge subcategory mapping
-        df = df.merge(subcat_map, on="CMPNT_CAT_CD_DESC", how="left", suffixes=("", "_subcat_mapped"))
-
-        # === CATEGORY UPDATE LOGIC ===
-        mask_cat = df["AI_FINAL_CATEGORY"].isna() & df["AI_FINAL_CATEGORY_cat_mapped"].notna()
-        print(f"🔍 {file} → {mask_cat.sum()} rows updated for CATEGORY.")
-
-        df.loc[mask_cat, "AI_FINAL_CATEGORY"] = df.loc[mask_cat, "AI_FINAL_CATEGORY_cat_mapped"]
-        df.loc[mask_cat, "AI_MATCHING_REASON_FINAL_CATEGORY"] = "direct_mapping_lookup"
-        df.loc[mask_cat, "AI_FINAL_CATEGORY_CONFIDENCE"] = 1
-
-        # === SUBCATEGORY UPDATE LOGIC ===
-        mask_subcat = df["AI_FINAL_SUBCATEGORY"].isna() & df["AI_FINAL_SUBCATEGORY_subcat_mapped"].notna()
-        print(f"🔍 {file} → {mask_subcat.sum()} rows updated for SUBCATEGORY.")
-
-        df.loc[mask_subcat, "AI_FINAL_SUBCATEGORY"] = df.loc[mask_subcat, "AI_FINAL_SUBCATEGORY_subcat_mapped"]
-        df.loc[mask_subcat, "AI_MATCHING_REASON_FINAL_SUBCATEGORY"] = "direct_mapping_lookup"
-        df.loc[mask_subcat, "AI_FINAL_SUBCATEGORY_CONFIDENCE"] = 1
-
-        # Drop helper columns
-        df.drop(columns=["AI_FINAL_CATEGORY_cat_mapped", "AI_FINAL_SUBCATEGORY_subcat_mapped"], errors='ignore', inplace=True)
-
-        df.to_parquet(output_file, index=False)
-        print(f"✅ Updated & saved: {file}")
-
-# === Step 3: Upload back to Azure ===
-print(f"⏫ Uploading updated files to: {blob_output_path}")
-ds.upload(
-    src_dir=output_path,
-    target_path=blob_output_path,
-    overwrite=True,
-    show_progress=True
-)
-
-print(f"🎉 All files uploaded to Azure at: {blob_output_path}")
+Project	Summary		Project lead	Priority	Assignee	Created
+DFN	Took over the project through a structured handover process, ensuring a clear understanding of the algorithm and its implementation.	DFN - Took over the project through a structured handover process, ensuring a clear understanding of the algorithm and its implementation.	Shridhar Raikar	Medium	Manisha	December, 2024
+DFN	Executed sample runs to understand the algorithm, UI and analyse outcomes.	DFN - Executed sample runs to understand the algorithm, UI and analyse outcomes.	Shridhar Raikar	Medium	Manisha	January
+DFN	Executed sample runs to understand the algorithm, UI and analyse outcomes.	DFN - Executed sample runs to understand the algorithm, UI and analyse outcomes.	Shridhar Raikar	Medium	Manisha	February
+MIT	Took over the project through a structured handover process, ensuring a clear understanding of the algorithm and its implementation.	MIT - Took over the project through a structured handover process, ensuring a clear understanding of the algorithm and its implementation.	Shridhar Raikar	Medium	Manisha	26, February
+MIT	Executed sample runs to validate the algorithm’s performance and verify expected outcomes.	MIT - Executed sample runs to validate the algorithm’s performance and verify expected outcomes.	Shridhar Raikar	Medium	Manisha	17, March
+DFN	Data Preparation for APAC (LCB Hub)	DFN - Data Preparation for APAC (LCB Hub)	Shridhar Raikar	Medium	Manisha	25, March
+DFN	Data Preparation for APAC (TPPHub)	DFN - Data Preparation for APAC (TPPHub)	Shridhar Raikar	Medium	Manisha	25, March
+DFN	Cost Data Preparation for PH	DFN - Cost Data Preparation for PH	Shridhar Raikar	Medium	Manisha	15, April
+MIT	Run for APAC (TPP Hub)	MIT - Run for APAC (TPP Hub)	Shridhar Raikar	Medium	Manisha	15, April
+MIT	Run for APAC (LCB Hub)	MIT - Run for APAC (LCB Hub)	Shridhar Raikar	Medium	Manisha	22, April
+MIT	Run for APAC (Both Hub)	MIT - Run for APAC (Both Hub)	Shridhar Raikar	Medium	Manisha	May
+DFN	Safety stock Data Preparation for PH	DFN - Safety stock Data Preparation for PH	Shridhar Raikar	Medium	Manisha	May
+DFN	Working on enhancement in code to add more features, easy to use and optimized	DFN - Working on enhancement in code to add more features, easy to use and optimized	Shridhar Raikar	Medium	Manisha	June
