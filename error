@@ -1,37 +1,26 @@
-from azureml.core import Workspace, Datastore
+from azure.storage.filedatalake import DataLakeServiceClient
 import os
-from datetime import datetime
 
-# === Azure ML Config ===
-SUBSCRIPTION_ID = "a8d518a9-4587-4ba2-9a60-68b980c2f000"
-RESOURCE_GROUP = "AZR-WDZ-DTO-AML-Development"
-WORKSPACE_NAME = "AML-DTO-Marmot-dev"
-DATASTORE_NAME = "xbomrefadlsg2"
-
-# === Paths ===
+# === Configs ===
+account_name = "<your_account_name>"                 # e.g., 'xbomrefadlsg2'
+account_key = "<your_account_key>"                   # get from Azure portal
+file_system = "<your_container_name>"                # e.g., 'raw' or 'processed'
+target_dir = f"hbom_category_prediction/hbom_category_prediction_{datetime.today().strftime('%d%m%Y')}_updated"
 local_folder = "./data/final_merged_predictions_updated"
-blob_output_path = f"hbom_category_prediction/hbom_category_prediction_{datetime.today().strftime('%d%m%Y')}_updated/"
 
-# === Get workspace and datastore ===
-ws = Workspace(subscription_id=SUBSCRIPTION_ID,
-               resource_group=RESOURCE_GROUP,
-               workspace_name=WORKSPACE_NAME)
+# === Connect to Gen2 DataLake ===
+service_client = DataLakeServiceClient(account_url=f"https://{account_name}.dfs.core.windows.net", credential=account_key)
+file_system_client = service_client.get_file_system_client(file_system)
+directory_client = file_system_client.get_directory_client(target_dir)
 
-datastore_wrapper = Datastore.get(ws, DATASTORE_NAME)
+# === Upload all parquet files ===
+for filename in os.listdir(local_folder):
+    if filename.endswith(".parquet"):
+        file_path = os.path.join(local_folder, filename)
+        file_client = directory_client.create_file(filename)
 
-# 💡 Use the inner ._datastore attribute to access working method
-files_to_upload = [
-    os.path.join(local_folder, f)
-    for f in os.listdir(local_folder)
-    if f.endswith(".parquet")
-]
+        with open(file_path, "rb") as f:
+            file_client.append_data(data=f, offset=0, length=os.path.getsize(file_path))
+            file_client.flush_data(os.path.getsize(file_path))
 
-datastore_wrapper._datastore.upload_files(
-    files=files_to_upload,
-    target_path=blob_output_path,
-    overwrite=True,
-    show_progress=True,
-    relative_root=local_folder
-)
-
-print(f"✅ Uploaded {len(files_to_upload)} files to Azure Data Lake Gen2: {blob_output_path}")
+        print(f"✅ Uploaded: {filename}")
