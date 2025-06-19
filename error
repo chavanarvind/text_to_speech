@@ -1,1 +1,7 @@
-final_output_path = "./data/local_data/final_output.parquet"
+=== DEBUG SUMMARY ===
+Total input rows processed: 285645
+Final Category Filled: 183180
+Final Subcategory Filled: 183180
+Rows needing model: 102465
+ - Category model only: 102465
+ - Subcategory model only: 102465
