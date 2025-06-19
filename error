@@ -1,27 +1,2 @@
-def finalize_output(df, output_path, ws):
-    df['AI_FINAL_CATEGORY'] = df['Mapped_File_Category']
-    df['AI_FINAL_CATEGORY_CONFIDENCE'] = df['Final Category Confidence Score']
-    df['AI_MATCHING_REASON_FINAL_CATEGORY'] = df['category_matching_reason']
-    df['AI_FINAL_SUBCATEGORY'] = df['Mapped_File_Subcategory']
-    df['AI_FINAL_SUBCATEGORY_CONFIDENCE'] = df['Final Subcategory Confidence Score']
-    df['AI_MATCHING_REASON_FINAL_SUBCATEG'] = df['subcategory_matching_reason']
-
-    df.drop(columns=[
-        'Mapped_File_Category', 'Final Category Confidence Score', 'category_matching_reason',
-        'Mapped_File_Subcategory', 'Final Subcategory Confidence Score', 'subcategory_matching_reason'
-    ], inplace=True, errors='ignore')
-
-    output_file = os.path.join(args.final_output, "final_output.parquet")
-    df.to_parquet(output_file, index=False)
-    print(f"[INFO] Saved final output to: {output_file}")
-
-   # Optional: register dataset manually using known datastore path
-    dataset = Dataset.Tabular.from_parquet_files(
-    path=[(ws.get_default_datastore(), f"hbom_category_prediction/hbom_category_prediction_{today}/final_output.parquet")])
-    dataset.register(
-    workspace=ws,
-    name="final_mapped_dataset",
-    description="Final mapped output",
-    create_new_version=True
-)
-print("✅ Registered as 'final_mapped_dataset'")
+def finalize_output(df, output_path, ws, args):
+finalize_output(df, args.final_output, ws, args)
