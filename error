@@ -1,70 +1,18 @@
-from azureml.core import Workspace, Dataset
-from azureml.core.datastore import Datastore
+# Path to your Parquet file
+file_path = './data/test1.parquet'
+
+# Read the file
+df = pd.read_parquet(file_path)
+
 import pandas as pd
-import os
-from datetime import datetime
+pd.set_option('display.max_columns', None)
 
-# === Azure ML Workspace Config ===
-SUBSCRIPTION_ID = "a8d518a9-4587-4ba2-9a60-68b980c2f000"
-RESOURCE_GROUP = "AZR-WDZ-DTO-AML-Development"
-WORKSPACE_NAME = "AML-DTO-Marmot-dev"
-DATASTORE_NAME = "xbomrefadlsg2"
-
-# === Set date tag and paths ===
-today = datetime.today().strftime("%d%m%Y")
-input_path = "./data/final_merged_predictions"
-output_path = "./data/final_merged_predictions_updated"
-target_blob_path = f"hbom_category_prediction/hbom_category_prediction_{today}_updated/"
-
-# === Load Azure ML Workspace and Datastore ===
-ws = Workspace(subscription_id=SUBSCRIPTION_ID,
-               resource_group=RESOURCE_GROUP,
-               workspace_name=WORKSPACE_NAME)
-
-ds = Datastore.get(ws, DATASTORE_NAME)
-
-# === Load Dataset ===
-dataset = Dataset.get_by_name(ws, "final_merged_predictions")
-
-# === Prepare local folders ===
-os.makedirs(input_path, exist_ok=True)
-os.makedirs(output_path, exist_ok=True)
-
-# === Step 1: Download original dataset locally ===
-dataset.download(target_path=input_path, overwrite=True)
-print(f"📥 Downloaded dataset to: {input_path}")
-
-# === Step 2: Apply logic and save updated files ===
-for file in os.listdir(input_path):
-    if file.endswith(".parquet"):
-        input_file = os.path.join(input_path, file)
-        output_file = os.path.join(output_path, file)
-
-        df = pd.read_parquet(input_file)
-
-        # Apply update condition
-        mask = (
+mask = (
             df["CMPNT_MATL_NUM"].notna() &
-            (df["AI_FINAL_CATEGORY"].str.upper() != "OTHER") &
-            df["AI_MATCHING_REASON_FINAL_CATEGORY"].isna()
+            (df["AI_FINAL_SUBCATEGORY"].str.upper() != "OTHER") &
+            df["AI_MATCHING_REASON_FINAL_SUBCATEGORY"].isna()
         )
-
-        matched_count = mask.sum()
-        print(f"🔍 {file} → {matched_count} rows matched for update.")
-
-        df.loc[mask, "AI_MATCHING_REASON_FINAL_CATEGORY"] = "direct_mapping"
-        df.loc[mask, "AI_FINAL_CATEGORY_CONFIDENCE"] = 1
-
-        df.to_parquet(output_file, index=False)
-        print(f"✅ Updated: {file}")
-
-# === Step 3: Upload updated files back to Azure ===
-print(f"⏫ Uploading to: {target_blob_path}")
-ds.upload(
-    src_dir=output_path,
-    target_path=target_blob_path,
-    overwrite=True,
-    show_progress=True
-)
-
-print(f"🎉 Upload complete. Files saved to Azure path: {target_blob_path}")
+matched_count = mask.sum()
+print(f"🔍  {matched_count} rows matched for update.")
+# View the first few rows
+print(df.head(0))
