@@ -1,0 +1,7 @@
+Project,Summary,Project Lead,Priority,Assignee,Created
+Video Translation,Project kickoff: Understanding the objective of translating internal training videos into multiple languages.,Arvind Chavan,High,Kiran,"June, 2025"
+Video Translation,Source videos identified. These are currently in English and used for internal training.,Arvind Chavan,High,Kiran,"June, 2025"
+Video Translation,First sample output generated using speech-to-text and translation pipeline. Output reviewed and accepted.,Arvind Chavan,High,Kiran,"June, 2025"
+Video Translation,"Working on Azure SDK integration for speech recognition, translation, and speech synthesis.",Arvind Chavan,High,Kiran,"June, 2025"
+Video Translation,"Dashboard development started to enable interface for video upload, language selection, and translation monitoring.",Arvind Chavan,High,Kiran,"June, 2025"
+Video Translation,"Next steps include managing language-specific voices, syncing subtitles, and testing output accuracy and latency.",Arvind Chavan,High,Kiran,"June, 2025"
