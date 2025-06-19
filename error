@@ -2,37 +2,36 @@ from azureml.core import Workspace, Datastore
 import os
 from datetime import datetime
 
-# === Config ===
+# === Azure ML Config ===
 SUBSCRIPTION_ID = "a8d518a9-4587-4ba2-9a60-68b980c2f000"
 RESOURCE_GROUP = "AZR-WDZ-DTO-AML-Development"
 WORKSPACE_NAME = "AML-DTO-Marmot-dev"
 DATASTORE_NAME = "xbomrefadlsg2"
 
-# === Local and blob path ===
+# === Paths ===
 local_folder = "./data/final_merged_predictions_updated"
 blob_output_path = f"hbom_category_prediction/hbom_category_prediction_{datetime.today().strftime('%d%m%Y')}_updated/"
 
-# === Connect to workspace and datastore ===
+# === Get workspace and datastore ===
 ws = Workspace(subscription_id=SUBSCRIPTION_ID,
                resource_group=RESOURCE_GROUP,
                workspace_name=WORKSPACE_NAME)
 
-datastore = Datastore.get(ws, DATASTORE_NAME)
+datastore_wrapper = Datastore.get(ws, DATASTORE_NAME)
 
-# === Collect full paths of parquet files ===
+# 💡 Use the inner ._datastore attribute to access working method
 files_to_upload = [
     os.path.join(local_folder, f)
     for f in os.listdir(local_folder)
     if f.endswith(".parquet")
 ]
 
-# === Upload via workspace blob client (Gen2 compatible) ===
-datastore.upload_files(
+datastore_wrapper._datastore.upload_files(
     files=files_to_upload,
     target_path=blob_output_path,
-    relative_root=local_folder,
     overwrite=True,
-    show_progress=True
+    show_progress=True,
+    relative_root=local_folder
 )
 
-print(f"✅ Successfully uploaded {len(files_to_upload)} files to: {blob_output_path}")
+print(f"✅ Uploaded {len(files_to_upload)} files to Azure Data Lake Gen2: {blob_output_path}")
