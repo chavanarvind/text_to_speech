@@ -1,91 +1,207 @@
-# Minimal pipeline with Data Pull and Direct Mapping Only
+import argparse
+import os
+import pandas as pd
+from azureml.core import Run, Dataset
 
-from azureml.core import Workspace, Environment, Experiment
-from azureml.pipeline.core import Pipeline, PipelineData
-from azureml.pipeline.steps import PythonScriptStep
-from azureml.core.runconfig import RunConfiguration
-from azureml.data.datapath import DataPath
-from azureml.data import OutputFileDatasetConfig
-from azureml.core import Dataset, Datastore
+# === Define join and mapping keys (you may override via args/config) ===
+DIRECT_MAP_KEY_1 = "Direct Mapping"
+DIRECT_MAP_KEY_2 = "Direct Mapping"
+JOIN_COL_1 = "CMPNT_CAT_CD_DESC"
+JOIN_COL_2 = "CMPNT_MATL_TYPE_CD"
+KEY_COLS = ["SRC_SYS_CD", "MATL_NUM", "PLNT_CD", "CMPNT_MATL_NUM"]
 
-from datetime import datetime
 
-today = datetime.today().strftime("%d%m%Y")
+def load_data(parquet_dir, mapping_csv_dir):
+    # Pick ONLY the first .parquet file in the input folder
+    files = [f for f in os.listdir(parquet_dir) if f.endswith(".parquet")]
+    if not files:
+        raise FileNotFoundError(f"No parquet file found in input: {parquet_dir}")
+    
+    first_file = os.path.join(parquet_dir, files[0])
+    print(f"[INFO] Processing only: {first_file}")
+    df = pd.read_parquet(first_file, columns=[
+    "CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD",
+    "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD"])
+    df = df[df['CMPNT_MATL_DESC'].notna()]
+    df = df.drop_duplicates(subset=["CMPNT_MATL_NUM"])
+    # Load mapping CSV
+    csv_files = [f for f in os.listdir(mapping_csv_dir) if f.endswith(".csv")]
+    if not csv_files:
+        raise FileNotFoundError(f"No CSV found in mapping dir: {mapping_csv_dir}")
+    csv_path = os.path.join(mapping_csv_dir, csv_files[0])
+    mapping_df = pd.read_csv(csv_path)
 
-# Workspace config
-SUBSCRIPTION_ID = "a8d518a9-4587-4ba2-9a60-68b980c2f000"
-RESOURCE_GROUP = "AZR-WDZ-DTO-AML-Development"
-WORKSPACE_NAME = "AML-DTO-Marmot-dev"
+    return df, mapping_df
 
-ws = Workspace(
-    subscription_id=SUBSCRIPTION_ID,
-    resource_group=RESOURCE_GROUP,
-    workspace_name=WORKSPACE_NAME
+    
+
+
+def ensure_ai_columns(df):
+    expected_cols = [
+        'AI_FINAL_CATEGORY', 'AI_FINAL_CATEGORY_CONFIDENCE', 'AI_MATCHING_REASON_FINAL_CATEGORY',
+        'AI_FINAL_SUBCATEGORY', 'AI_FINAL_SUBCATEGORY_CONFIDENCE', 'AI_MATCHING_REASON_FINAL_SUBCATEG'
+    ]
+    for col in expected_cols:
+        if col not in df.columns:
+            df[col] = None
+    return df
+
+
+def apply_existing_ai_overrides(df):
+    df['skip_category_mapping'] = (
+        df['AI_FINAL_CATEGORY'].notna() & df['AI_FINAL_CATEGORY'].astype(str).str.strip().ne('') &
+        df['AI_FINAL_CATEGORY_CONFIDENCE'].notna() & df['AI_MATCHING_REASON_FINAL_CATEGORY'].notna()
+    )
+    df['skip_subcategory_mapping'] = (
+        df['AI_FINAL_SUBCATEGORY'].notna() & df['AI_FINAL_SUBCATEGORY'].astype(str).str.strip().ne('') &
+        df['AI_FINAL_SUBCATEGORY_CONFIDENCE'].notna() & df['AI_MATCHING_REASON_FINAL_SUBCATEG'].notna()
+    )
+    df.loc[df['skip_category_mapping'], 'Mapped_File_Category'] = df.loc[df['skip_category_mapping'], 'AI_FINAL_CATEGORY']
+    df.loc[df['skip_subcategory_mapping'], 'Mapped_File_Subcategory'] = df.loc[df['skip_subcategory_mapping'], 'AI_FINAL_SUBCATEGORY']
+    return df
+
+
+def clean_mapping_df(mapping_df, key_col, value_col):
+    mapping_df.columns = mapping_df.columns.str.strip()
+    mapping_df[key_col] = mapping_df[key_col].astype(str).str.upper().str.strip()
+    mapping_df[value_col] = mapping_df[value_col].astype(str).str.strip()
+    df_map = mapping_df[[key_col, value_col]].drop_duplicates()
+    return df_map[df_map[value_col].notna() & df_map[value_col].ne("")]
+
+
+def map_values(df, map_df1, map_df2, join_col1, join_col2, key1, key2, value_col, output_col):
+    original_len = len(df)
+
+    # Normalize keys in mapping tables
+    map_df1[key1] = map_df1[key1].astype(str).str.upper().str.strip()
+    map_df2[key2] = map_df2[key2].astype(str).str.upper().str.strip()
+
+    df[join_col1] = df[join_col1].astype(str).str.upper().str.strip()
+    df[join_col2] = df[join_col2].astype(str).str.upper().str.strip()
+
+    # Build lookup dictionaries
+    map_dict1 = dict(zip(map_df1[key1], map_df1[value_col]))
+    map_dict2 = dict(zip(map_df2[key2], map_df2[value_col]))
+
+    # Fill from first key
+    df[output_col] = df[join_col1].map(map_dict1)
+
+    # Fill missing from second key
+    missing_mask = df[output_col].isna() | df[output_col].astype(str).str.strip().eq("")
+    df.loc[missing_mask, output_col] = df.loc[missing_mask, join_col2].map(map_dict2)
+
+    assert len(df) == original_len, "[ERROR] Row count changed after mapping!"
+    return df
+
+
+def add_flags(df):
+    df['Mapped_File_Category Filled'] = df['Mapped_File_Category'].notna() & df['Mapped_File_Category'].astype(str).str.strip().ne("")
+    df['Mapped_File_Subcategory Filled'] = df['Mapped_File_Subcategory'].notna() & df['Mapped_File_Subcategory'].astype(str).str.strip().ne("")
+
+    df['category_matching_reason'] = df.apply(
+        lambda row: row['AI_MATCHING_REASON_FINAL_CATEGORY'] if pd.notna(row['AI_MATCHING_REASON_FINAL_CATEGORY'])
+        else ('direct_mapping' if row['Mapped_File_Category Filled'] else 'unmapped'), axis=1
+    )
+    df['Final Category Confidence Score'] = df.apply(
+        lambda row: row['AI_FINAL_CATEGORY_CONFIDENCE'] if pd.notna(row['AI_FINAL_CATEGORY_CONFIDENCE'])
+        else (1.0 if row['Mapped_File_Category Filled'] else None), axis=1
+    )
+
+    df['subcategory_matching_reason'] = df.apply(
+        lambda row: row['AI_MATCHING_REASON_FINAL_SUBCATEG'] if pd.notna(row['AI_MATCHING_REASON_FINAL_SUBCATEG'])
+        else ('direct_mapping' if row['Mapped_File_Subcategory Filled'] else 'unmapped'), axis=1
+    )
+    df['Final Subcategory Confidence Score'] = df.apply(
+        lambda row: row['AI_FINAL_SUBCATEGORY_CONFIDENCE'] if pd.notna(row['AI_FINAL_SUBCATEGORY_CONFIDENCE'])
+        else (1.0 if row['Mapped_File_Subcategory Filled'] else None), axis=1
+    )
+
+    df['needs_model'] = ~(df['Mapped_File_Category Filled'] & df['Mapped_File_Subcategory Filled'])
+    df['needs_category_model'] = ~df['Mapped_File_Category Filled']
+    df['needs_subcategory_model'] = ~df['Mapped_File_Subcategory Filled']
+    return df
+
+def register_key_output(df, input_path, output_path, ws):
+    try:
+        input_cols = pd.read_parquet(input_path).columns
+        missing = [col for col in KEY_COLS if col not in input_cols]
+        if not missing:
+            key_df = pd.read_parquet(input_path, columns=KEY_COLS).drop_duplicates()
+            key_df.to_parquet(output_path, index=False)
+            datastore = ws.get_default_datastore()
+            datastore.upload_files([output_path], "mapped_data/key_reference/", overwrite=True)
+            dataset = Dataset.Tabular.from_parquet_files([(datastore, f"mapped_data/key_reference/{os.path.basename(output_path)}")])
+            dataset.register(ws, name="bom_key_reference_dataset", description="Key columns to remap BOM", create_new_version=True)
+            print("✅ Registered key reference dataset")
+        else:
+            print(f"[INFO] Skipped key output — missing columns: {missing}")
+    except Exception as e:
+        print(f"[ERROR] Failed to register key columns: {e}")
+
+def finalize_output(df, output_path, ws):
+    df['AI_FINAL_CATEGORY'] = df['Mapped_File_Category']
+    df['AI_FINAL_CATEGORY_CONFIDENCE'] = df['Final Category Confidence Score']
+    df['AI_MATCHING_REASON_FINAL_CATEGORY'] = df['category_matching_reason']
+    df['AI_FINAL_SUBCATEGORY'] = df['Mapped_File_Subcategory']
+    df['AI_FINAL_SUBCATEGORY_CONFIDENCE'] = df['Final Subcategory Confidence Score']
+    df['AI_MATCHING_REASON_FINAL_SUBCATEG'] = df['subcategory_matching_reason']
+
+    df.drop(columns=[
+        'Mapped_File_Category', 'Final Category Confidence Score', 'category_matching_reason',
+        'Mapped_File_Subcategory', 'Final Subcategory Confidence Score', 'subcategory_matching_reason'
+    ], inplace=True, errors='ignore')
+
+    output_file = os.path.join(args.final_output, "final_output.parquet")
+    df.to_parquet(output_file, index=False)
+    print(f"[INFO] Saved final output to: {output_file}")
+
+   # Optional: register dataset manually using known datastore path
+    dataset = Dataset.Tabular.from_parquet_files(
+    path=[(ws.get_default_datastore(), f"hbom_category_prediction/hbom_category_prediction_{today}/final_output.parquet")])
+    dataset.register(
+    workspace=ws,
+    name="final_mapped_dataset",
+    description="Final mapped output",
+    create_new_version=True
 )
+print("✅ Registered as 'final_mapped_dataset'")
 
-compute_name = "llm-gpu-cluster-2"
-env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
-run_config = RunConfiguration()
-run_config.target = compute_name
-run_config.environment = env
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_path", type=str, required=True)
+    parser.add_argument("--mapping_csv", type=str, required=True)
+    parser.add_argument("--key_output", type=str, default="key_reference_output.parquet")
+    parser.add_argument("--final_output", type=str, default="final_mapped_output.parquet")
+    args = parser.parse_args()
 
-default_ds = ws.get_default_datastore()
+    run = Run.get_context()
+    ws = run.experiment.workspace
 
-# === Shared Outputs ===
-data_step1_out = PipelineData(name="data_step1_out", is_directory=True)
-data_step1a_mapped = PipelineData(name="data_step1a_mapped", is_directory=True)
-data_step1a_key_output = OutputFileDatasetConfig(
-    name='data_step1a_key_output',
-    destination=(default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/")
-)
+    df, mapping_df = load_data(args.input_path, args.mapping_csv)
+    df = ensure_ai_columns(df)
+    df = apply_existing_ai_overrides(df)
 
-# === Mapping CSV as input ===
-default_ds.upload_files(
-    files=['./local_data/high_conf_direct_mapping.csv'],
-    target_path='high_conf_map',
-    overwrite=True,
-    show_progress=True
-)
-high_conf_dataset = Dataset.File.from_files((default_ds, 'high_conf_map'))
-high_conf_mount = high_conf_dataset.as_named_input('high_conf_map').as_mount()
+    # Category Mapping
+    cat_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Category')
+    cat_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Category')
+    df = map_values(df, cat_map_1, cat_map_2, JOIN_COL_1, JOIN_COL_2, DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Category', 'Mapped_File_Category')
 
-# === Step 1: Pull Harmonized BOM Data ===
-data_pull_step = PythonScriptStep(
-    name="Step 1 - Pull Dataset",
-    script_name="step_1_data_pull.py",
-    source_directory="scripts",
-    arguments=["--output_path", data_step1_out],
-    outputs=[data_step1_out],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
+    # Subcategory Mapping
+    sub_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Subcategory')
+    sub_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory')
+    df = map_values(df, sub_map_1, sub_map_2, JOIN_COL_1, JOIN_COL_2, DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory', 'Mapped_File_Subcategory')
 
-# === Step 1a: Direct Mapping (from canvas script) ===
-direct_mapping_step = PythonScriptStep(
-    name="Step 1a - Direct Mapping Logic",
-    script_name="step_1a_direct_mapping.py",
-    source_directory="scripts",
-    inputs=[data_step1_out, high_conf_mount],
-    arguments=[
-        "--input_path", data_step1_out,
-        "--mapping_csv", high_conf_mount,
-        "--key_output", data_step1a_key_output,
-        "--final_output", data_step1a_mapped
-    ],
-    outputs=[data_step1a_mapped, data_step1a_key_output],
-    runconfig=run_config,
-    compute_target=compute_name,
-    allow_reuse=False
-)
+    df = add_flags(df)
+    register_key_output(df, args.input_path, args.key_output, ws)
+    finalize_output(df, args.final_output, ws)
 
-# === Build and Submit Pipeline ===
-pipeline = Pipeline(workspace=ws, steps=[
-    data_pull_step,
-    direct_mapping_step
-])
+    print("=== DEBUG SUMMARY ===")
+    print(f"Total input rows processed: {len(df)}")
+    print(f"Final Category Filled: {df['Mapped_File_Category Filled'].sum()}")
+    print(f"Final Subcategory Filled: {df['Mapped_File_Subcategory Filled'].sum()}")
+    print(f"Rows needing model: {df['needs_model'].sum()}")
+    print(f" - Category model only: {df['needs_category_model'].sum()}")
+    print(f" - Subcategory model only: {df['needs_subcategory_model'].sum()}")
 
-pipeline.validate()
-experiment = Experiment(ws, "direct_mapping_pipeline")
-pipeline_run = experiment.submit(pipeline)
-pipeline_run.wait_for_completion(show_output=True)
+if __name__ == "__main__":
+    main()
