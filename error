@@ -1,7 +1,11 @@
 df = pd.read_parquet(file_path, columns=[
-            "CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD",
-            "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD"
-        ])
-        print(f"[INFO] Initial rows in input: {len(df)}")
-        df = df[df['CMPNT_MATL_DESC'].notna()].drop_duplicates()
-        print(f"[INFO] After dropping NA/duplicates: {len(df)}")
+    "CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD",
+    "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD"
+])
+print(f"[INFO] Initial rows in input: {len(df)}")
+
+# Drop rows with missing descriptions, then deduplicate by CMPNT_MATL_NUM
+df = df[df['CMPNT_MATL_DESC'].notna()]
+df = df.sort_values(by="CMPNT_MATL_NUM")  # optional: stable sort
+df = df.drop_duplicates(subset=["CMPNT_MATL_NUM"])
+print(f"[INFO] After dropping NA and duplicates by CMPNT_MATL_NUM: {len(df)}")
