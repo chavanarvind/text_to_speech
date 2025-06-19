@@ -1,21 +1,22 @@
 import os
 import pandas as pd
 
-def load_data(parquet_dir, mapping_csv_dir):
-    # Pick ONLY the first .parquet file in the input folder
-    files = [f for f in os.listdir(parquet_dir) if f.endswith(".parquet")]
-    if not files:
-        raise FileNotFoundError(f"No parquet file found in input: {parquet_dir}")
-    
-    first_file = os.path.join(parquet_dir, files[0])
-    print(f"[INFO] Processing only: {first_file}")
-    df = pd.read_parquet(first_file)
-
-    # Load mapping CSV
-    csv_files = [f for f in os.listdir(mapping_csv_dir) if f.endswith(".csv")]
-    if not csv_files:
-        raise FileNotFoundError(f"No CSV found in mapping dir: {mapping_csv_dir}")
-    csv_path = os.path.join(mapping_csv_dir, csv_files[0])
-    mapping_df = pd.read_csv(csv_path)
-
-    return df, mapping_df
+Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error:     finalize_output(df, args.final_output, ws)
+  File "step_1a_direct_mapping.py", line 156, in finalize_output
+    datastore.upload_files([output_path], "mapped_data/final_output/", overwrite=True)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/azureml/data/_dataset_deprecation.py", line 26, in wrapper
+    result = func(*args, **kwargs)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/azureml/data/azure_storage_datastore.py", line 978, in upload_files
+    self._get_upload_from_files(files, target_path, relative_root, False),
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/azureml/data/azure_storage_datastore.py", line 288, in _get_upload_from_files
+    raise UserErrorException("relative_root: '{}' is not part of the file_path: '{}'.".format(
+azureml.exceptions._azureml_exception.UserErrorException: UserErrorException:
+	Message: relative_root: 'mapped_data/final_output/' is not part of the file_path: '/mnt/azureml/cr/j/6e4196c0166c46548cf0dc1724b4f850/cap/data-capability/wd/INPUT_data_step1a_mapped_workspaceblobstore/azureml/d769d654-fcd8-4293-8d0a-006a715b56c7/data_step1a_mapped'.
+	InnerException None
+	ErrorResponse 
+{
+    "error": {
+        "code": "UserError",
+        "message": "relative_root: 'mapped_data/final_output/' is not part of the file_path: '/mnt/azureml/cr/j/6e4196c0166c46548cf0dc1724b4f850/cap/data-capability/wd/INPUT_data_step1a_mapped_workspaceblobstore/azureml/d769d654-fcd8-4293-8d0a-006a715b56c7/data_step1a_mapped'."
+    }
+}
