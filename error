@@ -1,17 +1,20 @@
-def load_data(parquet_dir, mapping_csv_dir):
-    # 🔍 Load all parquet files in the mounted input folder
-    parquet_files = glob.glob(os.path.join(parquet_dir, "*.parquet"))
-    if not parquet_files:
-        raise ValueError(f"No parquet files found in: {parquet_dir}")
-    
-    dfs = [pd.read_parquet(pq) for pq in parquet_files]
-    df = pd.concat(dfs, ignore_index=True)
-    print(f"[INFO] Total input rows from {len(parquet_files)} files: {len(df)}")
+import os
+import pandas as pd
 
-    # 🔍 Load mapping CSV from mounted directory
+def load_data(parquet_dir, mapping_csv_dir):
+    # Pick ONLY the first .parquet file in the input folder
+    files = [f for f in os.listdir(parquet_dir) if f.endswith(".parquet")]
+    if not files:
+        raise FileNotFoundError(f"No parquet file found in input: {parquet_dir}")
+    
+    first_file = os.path.join(parquet_dir, files[0])
+    print(f"[INFO] Processing only: {first_file}")
+    df = pd.read_parquet(first_file)
+
+    # Load mapping CSV
     csv_files = [f for f in os.listdir(mapping_csv_dir) if f.endswith(".csv")]
     if not csv_files:
-        raise ValueError(f"No CSV found in mapping dir: {mapping_csv_dir}")
+        raise FileNotFoundError(f"No CSV found in mapping dir: {mapping_csv_dir}")
     csv_path = os.path.join(mapping_csv_dir, csv_files[0])
     mapping_df = pd.read_csv(csv_path)
 
