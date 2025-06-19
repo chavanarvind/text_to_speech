@@ -1,3 +1,43 @@
+import os
+from azureml.core import Workspace, Dataset
+from datetime import datetime
+
+# === Azure ML Workspace Config ===
 SUBSCRIPTION_ID = "a8d518a9-4587-4ba2-9a60-68b980c2f000"
 RESOURCE_GROUP = "AZR-WDZ-DTO-AML-Development"
 WORKSPACE_NAME = "AML-DTO-Marmot-dev"
+
+# === Local folder and target path in blob ===
+local_folder = "./data/final_merged_predictions_updated"
+blob_target_path = f"hbom_category_prediction/final_predictions_updated_{datetime.today().strftime('%d%m%Y')}"
+
+# === Step 1: Connect to Azure ML workspace ===
+ws = Workspace(
+    subscription_id=SUBSCRIPTION_ID,
+    resource_group=RESOURCE_GROUP,
+    workspace_name=WORKSPACE_NAME
+)
+print(f"✅ Connected to workspace: {ws.name}")
+
+# === Step 2: Get default datastore (workspaceblobstore) ===
+datastore = ws.get_default_datastore()
+print(f"✅ Using datastore: {datastore.name}")
+
+# === Step 3: Upload files to blob storage ===
+datastore.upload(
+    src_dir=local_folder,
+    target_path=blob_target_path,
+    overwrite=True,
+    show_progress=True
+)
+print(f"📤 Uploaded files to blob path: {blob_target_path}")
+
+# === Step 4: Register uploaded files as dataset ===
+dataset = Dataset.File.from_files(path=(datastore, blob_target_path))
+dataset = dataset.register(
+    workspace=ws,
+    name="final_merged_predictions_updated",
+    description="Final merged predictions with AI category and subcategory",
+    create_new_version=True
+)
+print(f"✅ Registered dataset: final_merged_predictions_updated (version: {dataset.version})")
