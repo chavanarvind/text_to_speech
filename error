@@ -1,14 +1,47 @@
-Project	Summary		Project lead	Priority	Assignee	Created
-DFN	Took over the project through a structured handover process, ensuring a clear understanding of the algorithm and its implementation.	DFN - Took over the project through a structured handover process, ensuring a clear understanding of the algorithm and its implementation.	Shridhar Raikar	Medium	Manisha	December, 2024
-DFN	Executed sample runs to understand the algorithm, UI and analyse outcomes.	DFN - Executed sample runs to understand the algorithm, UI and analyse outcomes.	Shridhar Raikar	Medium	Manisha	January
-DFN	Executed sample runs to understand the algorithm, UI and analyse outcomes.	DFN - Executed sample runs to understand the algorithm, UI and analyse outcomes.	Shridhar Raikar	Medium	Manisha	February
-MIT	Took over the project through a structured handover process, ensuring a clear understanding of the algorithm and its implementation.	MIT - Took over the project through a structured handover process, ensuring a clear understanding of the algorithm and its implementation.	Shridhar Raikar	Medium	Manisha	26, February
-MIT	Executed sample runs to validate the algorithm’s performance and verify expected outcomes.	MIT - Executed sample runs to validate the algorithm’s performance and verify expected outcomes.	Shridhar Raikar	Medium	Manisha	17, March
-DFN	Data Preparation for APAC (LCB Hub)	DFN - Data Preparation for APAC (LCB Hub)	Shridhar Raikar	Medium	Manisha	25, March
-DFN	Data Preparation for APAC (TPPHub)	DFN - Data Preparation for APAC (TPPHub)	Shridhar Raikar	Medium	Manisha	25, March
-DFN	Cost Data Preparation for PH	DFN - Cost Data Preparation for PH	Shridhar Raikar	Medium	Manisha	15, April
-MIT	Run for APAC (TPP Hub)	MIT - Run for APAC (TPP Hub)	Shridhar Raikar	Medium	Manisha	15, April
-MIT	Run for APAC (LCB Hub)	MIT - Run for APAC (LCB Hub)	Shridhar Raikar	Medium	Manisha	22, April
-MIT	Run for APAC (Both Hub)	MIT - Run for APAC (Both Hub)	Shridhar Raikar	Medium	Manisha	May
-DFN	Safety stock Data Preparation for PH	DFN - Safety stock Data Preparation for PH	Shridhar Raikar	Medium	Manisha	May
-DFN	Working on enhancement in code to add more features, easy to use and optimized	DFN - Working on enhancement in code to add more features, easy to use and optimized	Shridhar Raikar	Medium	Manisha	June
+Hi Team,
+
+Here are the latest updates:
+•	We now have access to the required data in Databricks. Today, Niharika shared a sample of the target column.
+•	We plan to start building the skeleton for multiple predictive models from 11th April for sample data.
+•	We're still awaiting access to the Azure Datastore, which is required to build the pipeline and process the data – closing it before 14th Apr
+
+Thanks,
+Arvind
+From: Chavan, Arvind [Non-Kenvue] 
+Sent: Tuesday, April 1, 2025 8:14 PM
+To: Campbell, Katherine <KCampbe8@kenvue.com>; KOPARDE, KIRAN <kkoparde@kenvue.com>; Vidya Shankar, Niharika <NVidyaSh@kenvue.com>; Chellavel, SRINI <SChellav@kenvue.com>; Amin, Sana <SAmin17@kenvue.com>; FODOR, MEGAN <MFodor@kenvue.com>
+Cc: Espadas, Gabriel <GEspadas@kenvue.com>
+Subject: MoM (4th APR 2025) - RPM Categorization
+
+Agenda:
+
+•	Understanding the Problem Area
+•	Expectations from the Team – Category/subcategory mapping
+•	Input Data Details and Target Column Mapping
+•	Validation and Accuracy Improvement
+•	Timeline for Output Delivery
+
+
+Topic	Details	Responsible
+Understanding Problem Area	Gabriel walked through the problem area, explaining challenges and key objectives.	Gabriel
+Expectations from the Team	Srini explained the expectations related to Category: Chemical/Package and 
+subcategory-plastic, glass and paper Mapping using NLP.	Srini
+Business Impact Explained	Overall improvement in category and subcategory mapping will enhance data quality and 
+ensure accurate tax payment from the business.	Srini
+Input Data Details	Niharika shared input data details and table name(sc_core.harmonized_bom_data_asset).	Niharika
+ 	- Discussed which columns can be explored for higher accuracy.	Gabriel
+ 	- Niharika will share final mapping of the target column (WIP).	Niharika
+Output Validation	Need to coordinate with Magan and the Data Team for output validation.	Magan, Team
+Timeline Discussion	Initial output using NLP model to be shared in two sprints.	Team-Arvind
+ 	Final timeline for output needs to be discussed.	Team
+
+Pending Steps:
+
+Next Steps	Responsible
+Finalize the target column mapping	Niharika
+Prepare a sample output using the NLP model
+- Data understanding 
+- NLP model approach and steps
+-EDA analysis
+- Sample output	Arvind
+Coordinate with Magan and Data Team for output validation	WIP
