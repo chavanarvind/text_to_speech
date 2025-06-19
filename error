@@ -1,18 +1,504 @@
-# Path to your Parquet file
-file_path = './data/test1.parquet'
-
-# Read the file
-df = pd.read_parquet(file_path)
-
-import pandas as pd
-pd.set_option('display.max_columns', None)
-
-mask = (
-            df["CMPNT_MATL_NUM"].notna() &
-            (df["AI_FINAL_SUBCATEGORY"].str.upper() != "OTHER") &
-            df["AI_MATCHING_REASON_FINAL_SUBCATEGORY"].isna()
-        )
-matched_count = mask.sum()
-print(f"🔍  {matched_count} rows matched for update.")
-# View the first few rows
-print(df.head(0))
+CMPNT_CAT_CD_DESC	AI_FINAL_CATEGORY
+Acetaminophen or par	CHM
+Acetaminophen/aspiri	CHM
+Acetaminophen/diphen	CHM
+Acetylsalicylic Acid	CHM
+Acids / Buffers / Sa	CHM
+Acids/Buffers/Salts	CHM
+ACTIVE INGREDIENTS            	CHM
+Active Substances	CHM
+Actives	CHM
+ACTIVES                       	CHM
+Adhesive dry bandage	FNW
+ADVERT/PROMO ITEMS	PKG
+Airlaid	FNW
+Alcohol/benzoic acid	CHM
+ALCOHOLS                      	CHM
+Alcohols/Solvent	CHM
+Aluminium Foil	PKG
+Alu-tubes	PKG
+Anthelmintic benzimi	CHM
+ANTIPERSPIRANTS AND	CHM
+ANTISEPTICS	CHM
+Apertured Films	FNW
+API	API
+API - generic	API
+API-Generic	API
+Ascorbic acid	CHM
+Baby Lotion and Cream         	Liquids and Creams
+Baby Oil                      	Liquids and Creams
+BARRIER FILM LPDE 30my-40my   	FNW
+Barrier&Pouch Films	FNW
+BEBE YC MOISTURIZER LOTION    	Liquids and Creams
+BENYLIN	CHM
+BENYLIN                       	CHM
+BENYLIN SCHEDULE 0            	CHM
+Benzocaine/camphor/e	CHM
+Blsters/ThermPlastic	PKG
+Bonded NW	FNW
+Booklets	PKG
+BORRACHAS, PLASTICOS	PKG
+Bottles	PKG
+Bottles (HDPE) DM	PKG
+Bottles (PET) DM	PKG
+Bottles (PP)	PKG
+BOTTLES HDPE                  	PKG
+Bottles HPDE	PKG
+Bottles PET	PKG
+BOTTLES PET                   	PKG
+BOTTLES PVC                   	PKG
+BULK SUNCARE                  	CHM
+Caffeine/sodium benz	CHM
+Caixa Papelão	PKG
+Cane sugar	CHM
+CAP SLEEVES                   	PKG
+Caps	PKG
+CAPS PP                       	PKG
+Caps/Closures/Lids	PKG
+Caps/Closures/Lids D	PKG
+Card Leaflets	PKG
+Cartons	PKG
+Cetirizine hydrochlo	CHM
+Chem Flavor,Dye,Frag	CHM
+Chem, Other	CHM
+Chem, Surfactants	CHM
+Chewing Gum Base	CHM
+Child Resistant Caps	PKG
+Chlorpheniramine mal	CHM
+CHM – Soapchips–Veg	CHM
+CHM - Sweeteners	CHM
+CHM - Talc	CHM
+CHM-Acids/Buffers/Sa	CHM
+CHM-Acids/Buffers/Salts       	CHM
+CHM-Actives	CHM
+CHM-Actives/Naturals          	CHM
+CHM-Alcohols/Solvent	CHM
+CHM-Alcohoms/solvents         	CHM
+CHM-API	API
+CHM-API-Generic	API
+CHM-Conditioners/Emo	CHM
+CHM-Dyes/Colorants	CHM
+CHM-Dyes/Colorants            	CHM
+CHM-Emulsifiers	CHM
+CHM-Exfolients	CHM
+CHM-Exfolients                	CHM
+CHM-Fatty Acids/Fatt	CHM
+CHM-Fatty Acids/Fatty Alcohols	CHM
+CHM-Flavors/Fragranc	CHM
+CHM-Flavors/Fragrances        	CHM
+CHM-Glycerin	CHM
+CHM-Inorganic	CHM
+CHM-Mineral Oil/Petr	CHM
+CHM-Mineral Oil/Petrolatum    	CHM
+CHM-Naturals	CHM
+CHM–Naturals/Actives	CHM
+CHM-Other Chemicals	CHM
+CHM-Other Chemicals (waxes)   	CHM
+CHM-Preservatives	CHM
+CHM-Preservatives             	CHM
+CHM-Silicones	CHM
+CHM-Silicones                 	CHM
+CHM-Sunscreens	CHM
+CHM-Surfactant(Com)	CHM
+CHM-Surfactants	CHM
+CHM-Surfactants (Commodity)   	CHM
+CHM-Sweeteners	CHM
+CHM-Talc	CHM
+CHM-Thickeners	CHM
+CHM-Vitamins	CHM
+Closures/Caps/Pumps	PKG
+Cobert.Plástica/Film	PKG
+COLORANTS                     	CHM
+Colouring Agent	CHM
+Combination antacid,	CHM
+Condition/Emollients	CHM
+Conditioner / Emolli	CHM
+CONDITIONERS                  	CHM
+Conditioners/Emolnts	CHM
+CONSTRUCTION ADHESIVES        	FNW
+Corn Derivatives	CHM
+Corn starch or corn	CHM
+Cornstarch	CHM
+Corrugated	PKG
+Corrugated and other	PKG
+CORRUGATED BOARD DIE-CUT BOXES	PKG
+Corrugated Boxes	PKG
+Corrugated Packaging Material	PKG
+Cosm Saleable Samp	PKG
+Cosmetics	PKG
+COSMETICS - LIPS	PKG
+Cosmetics Open Stock	PKG
+Cosmetics Promo	PKG
+Cosmetics Promo-acct	PKG
+Cotton	FNW
+COTTON WOOL PRODUCTS	FNW
+Cover                         	PKG
+CT Packaging Materials        	PKG
+Dairy/Eggs and Subs	CHM
+Dental Floss                  	FNW
+Dextran 70/hydroxypr	CHM
+Dextromethorphan/qui	CHM
+Dimethicone + metocl	CHM
+Dyes / Colorants	CHM
+Dyes/Colorants	CHM
+Edta/sodium chloride	CHM
+Embalagens Rígidas	PKG
+EMOLLIENTS                    	CHM
+Emulsifiers	CHM
+EMULSIFIERS                   	CHM
+Enzymes	CHM
+Ethyl alcohol antise	CHM
+EXFOLIANTS/MASKS	CHM
+Exfolients	CHM
+Exp Packaging HALB	PKG
+Faltschachteln                	PKG
+Famotidine	CHM
+Fat Acids/Fat Alchls	CHM
+FATS                          	CHM
+Fats and Fat Derivatives	CHM
+Fatty Acids/Alcohols	CHM
+Fiber(ex Pulp&Rayon)	FNW
+Fibers                        	FNW
+Fibers (T.B./Floss)	FNW
+Film Barex	FNW
+Film, Tape	PKG
+Filme PVC	PKG
+FILME/EMB/PAPEL/ LAM	PKG
+Films (Flow Wrap)	PKG
+Films (Other)	PKG
+Films (Paper)	PKG
+Films (Plastic)	PKG
+Films (Polybags)	PKG
+Films (PVC)	PKG
+Films and Foils	PKG
+Flavors / Fragrances	CHM
+Flavors/Fragrances	CHM
+Flavouring Agent	CHM
+Flavours and Colours	CHM
+Flavours or extracts	CHM
+Fluid nicotine	CHM
+FNW	FNW
+FNW-Adhesives	FNW
+FNW-Airlaid	FNW
+FNW-Apertured Films	FNW
+FNW-Barrier & Pouch	FNW
+FNW-Bonded NW	FNW
+FNW-Cotton	FNW
+FNW-Films (PE/PP)	FNW
+FNW-Needlepunch/Pads	FNW
+FNW-Other Nonwovens	FNW
+FNW-Pulp	FNW
+FNW-Rayon	FNW
+FNW-Release Paper	FNW
+FNW-Spunlace/Airlace	FNW
+FNW-Superabsorbents	FNW
+FNW-Wovens	FNW
+Foam Products	FNW
+Foil Bags	PKG
+Foil Bulk Gum	PKG
+Foils	PKG
+Fold Ctns,Pboard,Bxs	PKG
+Folded Labels	PKG
+Folding Cartons	PKG
+FRAGRANCES	CHM
+FRAGRANCES AND FLAVORS        	CHM
+Free Standing Insert	PKG
+Glass	PKG
+Glass Packaging	PKG
+Glycerin	CHM
+GLYCERINE                     	CHM
+HAIR - CONDITIONER/T	CHM
+HAIR - STYLING - NON	PKG
+Hand or body lotions	CHM
+Hydroxyethyl cellulo	CHM
+Ibuprofen	CHM
+Imodium                       	CHM
+Inject Molded Comps	PKG
+Injection Molded	PKG
+Inorganic	CHM
+Inorganic Substances	CHM
+Jars	PKG
+JH BABY COTTON BUDS           	FNW
+JH BABY MOISTURIZER LOTION    	CHM
+JH BABY MOISTURIZER OIL       	Liquids and Creams
+Kartons                       	PKG
+KETOPROFEN	CHM
+Label                         	PKG
+Label/Insert/Leaflet	PKG
+Label/Printed Insert	PKG
+Labels	PKG
+LABELS PAPER                  	PKG
+LABELS PAPER GENERIC          	PKG
+LABELS PLAST. FLEXO-SILK+FOIL 	PKG
+LABELS PLAST. FLEXO-SILKSCREEN	PKG
+LABELS PLASTIC LETTER PRES    	PKG
+LABELS PLASTIC OFFSET         	PKG
+LABELS PLASTIC SILKSCREEN     	PKG
+Laminate Tubes	PKG
+Laminates and Filters	PKG
+Laminates for Patch	PKG
+Leaflet                       	PKG
+Leaflets	PKG
+LIDS PP                       	PKG
+Local & import. Caps	PKG
+Loperamide	CHM
+LPM LIQUID SOAP               	Liquids and Creams
+MAN_OTHER LABELS              	PKG
+MAN_PRINTED CARTONS           	PKG
+MAN-ACTIVE MODIFIER           	CHM
+MAN-ACTIVE NATURAL            	CHM
+MAN-BOTTLES HDPE              	PKG
+MAN-BOTTLES PETG              	PKG
+MAN-BOTTLES PP                	PKG
+MAN-BUFFER                    	CHM
+MAN-CLOSURES LDPE CAP (ACT)   	PKG
+MAN-CLOSURES PP               	PKG
+MAN-COLORANT                  	CHM
+MAN-CONDITIONERS              	CHM
+MAN-CORRUGATED BOARD DIE-CUT  	PKG
+MAN-CORRUGATED BOARD FEFCO    	PKG
+MAN-DIP TUBES BOTTLE INSERTS  	PKG
+MAN-DRUG ACTIVE               	CHM
+MAN-EMOLIENT                  	CHM
+MAN-EMULSIFIERS               	CHM
+MAN-EXFOLIENTS                	CHM
+MAN-FATTY ACID                	CHM
+MAN-FLAVORS & FRAGRANCES      	CHM
+MAN-GLYCERINE                 	CHM
+MAN-INORGANIC                 	CHM
+MAN-LOTION                    	CHM
+MAN-MINERAL OIL               	CHM
+MAN-MISC PACKAGING            	PKG
+MAN-NATURALS                  	CHM
+MAN-OTHER CHEMICALS           	CHM
+MAN-PB SUN PROTECTION         	CHM
+MAN-PH 5.5 FACIAL WASH        	Liquids and Creams
+MAN-PH 5.5 SHOWER GEL         	CHM
+MAN-PLASTIC LABELS OFFSET     	PKG
+MAN-PLASTIC LABELS SILK SCREEN	PKG
+MAN-PRESERVATIVES ANTI-OXIDANT	CHM
+MAN-PUMPS                     	PKG
+MAN-SHAMPOO/CONDITIONER       	CHM
+MAN-SILICONES                 	CHM
+MAN-SOLVENT                   	CHM
+MAN-SRINK WRAP FILM           	PKG
+MAN-SUNSCREENS                	CHM
+MAN-SURFACTANTS               	CHM
+MAN-TAPES                     	PKG
+MAN-THICKENER                 	CHM
+MAN-VITAMINS                  	CHM
+MAN-WAX                       	CHM
+Metal Foils	PKG
+Metals/Tin	PKG
+Microlax Tubes	PKG
+Min Oil/Petrolatum	CHM
+MINERAL OIL                   	CHM
+Mineral oil/oatmeal,	CHM
+Mineral Oil/Petrolat	CHM
+Misc, Packaging	PKG
+MISC.PACKAGING                	PKG
+Molded Parts, Custom	PKG
+Mouthwash	Liquids and Creams
+Narcotinum or noscap	CHM
+Naturals	CHM
+NATURALS                      	CHM
+Needlepunch/Padstock	FNW
+Nicotine	CHM
+Nicotine Resin	CHM
+Non Printed Pack Mat	PKG
+Non-potable water	CHM
+NONWOVEN BREATHABLE BACKSHEET 	FNW
+Nonwoven Covers	FNW
+NONWOVEN FFP                  	FNW
+NONWOVEN RETICULON            	FNW
+OGX CONDITIONER               	CHM
+OGX SHAMPOO                   	CHM
+OPP Film	PKG
+Other Active Substances	CHM
+Other Chemicals	CHM
+OTHER CHEMICALS               	CHM
+Other Corrugated	PKG
+Other Nonwovens	FNW
+Other Pack Material           	PKG
+Other Packaging	PKG
+OTH-Paper/Tissues	PKG
+OTH-Promotional Mate	PKG
+Pack Films, Paper	PKG
+Pack Films, Plastics	PKG
+Packaging	PKG
+Packaging boxes and	PKG
+Packaging Labels	PKG
+Packaging Materials           	PKG
+Packer Boxes	PKG
+Pallets	PKG
+PALLETS                       	PKG
+Paper, Copy	PKG
+Paper/Tissues	PKG
+Paper/Tissues(Other)	PKG
+PAPER-UNCOATD O/WRAP	PKG
+PH 5.5 SHOWER GEL             	Liquids and Creams
+PH5.5 Body Moisturising       	Liquids and Creams
+Pharmaceutical - Liq	Liquids and Creams
+PIGMENTS                      	CHM
+PK CORRUGATED BOARD           	PKG
+PK LABELS                     	PKG
+PK LEAFLET INSERT             	PKG
+PK pallet                     	PKG
+PK PRIMARY PACKAGING          	PKG
+PK SHRINKWRAP FILM            	PKG
+PKG	PKG
+PKG-Bottle(Gls&Almn)	PKG
+PKG-Bottle(HDPE)DBuy	PKG
+PKG-Bottles (HDPE)	PKG
+PKG-Bottles (HDPE)            	PKG
+PKG-Bottles (PET)	PKG
+PKG-Bottles (PET)             	PKG
+PKG-Bottles (PP)	PKG
+PKG-Bottles(PET)DBuy	PKG
+PKG-Cap/Closure DBuy	PKG
+PKG-Caps/Closures/Li	PKG
+PKG-Caps/Closures/Lids DM     	PKG
+PKG-Cartons	PKG
+PKG-Corrugated	PKG
+PKG-Corrugated                	PKG
+PKG-Films (Paper)	PKG
+PKG-Films (Plastic)	PKG
+PKG-Films (Polybags)	PKG
+PKG-Films (Primary)	PKG
+PKG-Films(Secondary)	PKG
+PKG-Foils	PKG
+PKG-Foils                     	PKG
+PKG-Injection Molded	PKG
+PKG-Inserts	PKG
+PKG-Jars	PKG
+PKG-Jars                      	PKG
+PKG-Labels	PKG
+PKG-Labels                    	PKG
+PKG-Labels/Inserts/L	PKG
+PKG-Leaflets	PKG
+PKG-Other Packaging	PKG
+PKG-Polybags	PKG
+PKG-Pumps	PKG
+PKG-Pumps Direct Buy	PKG
+PKG-Pumps-DM                  	PKG
+PKG-Sleeves	PKG
+PKG-Thermoformed Pac	PKG
+PKG-Tins	PKG
+PKG-Tubes	PKG
+PKG-Tubes (Aluminum)	PKG
+PKG-Tubes (Plastic)	PKG
+PKG-Tubes(Plastic)            	PKG
+PKG-Wrapper	PKG
+Plastic Bottles	PKG
+Plastic Film	PKG
+Plastic Ind Wrapper	PKG
+Polybags	PKG
+Polymer Syringes	PKG
+Potassium chloride/s	CHM
+Potassium sulphate	CHM
+POUCH FILM                    	FNW
+PP Tubes	PKG
+Preservatives	CHM
+PRESERVATIVES / ANTI-OXIDANTS 	CHM
+Printed	PKG
+PRINTED CARTONS               	PKG
+Printed Packaging Material	PKG
+PRINTING,B CARDS	PKG
+Promo Cut and Sew	PKG
+Promo Giftables	PKG
+Promo-Brand Preprice	PKG
+PROMOTIONAL DISPLAYS	PKG
+Promotional Material	PKG
+PROMOTIONS                    	PKG
+Pulp	FNW
+Pump Can	PKG
+Pumps	PKG
+PUMPS                         	PKG
+Pumps-DM	PKG
+PVC Film	PKG
+Rayon	FNW
+Release Paper	FNW
+RELEASE PAPER                 	FNW
+Resins & Plastics	PKG
+RM APERTURED FILM             	FNW
+RM FIBERS                     	FNW
+RM NON WOVEN                  	FNW
+RM OTHER CHEMICAL             	CHM
+RM PULP                       	FNW
+RM WRAPPER                    	PKG
+RM YARN                       	FNW
+RoC* Facial Moisturizer       	Liquids and Creams
+Savlon                        	Liquids and Creams
+Shampoos	Liquids and Creams
+Shrink Foil                   	PKG
+Shrinking film	PKG
+Silicones	CHM
+SILICONES                     	CHM
+Sleeves	PKG
+SLEEVES                       	PKG
+Slipsheets	PKG
+Soap Chips	CHM
+Sodium citrate	CHM
+Sodium hydroxide	CHM
+Spunlace/Airlace	FNW
+SRINK WRAP FILM               	PKG
+Sugar or sugar subst	CHM
+Sugers, Suger Derivatives and Polyls	CHM
+SUN PROTECTION PRODU	CHM
+SUNLESS TAN.-NPOWERE	CHM
+Sunscreens	CHM
+Superabsorbents	FNW
+Superabsorbents(SAP)	FNW
+Surfactants	CHM
+SURFACTANTS                   	CHM
+Sweeteners	CHM
+Sweets/Sweeteners	CHM
+SYNTHETIC POLYMERS            	CHM
+Talc	CHM
+Talco	CHM
+TE Label	PKG
+Thermoform Packaging	PKG
+Thickeners	CHM
+THICKENERS                    	CHM
+Tins	PKG
+Titanium dioxide	CHM
+TITANOREINE	CHM
+Tray	PKG
+Tubes	PKG
+Tubes (Aluminum)	PKG
+Tubes (Plastic)	PKG
+Tubetes / Tarugos	PKG
+UDI LABELS PLASTIC LETTER PRES	PKG
+Vitamins	CHM
+VITAMINS                      	CHM
+VITAMINS AND MINERAL	CHM
+Water (chemicals)	CHM
+Wax	CHM
+WIP COSMETIC                  	PKG
+WIP COTTON BUDS               	FNW
+WIP LISTERINE ALCOHOL         	CHM
+WIP OIL                       	Liquids and Creams
+WIP PH 5.5 SHOWER GEL         	Liquids and Creams
+WIP PREMIX COSMETIC           	PKG
+WIP SHAMPOO                   	Liquids and Creams
+Wovens	FNW
+Wrapping Film	PKG
+Yarn                          	FNW
+Chemicals	CHM
+Chemicals-Actives/Naturals	CHM
+Chemicals-Alcohol/Solvent	CHM
+Chemicals-Corn Derivatives/Sweeteners	CHM
+Chemicals-Dyes/Colorants	CHM
+Chemicals-Flavors/Fragrances	CHM
+Chemicals-Preservatives	CHM
+Chemicals-Surfactant	CHM
+Chemicals-Surfactants	CHM
+Other Chemicals (waxes & new items)	CHM
+PACK	PKG
+Packaging-Labels	PKG
+Packaging-Corrugated	PKG
+Packaging-Others	PKG
+Packaging-Sleeves	PKG
+Packaging-Bottles (PET)	PKG
+Packaging-Caps/Closures/Li	PKG
+KANBAN CHEMICALS 	CHM
