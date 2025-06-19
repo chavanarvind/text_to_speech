@@ -1,7 +1,5 @@
-from azureml.core import Workspace, Dataset, Datastore
-import pandas as pd
+from azureml.core import Workspace, Datastore
 import os
-from datetime import datetime
 
 # === Azure ML Workspace Config ===
 SUBSCRIPTION_ID = "a8d518a9-4587-4ba2-9a60-68b980c2f000"
@@ -9,85 +7,26 @@ RESOURCE_GROUP = "AZR-WDZ-DTO-AML-Development"
 WORKSPACE_NAME = "AML-DTO-Marmot-dev"
 DATASTORE_NAME = "xbomrefadlsg2"
 
-# === Date and paths ===
-today = datetime.today().strftime("%d%m%Y")
-input_path = f"./data/final_merged_predictions"
-output_path = f"./data/final_merged_predictions_updated"
-blob_output_path = f"hbom_category_prediction/hbom_category_prediction_{today}_updated/"
+# === Folder paths ===
+local_folder = "./data/final_merged_predictions_updated"
+blob_output_path = f"hbom_category_prediction/hbom_category_prediction_{datetime.today().strftime('%d%m%Y')}_updated/"
 
-os.makedirs(input_path, exist_ok=True)
-os.makedirs(output_path, exist_ok=True)
+# === Connect to workspace and datastore ===
+ws = Workspace(subscription_id=SUBSCRIPTION_ID,
+               resource_group=RESOURCE_GROUP,
+               workspace_name=WORKSPACE_NAME)
 
-# === Load both mapping CSVs ===
-cat_map = pd.read_csv("./data/cmpnt_cat_category_mapping.csv",encoding='latin1')        # CMPNT_CAT_CD_DESC → AI_FINAL_CATEGORY
-subcat_map = pd.read_csv("./data/cmpnt_cat_subcategory_mapping.csv",encoding='latin1')  # CMPNT_CAT_CD_DESC → AI_FINAL_SUBCATEGORY
+datastore = Datastore.get(ws, DATASTORE_NAME)
 
-# === Step 1: Download original dataset ===
-#dataset.download(target_path=input_path, overwrite=True)
-#print(f"📥 Downloaded dataset to: {input_path}")
+# === List files to upload ===
+files_to_upload = [os.path.join(local_folder, f) for f in os.listdir(local_folder) if f.endswith(".parquet")]
 
-# === Step 2: Process and update ===
-for file in os.listdir(input_path):
-    if file.endswith(".parquet"):
-        input_file = os.path.join(input_path, file)
-        output_file = os.path.join(output_path, file)
-
-        df = pd.read_parquet(input_file)
-
-        # Merge category mapping
-        df = df.merge(cat_map, on="CMPNT_CAT_CD_DESC", how="left", suffixes=("", "_cat_mapped"))
-        # Merge subcategory mapping
-        df = df.merge(subcat_map, on="CMPNT_CAT_CD_DESC", how="left", suffixes=("", "_subcat_mapped"))
-
-        # === CATEGORY UPDATE LOGIC ===
-        mask_cat = df["AI_FINAL_CATEGORY"].isna() & df["AI_FINAL_CATEGORY_cat_mapped"].notna()
-        print(f"🔍 {file} → {mask_cat.sum()} rows updated for CATEGORY.")
-
-        df.loc[mask_cat, "AI_FINAL_CATEGORY"] = df.loc[mask_cat, "AI_FINAL_CATEGORY_cat_mapped"]
-        df.loc[mask_cat, "AI_MATCHING_REASON_FINAL_CATEGORY"] = "direct_mapping_lookup"
-        df.loc[mask_cat, "AI_FINAL_CATEGORY_CONFIDENCE"] = 1
-
-        # === SUBCATEGORY UPDATE LOGIC ===
-        mask_subcat = df["AI_FINAL_SUBCATEGORY"].isna() & df["AI_FINAL_SUBCATEGORY_subcat_mapped"].notna()
-        print(f"🔍 {file} → {mask_subcat.sum()} rows updated for SUBCATEGORY.")
-
-        df.loc[mask_subcat, "AI_FINAL_SUBCATEGORY"] = df.loc[mask_subcat, "AI_FINAL_SUBCATEGORY_subcat_mapped"]
-        df.loc[mask_subcat, "AI_MATCHING_REASON_FINAL_SUBCATEGORY"] = "direct_mapping_lookup"
-        df.loc[mask_subcat, "AI_FINAL_SUBCATEGORY_CONFIDENCE"] = 1
-
-        # Drop helper columns
-        df.drop(columns=["AI_FINAL_CATEGORY_cat_mapped", "AI_FINAL_SUBCATEGORY_subcat_mapped"], errors='ignore', inplace=True)
-
-        df.to_parquet(output_file, index=False)
-        print(f"✅ Updated & saved: {file}")
-
-# === Step 3: Upload back to Azure ===
-print(f"⏫ Uploading updated files to: {blob_output_path}")
-ds.upload(
-    src_dir=output_path,
+# === Upload files ===
+datastore.upload_files(
+    files=files_to_upload,
     target_path=blob_output_path,
     overwrite=True,
     show_progress=True
 )
 
-print(f"🎉 All files uploaded to Azure at: {blob_output_path}")
-
-
-
-
-⏫ Uploading updated files to: hbom_category_prediction/hbom_category_prediction_19062025_updated/
-Show less
----------------------------------------------------------------------------
-AttributeError                            Traceback (most recent call last)
-Cell In[36], line 66
-     64 # === Step 3: Upload back to Azure ===
-     65 print(f"⏫ Uploading updated files to: {blob_output_path}")
----> 66 ds.upload(
-     67     src_dir=output_path,
-     68     target_path=blob_output_path,
-     69     overwrite=True,
-     70     show_progress=True
-     71 )
-     73 print(f"🎉 All files uploaded to Azure at: {blob_output_path}")
-
-AttributeError: 'AzureDataLakeGen2Datastore' object has no attribute 'upload'
+print(f"✅ Uploaded {len(files_to_upload)} files to: {blob_output_path}")
