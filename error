@@ -1,7 +1,4 @@
-    PipelineStep._validate_io_types(inputs, outputs, resource_inputs)
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\pipeline\core\builder.py", line 227, in _validate_io_types
-    validate_input_type(input)
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\pipeline\core\builder.py", line 204, in validate_input_type
-    raise ValueError(
-ValueError: <class 'azureml.data.file_dataset.FileDataset'> cannot be directly used as a step's input. Please call the as_named_input method on <class 'azureml.data.file_dataset.FileDataset'> and pass the returned DatasetConsumptionConfig instance into the step.
-(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\RPM_Data_Prep_Pipeline> 
+input_data = Dataset.File.from_files(path=(datastore, "raw_input_data/"))
+input_data = Dataset.File.from_files((datastore, "raw_input_data/")).as_named_input("raw_input_data").as_mount()
+"--input_path", input_data.as_mount(),
+"--input_path", input_data,
