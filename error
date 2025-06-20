@@ -1,2 +1,249 @@
-datastore.upload_files([key_file_path], "mapped_data/key_reference/", overwrite=True)
-dataset = Dataset.Tabular.from_parquet_files([(datastore, "mapped_data/key_reference/key_reference_output.parquet")])
+#abbrivation
+import os
+import glob
+import re
+import argparse
+import pandas as pd
+from multiprocessing import Pool, cpu_count
+from functools import partial
+
+# Global abbreviation map for multiprocessing-safe replacement
+GLOBAL_ABBREV_MAP = {}
+
+# --- Replacement function (must be top-level for pickling) ---
+def replace_match(m):
+    return GLOBAL_ABBREV_MAP.get(m.group(0).lower(), m.group(0))
+
+# --- Per-file processing ---
+def process_file(file, abbrev_pattern, output_path):
+    try:
+        df = pd.read_parquet(file)
+
+        if 'CMPNT_MATL_DESC' not in df.columns:
+            print(f"⚠️ Skipped {file}: missing 'CMPNT_MATL_DESC'")
+            return
+
+        df['CMPNT_MATL_DESC_CLEAN'] = df['CMPNT_MATL_DESC'].str.replace(
+            abbrev_pattern, replace_match, regex=True
+        )
+
+        output_file = os.path.join(output_path, os.path.basename(file))
+        df.to_parquet(output_file, index=False)
+        print(f"✅ Expanded abbreviations in: {output_file}")
+
+    except Exception as e:
+        print(f"❌ Failed to process {file} -> {e}")
+
+# --- Main ---
+def main(input_path, abbrev_map_path, output_path):
+    # Load abbreviation map
+    csv_files = glob.glob(os.path.join(abbrev_map_path, "*.csv"))
+    if not csv_files:
+        raise FileNotFoundError(f"No abbreviation CSV found in: {abbrev_map_path}")
+    
+    abbrev_df = pd.read_csv(csv_files[0])
+    abbrev_map = {
+        k.lower(): v for k, v in zip(abbrev_df['Abbreviation_list'], abbrev_df['Abbreviation_Expension'])
+    }
+
+    # Set global for multiprocessing-safe replacement
+    global GLOBAL_ABBREV_MAP
+    GLOBAL_ABBREV_MAP = abbrev_map
+
+    abbrev_pattern = re.compile(
+        r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b',
+        flags=re.IGNORECASE
+    )
+
+    os.makedirs(output_path, exist_ok=True)
+    files = glob.glob(os.path.join(input_path, '*.parquet'))
+
+    # Run in parallel
+    worker_func = partial(
+        process_file,
+        abbrev_pattern=abbrev_pattern,
+        output_path=output_path
+    )
+    with Pool(processes=cpu_count()) as pool:
+        pool.map(worker_func, files)
+
+# --- Entry point ---
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input_path', required=True)
+    parser.add_argument('--abbrev_map', required=True)
+    parser.add_argument('--output_path', required=True)
+    args = parser.parse_args()
+
+    main(args.input_path, args.abbrev_map, args.output_path)
+
+#cleaning
+import os
+import re
+import glob
+import argparse
+import pandas as pd
+from multiprocessing import Pool, cpu_count
+
+# --- Precompiled regex patterns ---
+patterns = {
+    'non_alphanumeric': re.compile(r'[^A-Za-z0-9&% ]+'),
+    'percent_space': re.compile(r"\s*%\s*"),
+    'remove_canada': re.compile(r'canada\s*\d*|can\s*\d*|ca\s*\d*|ca$|can$|ca\s'),
+    'units': re.compile(r"(\D)(\d+)(\s*)(ml|l|gr|gm|g|ct)"),
+    'spf_space': re.compile(r"(\s)(spf)\s*([\d+])"),
+    'units_no_space': re.compile(r'(\d+)\s*(ml|l|gr|gm|g|ct)(?: |$)'),
+    'spf_number': re.compile(r"(\D)(spf\d+)")
+}
+
+# --- Clean function ---
+def clean_series(series):
+    return (series.str.lower()
+        .str.replace(r'[-/]', ' ', regex=True)               #  Replace hyphen/slash with space
+        .str.replace(patterns['non_alphanumeric'], '', regex=True)
+        .str.replace(patterns['percent_space'], '% ', regex=True)
+        .str.replace(patterns['remove_canada'], '', regex=True)
+        .str.replace(patterns['units'], r'\1 \2\3\4 ', regex=True)
+        .str.replace(patterns['spf_space'], r'\1\2\3', regex=True)
+        .str.replace(patterns['units_no_space'], lambda z: z.group().replace(" ", ""), regex=True)
+        .str.replace(patterns['spf_number'], r'\1 \2 ', regex=True)
+        .str.replace(r'\b\d{5,}\b$', '', regex=True)         # remove trailing 5+ digit numbers
+        .str.replace(r'\b\d+\b', '', regex=True)             # remove all standalone numbers
+        .str.replace(r'\s+', ' ', regex=True)                # normalize spaces
+        .str.strip()
+        .apply(lambda x: ' '.join(dict.fromkeys(x.split()))) # remove duplicate words
+    )
+# --- Per-file processor ---
+def process_file(file_info):
+    file_path, output_path = file_info
+    try:
+        df = pd.read_parquet(file_path)
+        df['CMPNT_MATL_DESC_CLEAN'] = clean_series(df['CMPNT_MATL_DESC_CLEAN'].fillna(''))
+
+        out_file = os.path.join(output_path, os.path.basename(file_path))
+        df.to_parquet(out_file, index=False)
+        print(f"✅ Cleaned and saved: {os.path.basename(file_path)}")
+    except Exception as e:
+        print(f"❌ Failed: {os.path.basename(file_path)} -> {e}")
+
+# --- Main ---
+def main(input_path, output_path):
+    os.makedirs(output_path, exist_ok=True)
+    files = glob.glob(os.path.join(input_path, '*.parquet'))
+    file_info_list = [(f, output_path) for f in files]
+
+    with Pool(cpu_count()) as pool:
+        pool.map(process_file, file_info_list)
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input_path', required=True)
+    parser.add_argument('--output_path', required=True)
+    args = parser.parse_args()
+
+    main(args.input_path, args.output_path)
+
+
+#feature enginering
+import os
+import glob
+import pandas as pd
+from multiprocessing import Pool, cpu_count
+import argparse
+
+# --- UNIT_GROUP mapping ---
+unit_group_map = {
+    'KG': 'CHM', 'KGS': 'CHM', 'KGA': 'CHM', 'KGW': 'CHM', 'G': 'CHM', 'GR': 'CHM', 'GM': 'CHM', 'MG': 'CHM',
+    'LB': 'CHM', 'LBS': 'CHM', 'OZ': 'CHM', 'OZA': 'CHM', 'GW': 'CHM', 'TON': 'CHM', 'DR': 'CHM',
+    'L': 'Liquid', 'LT': 'Liquid', 'ML': 'Liquid', 'CC': 'Liquid', 'CL': 'Liquid', 'CCM': 'Liquid', 'GLL': 'Liquid',
+    'EA': 'Discrete', 'PC': 'Discrete', 'PCS': 'Discrete', 'Pcs': 'Discrete', 'PKT': 'Discrete', 'PK': 'Discrete',
+    'PAK': 'Discrete', 'PCK': 'Discrete', 'CS': 'Discrete', 'CSE': 'Discrete', 'CT': 'Discrete', 'CA': 'Discrete',
+    'ST': 'Discrete', 'GRO': 'Discrete', 'BX': 'Discrete',
+    'BOT': 'Containers', 'BOTTLE': 'Containers', 'ROLL': 'Containers', 'ROL': 'Containers', 'REEL': 'Containers', 'KAR': 'Containers',
+    'FT': 'Dimensional', 'YD': 'Dimensional', 'KM': 'Dimensional', 'DM': 'Dimensional', 'M': 'Dimensional',
+    'M1': 'Dimensional', 'M2': 'Dimensional', 'KM2': 'Dimensional', 'YD2': 'Dimensional', 'FT3': 'Dimensional',
+    'SQM': 'Dimensional', 'sqm': 'Dimensional', 'MYD': 'Dimensional', 'MI': 'Dimensional', 'SM': 'Dimensional',
+    'LM': 'Dimensional', 'LF': 'Dimensional', 'MH': 'Dimensional', 'KN': 'Dimensional', 'CH': 'Dimensional',
+    'TH': 'Unclassified', 'THU': 'Unclassified', 'IM': 'Unclassified', 'NOS': 'Unclassified', 'NO': 'Unclassified',
+    'TS': 'Unclassified', 'KA': 'Unclassified', 'ZPC': 'Unclassified', 'ZCT': 'Unclassified', '0%': 'Unclassified',
+    'KP': 'Unclassified', 'GP': 'Unclassified', 'KAI': 'Unclassified', 'SY': 'Unclassified', 'UN': 'Unclassified',
+    'MU': 'Unclassified', 'UM': 'Unclassified', 'HU': 'Unclassified'
+}
+
+def map_cmpnt_type_category(val):
+    if pd.isna(val):
+        return 'OTHER'
+
+    val_clean = str(val).strip()
+    val_lower = val_clean.lower()
+    val_upper = val_clean.upper()
+
+    erp_type_map = {
+        'FERT': 'FINISHED_PRODUCT',
+        'HALB': 'SEMI_FINISHED',
+        'ROH': 'RAW_MATERIAL',
+        'VERP': 'PACKAGING_MATERIAL',
+        'TRAD': 'TRADED_GOOD',
+        'ERSA': 'SUBCONTRACT_COMPONENT',
+        'API': 'API',
+        'TPF': 'TRADE_PRODUCT',
+        'PACK': 'PACKAGING',
+        'ZHBG': 'INTERMEDIATE',
+        'EPC': 'EXCIPIENT',
+        'EPF': 'FINISHED_PRODUCT',
+        'HAWA': 'TRADING_GOOD',
+        'ZEXI': 'EXCIPIENT',
+        'ZROH': 'RAW_MATERIAL',
+        'SAPR': 'PACKAGING',
+        'IM': 'INTERMEDIATE',
+        'UNBW': 'NON_VALUATED',
+        'IG': 'INTERMEDIATE_GOOD'
+    }
+
+    if val_upper in erp_type_map:
+        return erp_type_map[val_upper]
+    if any(x in val_lower for x in ['packaging', 'bottle', 'jar', 'cap', 'carton', 'tube', 'pouch', 'closure']):
+        return 'PACKAGING'
+    if any(x in val_lower for x in ['chemical', 'solvent', 'alcohol', 'acid', 'buffer', 'salt', 'preservative']):
+        return 'CHEMICAL'
+    if any(x in val_lower for x in ['actives', 'naturals', 'flavor', 'fragrance', 'api']):
+        return 'ACTIVES_NATURALS'
+    if any(x in val_lower for x in ['film', 'foil', 'label', 'sleeve']):
+        return 'FILMS_LABELS'
+    if any(x in val_lower for x in ['soap', 'conditioner', 'emulsifier', 'thickener', 'talc', 'sunscreen']):
+        return 'COSMETIC_BASE'
+    if any(x in val_lower for x in ['glass', 'pump', 'puff']):
+        return 'CONTAINERS'
+    if len(val_clean) <= 5 and val_clean.isalnum():
+        return 'ERP_CODE'
+    return 'OTHER'
+
+# --- Process one file ---
+def process_file(args):
+    file_path, output_path = args
+    try:
+        df = pd.read_parquet(file_path)
+
+        df['CMPNT_MATL_DESC_LEN'] = df['CMPNT_MATL_DESC'].astype(str).str.len()
+        df['UNIT_GROUP'] = df['CMPNT_UOM_CD'].fillna('').str.upper().map(unit_group_map).fillna('Unclassified')
+        df['CMPNT_MATL_TYPE_CATEGORY'] = df['CMPNT_MATL_TYPE_CD'].apply(map_cmpnt_type_category)
+
+        output_file = os.path.join(output_path, os.path.basename(file_path))
+        df.to_parquet(output_file, index=False)
+        print(df.head())
+        print(f"✅ Features written to: {output_file}")
+    except Exception as e:
+        print(f"❌ Failed: {os.path.basename(file_path)} -> {e}")
+
+# --- Main ---
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input_path', required=True)
+    parser.add_argument('--output_path', required=True)
+    args = parser.parse_args()
+
+    os.makedirs(args.output_path, exist_ok=True)
+
+    files = glob.glob(os.path.join(args.input_path, '*.parquet'))
+    with Pool(cpu_count()) as pool:
+        pool.map(process_file, [(f, args.output_path) for f in files])
