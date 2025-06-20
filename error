@@ -1,2 +1,17 @@
-🔄 [Processing file]: part-00000-00185f20-d84d-4828-b7cb-f6f0a7f512fa-c000.snappy.parquet
-[❌ ERROR] Failed to process /mnt/azureml/cr/j/236ae1ec3a504c7ab971df5b0563fbac/cap/data-capability/wd/INPUT_input_72fc4d3a/part-00000-00185f20-d84d-4828-b7cb-f6f0a7f512fa-c000.snappy.parquet: [Errno 21] Failed to open local file '/mnt/azureml/cr/j/236ae1ec3a504c7ab971df5b0563fbac/cap/data-capability/wd/step1a_key_output_temp'. Detail: [errno 21] Is a directory
+key_df.to_parquet(output_path, index=False)
+
+To:
+
+python
+Copy
+Edit
+key_file_path = os.path.join(output_path, "key_reference_output.parquet")
+key_df.to_parquet(key_file_path, index=False)
+
+Then update the upload line:
+
+python
+Copy
+Edit
+datastore.upload_files([key_file_path], "mapped_data/key_reference/", overwrite=True)
+dataset = Dataset.Tabular.from_parquet_files([(datastore, "mapped_data/key_referenc
