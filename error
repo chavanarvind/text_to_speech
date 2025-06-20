@@ -1,32 +1,110 @@
-def finalize_output(df, output_path):
-    # Copy mapped values to final output columns
-    df['AI_FINAL_CATEGORY'] = df['Mapped_File_Category']
-    df['AI_FINAL_CATEGORY_CONFIDENCE'] = df['Final Category Confidence Score']
-    df['AI_MATCHING_REASON_FINAL_CATEGORY'] = df['category_matching_reason']
+import json
+import logging
+import os
+import sys
+import time
+import uuid
+import zipfile
+import requests
 
-    df['AI_FINAL_SUBCATEGORY'] = df['Mapped_File_Subcategory']
-    df['AI_FINAL_SUBCATEGORY_CONFIDENCE'] = df['Final Subcategory Confidence Score']
-    df['AI_MATCHING_REASON_FINAL_SUBCATEG'] = df['subcategory_matching_reason']
+def process_tts_synthesis(file_path):
+    """
+    Submits an SSML file for text-to-speech synthesis, checks job status,
+    downloads the output, and processes it into SRT format.
+    
+    Args:
+        file_path (str): Path to the SSML file to be processed.
+    """
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO,
+                        format="[%(asctime)s] %(message)s", datefmt="%m/%d/%Y %I:%M:%S %p %Z")
+    logger = logging.getLogger(__name__)
 
-    # ✅ Fix 1: Invalidate subcategory confidence/reason if subcategory is missing
-    invalid_subcat_mask = df['AI_FINAL_SUBCATEGORY'].isna() | df['AI_FINAL_SUBCATEGORY'].astype(str).str.strip().eq("")
-    df.loc[invalid_subcat_mask, 'AI_FINAL_SUBCATEGORY_CONFIDENCE'] = None
-    df.loc[invalid_subcat_mask, 'AI_MATCHING_REASON_FINAL_SUBCATEG'] = None
-    df.loc[invalid_subcat_mask, 'needs_subcategory_model'] = True
-    df.loc[invalid_subcat_mask, 'needs_model'] = True
+    SPEECH_ENDPOINT = "https://cog-speech-dto-epil-dev.cognitiveservices.azure.com/"
+    SUBSCRIPTION_KEY = "BBvpAQdmiBQWNukOTc5F2tIb5Ln7TuubMiQGbbkSSO2GJDR6ZK09JQQJ99AKACYeBjFXJ3w3AAAYACOG1LLR"
+    API_VERSION = "2024-04-01"
 
-    # ✅ Fix 2: Invalidate category confidence/reason if category is missing
-    invalid_cat_mask = df['AI_FINAL_CATEGORY'].isna() | df['AI_FINAL_CATEGORY'].astype(str).str.strip().eq("")
-    df.loc[invalid_cat_mask, 'AI_FINAL_CATEGORY_CONFIDENCE'] = None
-    df.loc[invalid_cat_mask, 'AI_MATCHING_REASON_FINAL_CATEGORY'] = None
-    df.loc[invalid_cat_mask, 'needs_category_model'] = True
-    df.loc[invalid_cat_mask, 'needs_model'] = True
+    def _create_job_id():
+        return str(uuid.uuid4())
 
-    # Drop temp columns
-    df.drop(columns=[
-        'Mapped_File_Category', 'Final Category Confidence Score', 'category_matching_reason',
-        'Mapped_File_Subcategory', 'Final Subcategory Confidence Score', 'subcategory_matching_reason'
-    ], inplace=True, errors='ignore')
+    def _authenticate():
+        return {'Ocp-Apim-Subscription-Key': SUBSCRIPTION_KEY}
 
-    df.to_parquet(output_path, index=False)
-    print(f"[✅] Final output saved to: {output_path}")
+    def submit_synthesis(job_id):
+        url = f'{SPEECH_ENDPOINT}/texttospeech/batchsyntheses/{job_id}?api-version={API_VERSION}'
+        header = {'Content-Type': 'application/json; charset=utf-8'}
+        header.update(_authenticate())
+
+        with open(file_path, 'r', encoding="utf-8-sig") as f:
+            text = f.read()
+
+        payload = {
+            "inputKind": "SSML",
+            'synthesisConfig': {"voice": "tr-TR-EmelNeural"},
+            "inputs": [{"content": text}],
+            "properties": {
+                "outputFormat": "audio-24khz-160kbitrate-mono-mp3",
+                "wordBoundaryEnabled": True,
+                "sentenceBoundaryEnabled": True,
+                "timeToLiveInHours": 168
+            }
+        }
+        response = requests.put(url, json.dumps(payload, ensure_ascii=False), headers=header)
+        return response.json()["id"] if response.status_code < 400 else None
+
+    def get_synthesis_status(job_id):
+        url = f'{SPEECH_ENDPOINT}/texttospeech/batchsyntheses/{job_id}?api-version={API_VERSION}'
+        return requests.get(url, headers=_authenticate()).json()
+
+    def download_file(url, file_name):
+        response = requests.get(url)
+        if response.status_code == 200:
+            with open(file_name, 'wb') as f:
+                f.write(response.content)
+            zipfile.ZipFile(file_name, 'r').extractall('extracted_files')
+        
+    def process_timestamps(extracted_folder):
+        sentence_file = os.path.join(extracted_folder, "0001.sentence.json")
+        if not os.path.exists(sentence_file):
+            logger.error("sentence.json file not found!")
+            return
+
+        with open(sentence_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        srt_lines, subtitle_counter = [], 1
+        for phrase in data:
+            start_time, duration = phrase["AudioOffset"] / 1000, phrase["Duration"] / 1000
+            end_time = start_time + duration
+            srt_lines.extend([f"{subtitle_counter}",
+                              f"{convert_to_srt_timestamp(start_time)} --> {convert_to_srt_timestamp(end_time)}",
+                              phrase["Text"], ""])
+            subtitle_counter += 1
+
+        with open(os.path.join(extracted_folder, "output.srt"), "w", encoding="utf-8") as f:
+            f.write("\n".join(srt_lines))
+
+    def convert_to_srt_timestamp(seconds):
+        millis = int((seconds - int(seconds)) * 1000)
+        hours, remainder = divmod(int(seconds), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{hours:02}:{minutes:02}:{seconds:02},{millis:03}"
+
+    job_id = _create_job_id()
+    if submit_synthesis(job_id):
+        while True:
+            job_response = get_synthesis_status(job_id)
+            status = job_response['status']
+            if status == 'Succeeded':
+                download_file(job_response['outputs']['result'], "results.zip")
+                process_timestamps("extracted_files")
+                logger.info("Batch synthesis job succeeded")
+                break
+            elif status == 'Failed':
+                logger.error("Batch synthesis job failed")
+                break
+            else:
+                logger.info(f"Batch synthesis job is still running, status [{status}]")
+                time.sleep(5)
+
+# Example usage
+#process_tts_synthesis("C:/Users/AChava05/OneDrive - Kenvue/AChava05/audio/audio-agents/text2speech/text_files/test.txt")
