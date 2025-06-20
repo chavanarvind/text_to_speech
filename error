@@ -1,5 +1,1 @@
-
-Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
-  File "step3_inference_run.py", line 153, in <module>
-    main(args.input_path, args.final_output_dir)
-TypeError: main() missing 2 required positional arguments: 'key_output_dir' and 'final_output_dir'
+ROW_NM|^SRC_SYS_CD|^MATL_NUM|^PLNT_CD|^CMPNT_MATL_NUM|^BOM_LVL_DTLS_NUM|^TRU_MATL_NUM|^CMPNT_RM_SPEC_CD|^CMPNT_PC_SPEC_CD|^CMPNT_DC_SPEC_CD|^RAW_MATL_TITLE_NM
