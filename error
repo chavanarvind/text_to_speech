@@ -1,10 +1,14 @@
-if idx == 0:
-    register_key_output(df, args.input_path, args.key_output, ws)
+arguments=[
+    "--input_path", step1_out,
+    "--mapping_csv", mapping_csv_mount,
+    "--key_output", step1a_key_output_temp,
+    "--final_output", step1a_final_output
+],
 
-if idx == 0 and not args.skip_register:
-    register_key_output(df, args.input_path, args.key_output, ws)
-
-
-register_final_output_dir(args.final_output, ws)
-if not args.skip_register:
-    register_final_output_dir(args.final_output, ws)
+arguments=[
+    "--input_path", step1_out,
+    "--mapping_csv", mapping_csv_mount,
+    "--key_output", step1a_key_output_temp,
+    "--final_output", step1a_final_output,
+    "--skip_register"  # ✅ Add this line
+],
