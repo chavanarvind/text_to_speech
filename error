@@ -1,108 +1,67 @@
-
-import argparse
+from azureml.core import Workspace, Experiment, Environment, Dataset, Datastore
+from azureml.pipeline.core import Pipeline, PipelineData
+from azureml.pipeline.steps import PythonScriptStep
+from azureml.data import OutputFileDatasetConfig, DataPath
+from azureml.core.compute import ComputeTarget
 import os
-import glob
-import re
-import pandas as pd
-from multiprocessing import Pool, cpu_count
 
-# === UNIT_GROUP and CMPNT_MATL_TYPE_CATEGORY mappings ===
-unit_group_map = {
-    'KG': 'CHM', 'KGS': 'CHM', 'KGA': 'CHM', 'KGW': 'CHM', 'G': 'CHM', 'GR': 'CHM', 'GM': 'CHM', 'MG': 'CHM',
-    'LB': 'CHM', 'LBS': 'CHM', 'OZ': 'CHM', 'OZA': 'CHM', 'GW': 'CHM', 'TON': 'CHM', 'DR': 'CHM',
-    'L': 'Liquid', 'LT': 'Liquid', 'ML': 'Liquid', 'CC': 'Liquid', 'CL': 'Liquid', 'CCM': 'Liquid', 'GLL': 'Liquid',
-    'EA': 'Discrete', 'PC': 'Discrete', 'PCS': 'Discrete', 'Pcs': 'Discrete', 'PKT': 'Discrete', 'PK': 'Discrete',
-    'PAK': 'Discrete', 'PCK': 'Discrete', 'CS': 'Discrete', 'CSE': 'Discrete', 'CT': 'Discrete', 'CA': 'Discrete',
-    'ST': 'Discrete', 'GRO': 'Discrete', 'BX': 'Discrete',
-    'BOT': 'Containers', 'BOTTLE': 'Containers', 'ROLL': 'Containers', 'ROL': 'Containers', 'REEL': 'Containers', 'KAR': 'Containers',
-    'FT': 'Dimensional', 'YD': 'Dimensional', 'KM': 'Dimensional', 'DM': 'Dimensional', 'M': 'Dimensional',
-    'M1': 'Dimensional', 'M2': 'Dimensional', 'KM2': 'Dimensional', 'YD2': 'Dimensional', 'FT3': 'Dimensional',
-    'SQM': 'Dimensional', 'sqm': 'Dimensional', 'MYD': 'Dimensional', 'MI': 'Dimensional', 'SM': 'Dimensional',
-    'LM': 'Dimensional', 'LF': 'Dimensional', 'MH': 'Dimensional', 'KN': 'Dimensional', 'CH': 'Dimensional',
-    'TH': 'Unclassified', 'THU': 'Unclassified', 'IM': 'Unclassified', 'NOS': 'Unclassified', 'NO': 'Unclassified',
-    'TS': 'Unclassified', 'KA': 'Unclassified', 'ZPC': 'Unclassified', 'ZCT': 'Unclassified', '0%': 'Unclassified',
-    'KP': 'Unclassified', 'GP': 'Unclassified', 'KAI': 'Unclassified', 'SY': 'Unclassified', 'UN': 'Unclassified',
-    'MU': 'Unclassified', 'UM': 'Unclassified', 'HU': 'Unclassified'
-}
+# === Workspace and Compute Target ===
+ws = Workspace.from_config()
+compute_target = ComputeTarget(workspace=ws, name="your-compute-cluster")
 
-def map_cmpnt_type_category(val):
-    if pd.isna(val): return 'OTHER'
-    val_clean = str(val).strip().upper()
-    erp_type_map = {
-        'FERT': 'FINISHED_PRODUCT', 'HALB': 'SEMI_FINISHED', 'ROH': 'RAW_MATERIAL',
-        'VERP': 'PACKAGING_MATERIAL', 'TRAD': 'TRADED_GOOD', 'ERSA': 'SUBCONTRACT_COMPONENT',
-        'API': 'API', 'TPF': 'TRADE_PRODUCT', 'PACK': 'PACKAGING', 'ZHBG': 'INTERMEDIATE',
-        'EPC': 'EXCIPIENT', 'EPF': 'FINISHED_PRODUCT', 'HAWA': 'TRADING_GOOD', 'ZEXI': 'EXCIPIENT',
-        'ZROH': 'RAW_MATERIAL', 'SAPR': 'PACKAGING', 'IM': 'INTERMEDIATE', 'UNBW': 'NON_VALUATED',
-        'IG': 'INTERMEDIATE_GOOD'
-    }
-    return erp_type_map.get(val_clean, 'OTHER')
+# === Input Definitions ===
+# Define local mapping folder (uploaded manually or pre-registered)
+datastore = Datastore.get(ws, datastore_name="workspaceblobstore")
+mapping_csv_path = DataPath(datastore, "mapping_folder/")
+input_data = Dataset.File.from_files(path=(datastore, "raw_input_data/"))
 
-# --- Clean function ---
-def clean_text(text):
-    text = str(text).lower()
-    text = re.sub(r'[-/]', ' ', text)
-    text = re.sub(r'[^A-Za-z0-9&% ]+', '', text)
-    text = re.sub(r'\s*%\s*', '% ', text)
-    text = re.sub(r'canada\s*\d*|can\s*\d*|ca\s*\d*|ca$|can$|ca\s', '', text)
-    text = re.sub(r'(\D)(\d+)(\s*)(ml|l|gr|gm|g|ct)', r'\1 \2\3\4 ', text)
-    text = re.sub(r'(\s)(spf)\s*([\d+])', r'\1\2\3', text)
-    text = re.sub(r'(\d+)\s*(ml|l|gr|gm|g|ct)(?: |$)', lambda z: z.group().replace(" ", ""), text)
-    text = re.sub(r'(\D)(spf\d+)', r'\1 \2 ', text)
-    text = re.sub(r'\b\d{5,}\b$', '', text)
-    text = re.sub(r'\b\d+\b', '', text)
-    text = re.sub(r'\s+', ' ', text).strip()
-    return ' '.join(dict.fromkeys(text.split()))  # remove duplicate words
+# === Output Definitions ===
+step1a_output = OutputFileDatasetConfig(name="mapped_data_output")
+step2_output = OutputFileDatasetConfig(name="preprocessed_data_output")
 
-# --- Abbreviation Replacer ---
-def expand_abbreviations(text, abbrev_map):
-    def repl(m): return abbrev_map.get(m.group(0).lower(), m.group(0))
-    pattern = re.compile(r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b', flags=re.IGNORECASE)
-    return pattern.sub(repl, text)
+# === Environment ===
+env = Environment.get(ws, name="AzureML-sklearn-1.0-ubuntu20.04-py38-cpu")  # Or define custom one
 
-# --- Per-file Processor ---
-def process_file(file_path, abbrev_map, output_path):
-    try:
-        df = pd.read_parquet(file_path)
+# === Step 1a: Mapping Logic ===
+step1a_merge = PythonScriptStep(
+    name="Step1a_MergeAndMap",
+    script_name="step1a_merge_singlefile.py",
+    arguments=[
+        "--input_path", input_data.as_mount(),
+        "--mapping_csv", mapping_csv_path,
+        "--key_output", "key_reference_output.parquet",
+        "--final_output", step1a_output
+    ],
+    inputs=[input_data, mapping_csv_path],
+    outputs=[step1a_output],
+    compute_target=compute_target,
+    source_directory="scripts",
+    allow_reuse=True,
+    environment=env
+)
 
-        # Step 1: Expand Abbreviations
-        df['CMPNT_MATL_DESC_CLEAN'] = df['CMPNT_MATL_DESC'].astype(str).apply(lambda x: expand_abbreviations(x, abbrev_map))
+# === Step 2: Preprocessing (Abbreviation + Cleaning + Features) ===
+step2_preprocess = PythonScriptStep(
+    name="Step2_PreProcess",
+    script_name="step2_pre_process.py",
+    arguments=[
+        "--input_path", step1a_output,
+        "--abbrev_map", mapping_csv_path,
+        "--output_path", step2_output
+    ],
+    inputs=[step1a_output, mapping_csv_path],
+    outputs=[step2_output],
+    compute_target=compute_target,
+    source_directory="scripts",
+    allow_reuse=True,
+    environment=env
+)
 
-        # Step 2: Clean Text
-        df['CMPNT_MATL_DESC_CLEAN'] = df['CMPNT_MATL_DESC_CLEAN'].apply(clean_text)
+# === Pipeline Definition ===
+pipeline = Pipeline(workspace=ws, steps=[step1a_merge, step2_preprocess])
+pipeline.validate()
 
-        # Step 3: Feature Engineering
-        df['CMPNT_MATL_DESC_LEN'] = df['CMPNT_MATL_DESC'].astype(str).str.len()
-        df['UNIT_GROUP'] = df['CMPNT_UOM_CD'].fillna('').str.upper().map(unit_group_map).fillna('Unclassified')
-        df['CMPNT_MATL_TYPE_CATEGORY'] = df['CMPNT_MATL_TYPE_CD'].apply(map_cmpnt_type_category)
-
-        # Save
-        out_file = os.path.join(output_path, os.path.basename(file_path))
-        df.to_parquet(out_file, index=False)
-        print(f"✅ Processed: {os.path.basename(file_path)}")
-    except Exception as e:
-        print(f"❌ Failed: {os.path.basename(file_path)} -> {e}")
-
-# --- Main ---
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--input_path', required=True)
-    parser.add_argument('--abbrev_map', required=True)
-    parser.add_argument('--output_path', required=True)
-    args = parser.parse_args()
-
-    # Load abbreviation map
-    abbrev_csv = glob.glob(os.path.join(args.abbrev_map, '*.csv'))
-    if not abbrev_csv:
-        raise FileNotFoundError("No abbreviation map CSV found.")
-    abbrev_df = pd.read_csv(abbrev_csv[0])
-    abbrev_map = dict(zip(abbrev_df['Abbreviation_list'].str.lower(), abbrev_df['Abbreviation_Expension']))
-
-    os.makedirs(args.output_path, exist_ok=True)
-    parquet_files = glob.glob(os.path.join(args.input_path, '*.parquet'))
-
-    for f in parquet_files:
-        process_file(f, abbrev_map, args.output_path)
-
-if __name__ == '__main__':
-    main()
+# === Submit Run ===
+experiment = Experiment(ws, name="bom_processing_pipeline")
+pipeline_run = experiment.submit(pipeline)
+pipeline_run.wait_for_completion(show_output=True)
