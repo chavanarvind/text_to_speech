@@ -1,22 +1,146 @@
-# === SUBCATEGORY UPDATE LOGIC ===
-mask_subcat = df["AI_FINAL_SUBCATEGORY"].isna() & df["AI_FINAL_SUBCATEGORY_subcat_mapped"].notna()
-print(f"🔍 {file} → {mask_subcat.sum()} rows updated for SUBCATEGORY.")
+import os
+import pandas as pd
 
-df.loc[mask_subcat, "AI_FINAL_SUBCATEGORY"] = df.loc[mask_subcat, "AI_FINAL_SUBCATEGORY_subcat_mapped"]
-df.loc[mask_subcat, "AI_MATCHING_REASON_FINAL_SUBCATEGORY"] = "direct_mapping_lookup"
-df.loc[mask_subcat, "AI_FINAL_SUBCATEGORY_CONFIDENCE"] = 1
+# Sample file paths (adjust these for your local files)
+input_parquet_dir = "./data/local_data/test_parquets"
+mapping_csv_dir = "./data/local_data"
+key_output_path = "./data/local_data/key_output.parquet"
+final_output_path = "./data/local_data/final_output.parquet"
 
-# === FIX: Reset invalid subcategory mappings ===
-invalid_subcat_mask = df["AI_FINAL_SUBCATEGORY"].isna()
+# Constants
+DIRECT_MAP_KEY_1 = "Direct Mapping"
+DIRECT_MAP_KEY_2 = "Direct Mapping"
+JOIN_COL_1 = "CMPNT_CAT_CD_DESC"
+JOIN_COL_2 = "CMPNT_MATL_TYPE_CD"
+KEY_COLS = ["SRC_SYS_CD", "MATL_NUM", "PLNT_CD", "CMPNT_MATL_NUM"]
 
-df.loc[invalid_subcat_mask, "AI_FINAL_SUBCATEGORY_CONFIDENCE"] = None
-df.loc[invalid_subcat_mask, "AI_MATCHING_REASON_FINAL_SUBCATEGORY"] = None
-df.loc[invalid_subcat_mask, "Mapped_File_Subcategory Filled"] = False
-df.loc[invalid_subcat_mask, "needs_subcategory_model"] = True
-df.loc[invalid_subcat_mask, "needs_model"] = True  # optional: only if subcategory triggers model need
 
-# Drop helper columns
-df.drop(columns=["AI_FINAL_CATEGORY_cat_mapped", "AI_FINAL_SUBCATEGORY_subcat_mapped"], errors='ignore', inplace=True)
+def load_data(parquet_dir, mapping_csv_dir):
+    parquet_files = [f for f in os.listdir(parquet_dir) if f.endswith(".parquet")]
+    df = pd.read_parquet(os.path.join(parquet_dir, parquet_files[0]))
+    df = df[df['CMPNT_MATL_DESC'].notna()].drop_duplicates(subset=["CMPNT_MATL_NUM"])
 
-df.to_parquet(output_file, index=False)
-print(f"✅ Updated & saved: {file}")
+    csv_files = [f for f in os.listdir(mapping_csv_dir) if f.endswith(".csv")]
+    mapping_df = pd.read_csv(os.path.join(mapping_csv_dir, csv_files[0]))
+
+    return df, mapping_df
+
+
+def ensure_ai_columns(df):
+    for col in [
+        'AI_FINAL_CATEGORY', 'AI_FINAL_CATEGORY_CONFIDENCE', 'AI_MATCHING_REASON_FINAL_CATEGORY',
+        'AI_FINAL_SUBCATEGORY', 'AI_FINAL_SUBCATEGORY_CONFIDENCE', 'AI_MATCHING_REASON_FINAL_SUBCATEG'
+    ]:
+        if col not in df.columns:
+            df[col] = None
+    return df
+
+
+def apply_existing_ai_overrides(df):
+    df['skip_category_mapping'] = (
+        df['AI_FINAL_CATEGORY'].notna() & df['AI_FINAL_CATEGORY'].astype(str).str.strip().ne('') &
+        df['AI_FINAL_CATEGORY_CONFIDENCE'].notna() & df['AI_MATCHING_REASON_FINAL_CATEGORY'].notna()
+    )
+    df['skip_subcategory_mapping'] = (
+        df['AI_FINAL_SUBCATEGORY'].notna() & df['AI_FINAL_SUBCATEGORY'].astype(str).str.strip().ne('') &
+        df['AI_FINAL_SUBCATEGORY_CONFIDENCE'].notna() & df['AI_MATCHING_REASON_FINAL_SUBCATEG'].notna()
+    )
+    df.loc[df['skip_category_mapping'], 'Mapped_File_Category'] = df['AI_FINAL_CATEGORY']
+    df.loc[df['skip_subcategory_mapping'], 'Mapped_File_Subcategory'] = df['AI_FINAL_SUBCATEGORY']
+    return df
+
+
+def clean_mapping_df(mapping_df, key_col, value_col):
+    mapping_df.columns = mapping_df.columns.str.strip()
+    mapping_df[key_col] = mapping_df[key_col].astype(str).str.upper().str.strip()
+    mapping_df[value_col] = mapping_df[value_col].astype(str).str.strip()
+    df_map = mapping_df[[key_col, value_col]].drop_duplicates()
+    return df_map[df_map[value_col].notna() & df_map[value_col].ne("")]
+
+
+def map_values(df, map_df1, map_df2, join_col1, join_col2, key1, key2, value_col, output_col):
+    df[join_col1] = df[join_col1].astype(str).str.upper().str.strip()
+    df[join_col2] = df[join_col2].astype(str).str.upper().str.strip()
+    map_dict1 = dict(zip(map_df1[key1], map_df1[value_col]))
+    map_dict2 = dict(zip(map_df2[key2], map_df2[value_col]))
+    df[output_col] = df[join_col1].map(map_dict1)
+    missing = df[output_col].isna() | df[output_col].astype(str).str.strip().eq("")
+    df.loc[missing, output_col] = df.loc[missing, join_col2].map(map_dict2)
+    return df
+
+
+def add_flags(df):
+    df['Mapped_File_Category Filled'] = df['Mapped_File_Category'].notna() & df['Mapped_File_Category'].astype(str).str.strip().ne("")
+    df['Mapped_File_Subcategory Filled'] = df['Mapped_File_Subcategory'].notna() & df['Mapped_File_Subcategory'].astype(str).str.strip().ne("")
+    df['category_matching_reason'] = df.apply(
+        lambda row: row['AI_MATCHING_REASON_FINAL_CATEGORY'] if pd.notna(row['AI_MATCHING_REASON_FINAL_CATEGORY']) else (
+            'direct_mapping' if row['Mapped_File_Category Filled'] else 'unmapped'
+        ), axis=1
+    )
+    df['Final Category Confidence Score'] = df.apply(
+        lambda row: row['AI_FINAL_CATEGORY_CONFIDENCE'] if pd.notna(row['AI_FINAL_CATEGORY_CONFIDENCE']) else (
+            1.0 if row['Mapped_File_Category Filled'] else None
+        ), axis=1
+    )
+    df['subcategory_matching_reason'] = df.apply(
+        lambda row: row['AI_MATCHING_REASON_FINAL_SUBCATEG'] if pd.notna(row['AI_MATCHING_REASON_FINAL_SUBCATEG']) else (
+            'direct_mapping' if row['Mapped_File_Subcategory Filled'] else 'unmapped'
+        ), axis=1
+    )
+    df['Final Subcategory Confidence Score'] = df.apply(
+        lambda row: row['AI_FINAL_SUBCATEGORY_CONFIDENCE'] if pd.notna(row['AI_FINAL_SUBCATEGORY_CONFIDENCE']) else (
+            1.0 if row['Mapped_File_Subcategory Filled'] else None
+        ), axis=1
+    )
+    df['needs_model'] = ~(df['Mapped_File_Category Filled'] & df['Mapped_File_Subcategory Filled'])
+    df['needs_category_model'] = ~df['Mapped_File_Category Filled']
+    df['needs_subcategory_model'] = ~df['Mapped_File_Subcategory Filled']
+    return df
+
+
+def finalize_output(df, output_path):
+    df['AI_FINAL_CATEGORY'] = df['Mapped_File_Category']
+    df['AI_FINAL_CATEGORY_CONFIDENCE'] = df['Final Category Confidence Score']
+    df['AI_MATCHING_REASON_FINAL_CATEGORY'] = df['category_matching_reason']
+    df['AI_FINAL_SUBCATEGORY'] = df['Mapped_File_Subcategory']
+    df['AI_FINAL_SUBCATEGORY_CONFIDENCE'] = df['Final Subcategory Confidence Score']
+    df['AI_MATCHING_REASON_FINAL_SUBCATEG'] = df['subcategory_matching_reason']
+    df.drop(columns=[
+        'Mapped_File_Category', 'Final Category Confidence Score', 'category_matching_reason',
+        'Mapped_File_Subcategory', 'Final Subcategory Confidence Score', 'subcategory_matching_reason'
+    ], inplace=True, errors='ignore')
+    df.to_parquet(output_path, index=False)
+    print(f"[✅] Final output saved to: {output_path}")
+
+
+def main():
+    df, mapping_df = load_data(input_parquet_dir, mapping_csv_dir)
+    print(f"[DEBUG] Original row count: {len(df)}")
+    df = ensure_ai_columns(df)
+    df = apply_existing_ai_overrides(df)
+
+    # Category Mapping
+    cat_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Category')
+    cat_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Category')
+    df = map_values(df, cat_map_1, cat_map_2, JOIN_COL_1, JOIN_COL_2, DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Category', 'Mapped_File_Category')
+
+    # Subcategory Mapping
+    sub_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Subcategory')
+    sub_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory')
+    df = map_values(df, sub_map_1, sub_map_2, JOIN_COL_1, JOIN_COL_2, DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory', 'Mapped_File_Subcategory')
+
+    df = add_flags(df)
+    print(f"[DEBUG] Original row count: {len(df)}")
+    finalize_output(df, final_output_path)
+    df.to('./data/test_v1.csv')
+    # print("=== DEBUG SUMMARY ===")
+    # print(f"Total input rows processed: {len(df)}")
+    # print(f"Final Category Filled: {df['Mapped_File_Category Filled'].sum()}")
+    # print(f"Final Subcategory Filled: {df['Mapped_File_Subcategory Filled'].sum()}")
+    # print(f"Rows needing model: {df['needs_model'].sum()}")
+    # print(f" - Category model only: {df['needs_category_model'].sum()}")
+    # print(f" - Subcategory model only: {df['needs_subcategory_model'].sum()}")
+
+
+if __name__ == "__main__":
+    main()
