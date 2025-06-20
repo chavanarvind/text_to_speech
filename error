@@ -1,5 +1,10 @@
-AI_MATCHING_REASON_FINAL_CATEGORY	AI_FINAL_SUBCATEGORY	AI_FINAL_SUBCATEGORY_CONFIDENCE	AI_MATCHING_REASON_FINAL_SUBCATEG	skip_category_mapping	skip_subcategory_mapping	Mapped_File_Category Filled	Mapped_File_Subcategory Filled	needs_model	needs_category_model	needs_subcategory_model
-direct_mapping	nan			FALSE	FALSE	TRUE	TRUE	TRUE	FALSE	TRUE
-direct_mapping	nan			FALSE	FALSE	TRUE	TRUE	TRUE	FALSE	TRUE
-direct_mapping	nan			FALSE	FALSE	TRUE	TRUE	TRUE	FALSE	TRUE
-direct_mapping	nan			FALSE	FALSE	TRUE	TRUE	TRUE	FALSE	TRUE
+def add_flags(df):
+    # Sanitize mapped values: convert "nan", "NaN", "" to real NaN
+    df['Mapped_File_Category'] = df['Mapped_File_Category'].replace(["nan", "NaN", ""], pd.NA)
+    df['Mapped_File_Subcategory'] = df['Mapped_File_Subcategory'].replace(["nan", "NaN", ""], pd.NA)
+    
+    # Now flags will calculate correctly
+    df['Mapped_File_Category Filled'] = df['Mapped_File_Category'].notna()
+    df['Mapped_File_Subcategory Filled'] = df['Mapped_File_Subcategory'].notna()
+
+    ...
