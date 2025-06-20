@@ -82,28 +82,6 @@ def add_flags(df):
     df['needs_subcategory_model'] = ~df['Mapped_File_Subcategory Filled']
     return df
 
-def register_key_output(df, output_path, ws, seen_keys=None):
-    if seen_keys is None:
-        seen_keys = set()
-
-    # Deduplicate using LOGL_KEY_COMB_COL_VAL
-    df = df[df['LOGL_KEY_COMB_COL_VAL'].notna()]
-    df = df[~df['LOGL_KEY_COMB_COL_VAL'].isin(seen_keys)]
-    if df.empty:
-        print("[INFO] All keys already seen. Skipping key registration.")
-        return
-
-    key_df = df[KEY_COLS].drop_duplicates()
-    key_file_path = os.path.join(output_path, "key_reference_output.parquet")
-    os.makedirs(os.path.dirname(key_file_path), exist_ok=True)
-    key_df.to_parquet(key_file_path, index=False)
-
-    datastore = ws.get_default_datastore()
-    datastore.upload_files([key_file_path], "mapped_data/key_reference/", overwrite=True)
-    dataset = Dataset.Tabular.from_parquet_files([(datastore, "mapped_data/key_reference/key_reference_output.parquet")])
-    dataset.register(ws, name="bom_key_reference_dataset", description="Key columns to remap BOM", create_new_version=True)
-    print("✅ Registered key reference dataset")
-
 def register_final_output_dir(output_dir, ws):
     print(f"[INFO] Registering final mapped output from: {output_dir}")
     parquet_files = glob.glob(os.path.join(output_dir, "*.parquet"))
@@ -148,11 +126,9 @@ def finalize_output(df, output_path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_path", type=str, required=True)
-    parser.add_argument("--mapping_csv", type=str, required=False)
-    parser.add_argument("--key_output", type=str, default="key_reference_output.parquet")
-    parser.add_argument("--final_output", type=str, required=False)
+    parser.add_argument("--mapping_csv", type=str, required=True)
+    parser.add_argument("--final_output", type=str, required=True)
     parser.add_argument("--skip_register", action="store_true")
-    parser.add_argument("--only_key_build", action="store_true", help="Only build key reference from first file")
     args = parser.parse_args()
 
     run = Run.get_context()
@@ -162,15 +138,6 @@ def main():
     if not parquet_files:
         raise FileNotFoundError(f"No parquet files found in {args.input_path}")
 
-    if args.only_key_build:
-        df = pd.read_parquet(parquet_files[0])
-        if all(col in df.columns for col in KEY_COLS):
-            register_key_output(df, args.key_output, ws)
-        else:
-            print("[WARN] Missing required columns in input file for key building")
-        return
-
-    # Normal mapping process
     csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
     if not csv_files:
         raise FileNotFoundError(f"No CSV mapping file found in {args.mapping_csv}")
@@ -208,10 +175,6 @@ def main():
                             DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory', 'Mapped_File_Subcategory')
 
             df = add_flags(df)
-
-            if idx == 0 and not args.skip_register:
-                register_key_output(df, args.key_output, ws, seen_keys)
-
             output_file = os.path.join(args.final_output, f"mapped_{os.path.basename(file_path)}")
             finalize_output(df, output_file)
 
