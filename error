@@ -1,10 +1,9 @@
-from azureml.core import Workspace, Environment, Experiment, Dataset
+from azureml.core import Workspace, Experiment, Environment, Dataset, Datastore
 from azureml.core.runconfig import RunConfiguration
 from azureml.data import OutputFileDatasetConfig
 from azureml.pipeline.core import Pipeline
 from azureml.pipeline.steps import PythonScriptStep
 from azureml.core.authentication import ServicePrincipalAuthentication
-
 from datetime import datetime
 import sys
 
@@ -53,6 +52,7 @@ default_ds = ws.get_default_datastore()
 step1_out = OutputFileDatasetConfig(name="data_step1_out")
 step1a_final_output = OutputFileDatasetConfig(name="step1a_final_output")
 step1a_key_output_temp = OutputFileDatasetConfig(name="step1a_key_output_temp")
+step2_final_output = OutputFileDatasetConfig(name="step2_final_output")
 
 # === Upload Mapping CSV ===
 default_ds.upload_files(
@@ -94,12 +94,27 @@ step1a = PythonScriptStep(
     allow_reuse=False
 )
 
-
+# === Step 2 - Preprocessing: abbreviation, cleaning, features ===
+step2 = PythonScriptStep(
+    name="Step 2 - Preprocessing",
+    script_name="step2_pre_process.py",
+    source_directory="scripts",
+    inputs=[step1a_final_output, high_conf_mount],
+    arguments=[
+        "--input_path", step1a_final_output,
+        "--abbrev_map", high_conf_mount,
+        "--output_path", step2_final_output
+    ],
+    outputs=[step2_final_output],
+    runconfig=run_config,
+    compute_target=COMPUTE_NAME,
+    allow_reuse=False
+)
 
 # === Build and Run Pipeline ===
-pipeline = Pipeline(workspace=ws, steps=[step1, step1a])
+pipeline = Pipeline(workspace=ws, steps=[step1, step1a, step2])
 pipeline.validate()
 
-experiment = Experiment(ws, "partial_pipeline_pull_and_merge_v2")
+experiment = Experiment(ws, "bom_pipeline_pull_merge_preprocess")
 run = experiment.submit(pipeline)
 run.wait_for_completion(show_output=True)
