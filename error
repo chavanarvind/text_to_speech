@@ -1,80 +1,14 @@
-Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.scriptrun = azureml.core.script_run:ScriptRun._from_run_dto with exception (packaging 23.2 (/opt/conda/envs/ptca/lib/python3.8/site-packages), Requirement.parse('packaging<=23.0,>=20.0')).
+key_df.to_parquet(key_file_path, index=False)
+os.makedirs(os.path.dirname(key_file_path), exist_ok=True)  # ✅ Ensure directory exists
+key_df.to_parquet(key_file_path, index=False)
 
-🔄 [Processing file]: part-00000-00185f20-d84d-4828-b7cb-f6f0a7f512fa-c000.snappy.parquet
-[❌ ERROR] Failed to process /mnt/azureml/cr/j/4d0c88cfa9ec4a759d656e674afb2ee7/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/ef8aeca3-3880-41cd-8e52-19ceadb5140d/step1_output/part-00000-00185f20-d84d-4828-b7cb-f6f0a7f512fa-c000.snappy.parquet: Cannot save file into a non-existent directory: '/mnt/azureml/cr/j/4d0c88cfa9ec4a759d656e674afb2ee7/cap/data-capability/wd/INPUT_step1a_key_output_temp_workspaceblobstore/azureml/b5d14a94-78f4-437e-8dc8-03952ccca861/step1a_key_output_temp'
-
-🔄 [Processing file]: part-00000-0042fc95-a813-4a78-a5ea-9d565974a2b5-c000.snappy.parquet
-[✅] Final output saved to: /mnt/azureml/cr/j/4d0c88cfa9ec4a759d656e674afb2ee7/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/b5d14a94-78f4-437e-8dc8-03952ccca861/step1a_final_output/mapped_part-00000-0042fc95-a813-4a78-a5ea-9d565974a2b5-c000.snappy.parquet
-[INFO] Registering final mapped output from: /mnt/azureml/cr/j/4d0c88cfa9ec4a759d656e674afb2ee7/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/b5d14a94-78f4-437e-8dc8-03952ccca861/step1a_final_output
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.14257431030273438 seconds
-Traceback (most recent call last):
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/azureml/data/dataset_error_handling.py", line 66, in _validate_has_data
-    dataflow.verify_has_data()
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/azureml/dataprep/api/_loggerfactory.py", line 273, in wrapper
-    return func(*args, **kwargs)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/azureml/dataprep/api/dataflow.py", line 947, in verify_has_data
-    if len(self.take(1)._to_pyrecords()) == 0:
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/azureml/dataprep/api/dataflow.py", line 853, in _to_pyrecords
-    intermediate_files = _write_preppy('Dataflow.to_pyrecords', self, span_context=to_dprep_span_context(span.get_context()), allow_fallback_to_clex=allow_fallback_to_clex, force_clex=force_clex)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/azureml/dataprep/api/_dataframereader.py", line 301, in _write_preppy
-    raise e
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/azureml/dataprep/api/_dataframereader.py", line 290, in _write_preppy
-    _execute(
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/azureml/dataprep/api/_dataframereader.py", line 631, in _execute
-    raise e
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/azureml/dataprep/api/_dataframereader.py", line 606, in _execute
-    return clex_execute()
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/azureml/dataprep/api/_dataframereader.py", line 439, in clex_execute
-    dataflow_for_execution._engine_api.execute_anonymous_activity(
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/azureml/dataprep/api/_aml_helper.py", line 44, in wrapper
-    return send_message_func(op_code, message, cancellation_token)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/azureml/dataprep/api/engineapi/api.py", line 159, in execute_anonymous_activity
-    response = self._message_channel.send_message('Engine.ExecuteActivity', message_args, cancellation_token)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/azureml/dataprep/api/engineapi/engine.py", line 291, in send_message
-    raise_engine_error(response['error'])
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/azureml/dataprep/api/errorhandlers.py", line 10, in raise_engine_error
-    raise ExecutionError(error_response)
-azureml.dataprep.api.errorhandlers.ExecutionError: 
-Error Code: ScriptExecution.StreamAccess.NotFound
-Failed Step: 6903bd66-5bce-4bd9-8876-b67991200338
-Error Message: ScriptExecutionException was caused by StreamAccessException.
-  StreamAccessException was caused by NotFoundException.
-    Found no resources for the input provided: 'https://blobdtoamlmarmot.blob.core.windows.net/azureml-blobstore-975b0280-8ce5-42df-bdeb-51637f5ddbc7/mnt/azureml/cr/j/4d0c88cfa9ec4a759d656e674afb2ee7/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/b5d14a94-78f4-437e-8dc8-03952ccca861/step1a_final_output/*.parquet'
-| session_id=8e4d7b42-58ab-48bc-8983-37610f96b0eb
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "step_1a_extract_and_merge.py", line 210, in <module>
-    main()
-  File "step_1a_extract_and_merge.py", line 206, in main
-    register_final_output_dir(args.final_output, ws)
-  File "step_1a_extract_and_merge.py", line 107, in register_final_output_dir
+def register_final_output_dir(output_dir, ws):
+    print(f"[INFO] Registering final mapped output from: {output_dir}")
+    parquet_files = glob.glob(os.path.join(output_dir, "*.parquet"))
+    if not parquet_files:
+        print(f"[WARN] No Parquet files found to register in {output_dir}")
+        return
+    datastore = ws.get_default_datastore()
     dataset = Dataset.Tabular.from_parquet_files([(datastore, os.path.join(output_dir, "*.parquet"))])
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/azureml/data/_loggerfactory.py", line 132, in wrapper
-    return func(*args, **kwargs)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/azureml/data/dataset_factory.py", line 142, in from_parquet_files
-    return TabularDatasetFactory._from_parquet_files(path,
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/azureml/data/dataset_factory.py", line 156, in _from_parquet_files
-    dataflow = _transform_and_validate(
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/azureml/data/dataset_factory.py", line 1173, in _transform_and_validate
-    _validate_has_data(dataflow, 'Failed to validate the data.')
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/azureml/data/dataset_error_handling.py", line 69, in _validate_has_data
-    raise DatasetValidationError(error_message + '\n' + e.compliant_message, exception=e)
-azureml.data.dataset_error_handling.DatasetValidationError: DatasetValidationError:
-	Message: Failed to validate the data.
-ScriptExecutionException was caused by StreamAccessException.
-  StreamAccessException was caused by NotFoundException.
-    Found no resources for the input provided: '[REDACTED]'
-| session_id=8e4d7b42-58ab-48bc-8983-37610f96b0eb
-	InnerException None
-	ErrorResponse 
-{
-    "error": {
-        "code": "UserError",
-        "message": "Failed to validate the data.\nScriptExecutionException was caused by StreamAccessException.\n  StreamAccessException was caused by NotFoundException.\n    Found no resources for the input provided: '[REDACTED]'\n| session_id=8e4d7b42-58ab-48bc-8983-37610f96b0eb"
-    }
-}
-
+    dataset.register(ws, name="bom_final_mapped_dataset", description="Final mapped output from step1a", create_new_version=True)
+    print("✅ Registered: bom_final_mapped_dataset")
