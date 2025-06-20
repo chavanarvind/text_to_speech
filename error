@@ -1,1 +1,10 @@
-parser.add_argument("--skip_register", action="store_true", help="Skip dataset registration steps")
+if idx == 0:
+    register_key_output(df, args.input_path, args.key_output, ws)
+
+if idx == 0 and not args.skip_register:
+    register_key_output(df, args.input_path, args.key_output, ws)
+
+
+register_final_output_dir(args.final_output, ws)
+if not args.skip_register:
+    register_final_output_dir(args.final_output, ws)
