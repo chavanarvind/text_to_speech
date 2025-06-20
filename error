@@ -1,17 +1,7 @@
-# === Step 3: Inference Prediction ===
-step3_inference = PythonScriptStep(
-    name="Step 3 - Inference Prediction",
-    script_name="step3_inference_run.py",  # Replace with actual script name if different
-    source_directory="scripts",
-    arguments=[
-        "--input_path", step2_final_output,
-        "--additional_mapped_dir", step1a_final_output,
-        "--key_output_dir", step1a_key_output_temp,
-        "--final_output_dir", step3_final_output
-    ],
-    inputs=[step2_final_output, step1a_final_output, step1a_key_output_temp],
-    outputs=[step3_final_output],
-    compute_target=compute_target,
-    runconfig=run_config,
-    allow_reuse=False
-)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_path", required=True)
+    parser.add_argument("--final_output_dir", required=True)
+    args = parser.parse_args()
+
+    main(args.input_path, args.final_output_dir)
