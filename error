@@ -1,10 +1,5 @@
-invalid_subcat_mask = (
-    df['AI_FINAL_SUBCATEGORY'].isna() |
-    df['AI_FINAL_SUBCATEGORY'].astype(str).str.strip().isin(["", "nan", "NaN"])
-)
-
-
-invalid_cat_mask = (
-    df['AI_FINAL_CATEGORY'].isna() |
-    df['AI_FINAL_CATEGORY'].astype(str).str.strip().isin(["", "nan", "NaN"])
-)
+AI_MATCHING_REASON_FINAL_CATEGORY	AI_FINAL_SUBCATEGORY	AI_FINAL_SUBCATEGORY_CONFIDENCE	AI_MATCHING_REASON_FINAL_SUBCATEG	skip_category_mapping	skip_subcategory_mapping	Mapped_File_Category Filled	Mapped_File_Subcategory Filled	needs_model	needs_category_model	needs_subcategory_model
+direct_mapping	nan			FALSE	FALSE	TRUE	TRUE	TRUE	FALSE	TRUE
+direct_mapping	nan			FALSE	FALSE	TRUE	TRUE	TRUE	FALSE	TRUE
+direct_mapping	nan			FALSE	FALSE	TRUE	TRUE	TRUE	FALSE	TRUE
+direct_mapping	nan			FALSE	FALSE	TRUE	TRUE	TRUE	FALSE	TRUE
