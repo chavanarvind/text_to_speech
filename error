@@ -1,3 +1,21 @@
-finalize_output(df, args.final_output, ws)
-finalize_output(df, args.final_output)
-finalize_output(df, args.final_output)
+def register_key_output(df, input_path, output_path, ws):
+    import glob
+
+    parquet_files = glob.glob(os.path.join(input_path, "*.parquet"))
+    if not parquet_files:
+        print(f"[INFO] No parquet file found for key extraction in {input_path}")
+        return
+
+    key_file = parquet_files[0]
+    input_cols = pd.read_parquet(key_file).columns
+    missing = [col for col in KEY_COLS if col not in input_cols]
+    if not missing:
+        key_df = pd.read_parquet(key_file, columns=KEY_COLS).drop_duplicates()
+        key_df.to_parquet(output_path, index=False)
+        datastore = ws.get_default_datastore()
+        datastore.upload_files([output_path], "mapped_data/key_reference/", overwrite=True)
+        dataset = Dataset.Tabular.from_parquet_files([(datastore, f"mapped_data/key_reference/{os.path.basename(output_path)}")])
+        dataset.register(ws, name="bom_key_reference_dataset", description="Key columns to remap BOM", create_new_version=True)
+        print("✅ Registered key reference dataset")
+    else:
+        print(f"[INFO] Skipped key output — missing columns: {missing}")
