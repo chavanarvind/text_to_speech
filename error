@@ -1,7 +1,17 @@
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input_path", required=True)
-    parser.add_argument("--final_output_dir", required=True)
-    args = parser.parse_args()
+# === Step 3: Inference Prediction ===
+step3_final_output = PipelineData(name="step3_final_output", is_directory=True)
 
-    main(args.input_path, args.final_output_dir)
+step3_inference = PythonScriptStep(
+    name="Step 3 - Inference Prediction",
+    script_name="step3_inference_run.py",
+    source_directory="scripts",
+    arguments=[
+        "--input_path", step2_final_output,
+        "--final_output_dir", step3_final_output
+    ],
+    inputs=[step2_final_output],
+    outputs=[step3_final_output],
+    compute_target=compute_target,
+    runconfig=run_config,
+    allow_reuse=False
+)
