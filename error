@@ -1,6 +1,7 @@
 import argparse
 import os
 import glob
+import traceback
 import pandas as pd
 from azureml.core import Run, Dataset
 
@@ -82,6 +83,24 @@ def add_flags(df):
     df['needs_subcategory_model'] = ~df['Mapped_File_Subcategory Filled']
     return df
 
+def register_key_output(df, output_path, ws, seen_keys=None):
+    if seen_keys is None:
+        seen_keys = set()
+    df = df[df['LOGL_KEY_COMB_COL_VAL'].notna()]
+    df = df[~df['LOGL_KEY_COMB_COL_VAL'].isin(seen_keys)]
+    if df.empty:
+        print("[INFO] All keys already seen. Skipping key registration.")
+        return
+    key_df = df[KEY_COLS].drop_duplicates()
+    key_file_path = os.path.join(output_path, "key_reference_output.parquet")
+    os.makedirs(os.path.dirname(key_file_path), exist_ok=True)
+    key_df.to_parquet(key_file_path, index=False)
+    datastore = ws.get_default_datastore()
+    datastore.upload_files([key_file_path], "mapped_data/key_reference/", overwrite=True)
+    dataset = Dataset.Tabular.from_parquet_files([(datastore, "mapped_data/key_reference/key_reference_output.parquet")])
+    dataset.register(ws, name="bom_key_reference_dataset", description="Key columns to remap BOM", create_new_version=True)
+    print("✅ Registered key reference dataset")
+
 def register_final_output_dir(output_dir, ws):
     print(f"[INFO] Registering final mapped output from: {output_dir}")
     parquet_files = glob.glob(os.path.join(output_dir, "*.parquet"))
@@ -137,10 +156,12 @@ def main():
     parquet_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
     if not parquet_files:
         raise FileNotFoundError(f"No parquet files found in {args.input_path}")
+    print(f"[INFO] Found {len(parquet_files)} parquet files.")
 
     csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
     if not csv_files:
         raise FileNotFoundError(f"No CSV mapping file found in {args.mapping_csv}")
+    print(f"[INFO] Found mapping file: {csv_files[0]}")
     mapping_df = pd.read_csv(csv_files[0])
     seen_components = set()
     seen_keys = set()
@@ -159,7 +180,11 @@ def main():
                 continue
 
             seen_components.update(df["CMPNT_MATL_NUM"].unique())
-            seen_keys.update(df["LOGL_KEY_COMB_COL_VAL"].dropna().unique())
+            new_keys = df["LOGL_KEY_COMB_COL_VAL"].dropna().unique()
+            unseen_keys = set(new_keys) - seen_keys
+            if not args.skip_register and unseen_keys:
+                register_key_output(df[df["LOGL_KEY_COMB_COL_VAL"].isin(unseen_keys)], args.final_output, ws, seen_keys)
+            seen_keys.update(unseen_keys)
 
             df = ensure_ai_columns(df)
             df = apply_existing_ai_overrides(df)
@@ -180,6 +205,7 @@ def main():
 
         except Exception as e:
             print(f"[❌ ERROR] Failed processing {file_path}: {e}")
+            traceback.print_exc()
 
     if not args.skip_register:
         register_final_output_dir(args.final_output, ws)
