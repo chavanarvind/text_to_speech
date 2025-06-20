@@ -1,17 +1,2 @@
-key_df.to_parquet(output_path, index=False)
-
-To:
-
-python
-Copy
-Edit
-key_file_path = os.path.join(output_path, "key_reference_output.parquet")
-key_df.to_parquet(key_file_path, index=False)
-
-Then update the upload line:
-
-python
-Copy
-Edit
 datastore.upload_files([key_file_path], "mapped_data/key_reference/", overwrite=True)
-dataset = Dataset.Tabular.from_parquet_files([(datastore, "mapped_data/key_referenc
+dataset = Dataset.Tabular.from_parquet_files([(datastore, "mapped_data/key_reference/key_reference_output.parquet")])
