@@ -1,1 +1,1 @@
-new_df = df[["column_1", "column_2"]].copy()
+df_unique = df.drop_duplicates(subset="column_name")
