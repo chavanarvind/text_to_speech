@@ -1,4 +1,22 @@
-AI_FINAL_CATEGORY	AI_FINAL_CATEGORY_CONFIDENCE	AI_MATCHING_REASON_FINAL_CATEGORY	AI_FINAL_SUBCATEGORY	AI_FINAL_SUBCATEGORY_CONFIDENCE	AI_MATCHING_REASON_FINAL_SUBCATEG	skip_category_mapping	skip_subcategory_mapping	Mapped_File_Category Filled	Mapped_File_Subcategory Filled	needs_model	needs_category_model	needs_subcategory_model
-CHM	1	direct_mapping	nan	1	direct_mapping	FALSE	FALSE	TRUE	TRUE	FALSE	FALSE	FALSE
-CHM	1	direct_mapping	nan	1	direct_mapping	FALSE	FALSE	TRUE	TRUE	FALSE	FALSE	FALSE
-CHM	1	direct_mapping	nan	1	direct_mapping	FALSE	FALSE	TRUE	TRUE	FALSE	FALSE	FALSE
+# === SUBCATEGORY UPDATE LOGIC ===
+mask_subcat = df["AI_FINAL_SUBCATEGORY"].isna() & df["AI_FINAL_SUBCATEGORY_subcat_mapped"].notna()
+print(f"🔍 {file} → {mask_subcat.sum()} rows updated for SUBCATEGORY.")
+
+df.loc[mask_subcat, "AI_FINAL_SUBCATEGORY"] = df.loc[mask_subcat, "AI_FINAL_SUBCATEGORY_subcat_mapped"]
+df.loc[mask_subcat, "AI_MATCHING_REASON_FINAL_SUBCATEGORY"] = "direct_mapping_lookup"
+df.loc[mask_subcat, "AI_FINAL_SUBCATEGORY_CONFIDENCE"] = 1
+
+# === FIX: Reset invalid subcategory mappings ===
+invalid_subcat_mask = df["AI_FINAL_SUBCATEGORY"].isna()
+
+df.loc[invalid_subcat_mask, "AI_FINAL_SUBCATEGORY_CONFIDENCE"] = None
+df.loc[invalid_subcat_mask, "AI_MATCHING_REASON_FINAL_SUBCATEGORY"] = None
+df.loc[invalid_subcat_mask, "Mapped_File_Subcategory Filled"] = False
+df.loc[invalid_subcat_mask, "needs_subcategory_model"] = True
+df.loc[invalid_subcat_mask, "needs_model"] = True  # optional: only if subcategory triggers model need
+
+# Drop helper columns
+df.drop(columns=["AI_FINAL_CATEGORY_cat_mapped", "AI_FINAL_SUBCATEGORY_subcat_mapped"], errors='ignore', inplace=True)
+
+df.to_parquet(output_file, index=False)
+print(f"✅ Updated & saved: {file}")
