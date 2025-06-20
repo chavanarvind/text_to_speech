@@ -1,54 +1,31 @@
-run = Run.get_context()
-    ws = run.experiment.workspace
+for idx, file_path in enumerate(parquet_files):
+    print(f"\n🔄 [Processing file]: {os.path.basename(file_path)}")
+    try:
+        df = pd.read_parquet(file_path)
+        df = df[df['CMPNT_MATL_DESC'].notna()].drop_duplicates(subset=["CMPNT_MATL_NUM"])
 
-    parquet_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
-    if not parquet_files:
-        raise FileNotFoundError(f"No parquet files found in {args.input_path}")
+        # Skip already seen components
+        df = df[~df["CMPNT_MATL_NUM"].isin(seen_components)]
+        if df.empty:
+            print("[SKIPPED] All CMPNT_MATL_NUM already processed in previous files.")
+            continue
+        seen_components.update(df["CMPNT_MATL_NUM"].unique())
 
-    csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
-    if not csv_files:
-        raise FileNotFoundError(f"No CSV files found in {args.mapping_csv}")
+        df = ensure_ai_columns(df)
+        df = apply_existing_ai_overrides(df)
 
-    mapping_df = pd.read_csv(csv_files[0])
+        # Mapping logic...
+        # ...
 
-    for idx, file_path in enumerate(parquet_files):
-        print(f"\n🔄 [Processing file]: {os.path.basename(file_path)}")
-        try:
-            df = pd.read_parquet(file_path)
-            df = df[df['CMPNT_MATL_DESC'].notna()].drop_duplicates(subset=["CMPNT_MATL_NUM"])
+        if idx == 0:
+            register_key_output(df, args.input_path, args.key_output, ws)
 
-            # Skip already seen components
-            df = df[~df["CMPNT_MATL_NUM"].isin(seen_components)]
-            if df.empty:
-                print("[SKIPPED] All CMPNT_MATL_NUM already processed in previous files.")
-                continue
-            seen_components.update(df["CMPNT_MATL_NUM"].unique())
-            df = ensure_ai_columns(df)
-            df = apply_existing_ai_overrides(df)
+        output_file = os.path.join(args.final_output, f"mapped_{os.path.basename(file_path)}")
+        finalize_output(df, output_file)
 
-            cat_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Category')
-            cat_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Category')
-            df = map_values(df, cat_map_1, cat_map_2, JOIN_COL_1, JOIN_COL_2,
-                            DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Category', 'Mapped_File_Category')
+        # ✅ Stop after one file if flag is set
+        if process_only_one:
+            break
 
-            sub_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Subcategory')
-            sub_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory')
-            df = map_values(df, sub_map_1, sub_map_2, JOIN_COL_1, JOIN_COL_2,
-                            DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory', 'Mapped_File_Subcategory')
-
-            df = add_flags(df)
-
-            if idx == 0:
-                register_key_output(df, args.input_path, args.key_output, ws)
-
-            output_file = os.path.join(args.final_output, f"mapped_{os.path.basename(file_path)}")
-            finalize_output(df, output_file)
-
-        except Exception as e:
-            print(f"[❌ ERROR] Failed to process {file_path}: {e}")
-
-    register_final_output_dir(args.final_output, ws)
-    print("\n✅ All files processed.")
-
-if __name__ == "__main__":
-    main()
+    except Exception as e:
+        print(f"[❌ ERROR] Failed to process {file_path}: {e}")
