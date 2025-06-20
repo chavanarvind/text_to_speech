@@ -83,15 +83,12 @@ def add_flags(df):
     df['needs_subcategory_model'] = ~df['Mapped_File_Subcategory Filled']
     return df
 
-def register_key_output(df, output_path, ws, seen_keys=None):
+def register_key_output(key_df, output_path, ws, seen_keys=None):
     if seen_keys is None:
         seen_keys = set()
-    df = df[df['LOGL_KEY_COMB_COL_VAL'].notna()]
-    df = df[~df['LOGL_KEY_COMB_COL_VAL'].isin(seen_keys)]
-    if df.empty:
-        print("[INFO] All keys already seen. Skipping key registration.")
+    if key_df.empty:
+        print("[INFO] No unseen keys to register. Skipping key registration.")
         return
-    key_df = df[KEY_COLS].drop_duplicates()
     key_file_path = os.path.join(output_path, "key_reference_output.parquet")
     os.makedirs(os.path.dirname(key_file_path), exist_ok=True)
     key_df.to_parquet(key_file_path, index=False)
@@ -180,10 +177,12 @@ def main():
                 continue
 
             seen_components.update(df["CMPNT_MATL_NUM"].unique())
+
             new_keys = df["LOGL_KEY_COMB_COL_VAL"].dropna().unique()
             unseen_keys = set(new_keys) - seen_keys
             if not args.skip_register and unseen_keys:
-                register_key_output(df[df["LOGL_KEY_COMB_COL_VAL"].isin(unseen_keys)], args.final_output, ws, seen_keys)
+                key_df = df[df["LOGL_KEY_COMB_COL_VAL"].isin(unseen_keys)][KEY_COLS].drop_duplicates()
+                register_key_output(key_df, args.final_output, ws, seen_keys)
             seen_keys.update(unseen_keys)
 
             df = ensure_ai_columns(df)
