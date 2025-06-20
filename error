@@ -1,10 +1,18 @@
-def add_flags(df):
-    # Sanitize mapped values: convert "nan", "NaN", "" to real NaN
-    df['Mapped_File_Category'] = df['Mapped_File_Category'].replace(["nan", "NaN", ""], pd.NA)
-    df['Mapped_File_Subcategory'] = df['Mapped_File_Subcategory'].replace(["nan", "NaN", ""], pd.NA)
-    
-    # Now flags will calculate correctly
-    df['Mapped_File_Category Filled'] = df['Mapped_File_Category'].notna()
-    df['Mapped_File_Subcategory Filled'] = df['Mapped_File_Subcategory'].notna()
+def map_values(df, map_df1, map_df2, join_col1, join_col2, key1, key2, value_col, output_col):
+    df[join_col1] = df[join_col1].astype(str).str.upper().str.strip()
+    df[join_col2] = df[join_col2].astype(str).str.upper().str.strip()
 
-    ...
+    map_dict1 = dict(zip(map_df1[key1], map_df1[value_col]))
+    map_dict2 = dict(zip(map_df2[key2], map_df2[value_col]))
+
+    # Step 1: Try mapping from map_dict1
+    df[output_col] = df[join_col1].map(map_dict1)
+
+    # Step 2: Fill missing with map_dict2
+    missing = df[output_col].isna() | df[output_col].astype(str).str.strip().isin(["", "nan", "NaN"])
+    df.loc[missing, output_col] = df.loc[missing, join_col2].map(map_dict2)
+
+    # ✅ Final cleanup: replace fake nans or empty strings with pd.NA or ""
+    df[output_col] = df[output_col].replace(["nan", "NaN"], pd.NA)  # or "" if you prefer blanks
+
+    return df
