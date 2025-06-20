@@ -1,17 +1,5 @@
-# === Step 3: Inference Prediction ===
-step3_final_output = PipelineData(name="step3_final_output", is_directory=True)
 
-step3_inference = PythonScriptStep(
-    name="Step 3 - Inference Prediction",
-    script_name="step3_inference_run.py",
-    source_directory="scripts",
-    arguments=[
-        "--input_path", step2_final_output,
-        "--final_output_dir", step3_final_output
-    ],
-    inputs=[step2_final_output],
-    outputs=[step3_final_output],
-    compute_target=compute_target,
-    runconfig=run_config,
-    allow_reuse=False
-)
+Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
+  File "step3_inference_run.py", line 153, in <module>
+    main(args.input_path, args.final_output_dir)
+TypeError: main() missing 2 required positional arguments: 'key_output_dir' and 'final_output_dir'
