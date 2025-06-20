@@ -1,67 +1,105 @@
-from azureml.core import Workspace, Experiment, Environment, Dataset, Datastore
-from azureml.pipeline.core import Pipeline, PipelineData
+from azureml.core import Workspace, Environment, Experiment, Dataset
+from azureml.core.runconfig import RunConfiguration
+from azureml.data import OutputFileDatasetConfig
+from azureml.pipeline.core import Pipeline
 from azureml.pipeline.steps import PythonScriptStep
-from azureml.data import OutputFileDatasetConfig, DataPath
-from azureml.core.compute import ComputeTarget
-import os
+from azureml.core.authentication import ServicePrincipalAuthentication
 
-# === Workspace and Compute Target ===
-ws = Workspace.from_config()
-compute_target = ComputeTarget(workspace=ws, name="your-compute-cluster")
+from datetime import datetime
+import sys
 
-# === Input Definitions ===
-# Define local mapping folder (uploaded manually or pre-registered)
-datastore = Datastore.get(ws, datastore_name="workspaceblobstore")
-mapping_csv_path = DataPath(datastore, "mapping_folder/")
-input_data = Dataset.File.from_files(path=(datastore, "raw_input_data/"))
+# === Workspace configuration ===
+SUBSCRIPTION_ID = "a8d518a9-4587-4ba2-9a60-68b980c2f000"
+RESOURCE_GROUP = "AZR-WDZ-DTO-AML-Development"
+WORKSPACE_NAME = "AML-DTO-Marmot-dev"
+COMPUTE_NAME = "llm-gpu-cluster-2"
+ENV_NAME = "Bom_X_Evaluator"
 
-# === Output Definitions ===
-step1a_output = OutputFileDatasetConfig(name="mapped_data_output")
-step2_output = OutputFileDatasetConfig(name="preprocessed_data_output")
+# === Get workspace ===
+def get_workspace(use_sp_auth=False, args=None):
+    if use_sp_auth and args and len(args) >= 4:
+        tenant_id = args[1]
+        client_id = args[2]
+        client_secret = args[3]
+        sp_auth = ServicePrincipalAuthentication(
+            tenant_id=tenant_id,
+            service_principal_id=client_id,
+            service_principal_password=client_secret
+        )
+        return Workspace(
+            subscription_id=SUBSCRIPTION_ID,
+            resource_group=RESOURCE_GROUP,
+            workspace_name=WORKSPACE_NAME,
+            auth=sp_auth
+        )
+    else:
+        return Workspace(
+            subscription_id=SUBSCRIPTION_ID,
+            resource_group=RESOURCE_GROUP,
+            workspace_name=WORKSPACE_NAME
+        )
 
-# === Environment ===
-env = Environment.get(ws, name="AzureML-sklearn-1.0-ubuntu20.04-py38-cpu")  # Or define custom one
+# === Initialize workspace and configs ===
+ws = get_workspace(use_sp_auth=(len(sys.argv) > 3), args=sys.argv)
+env = Environment.get(workspace=ws, name=ENV_NAME)
 
-# === Step 1a: Mapping Logic ===
-step1a_merge = PythonScriptStep(
-    name="Step1a_MergeAndMap",
-    script_name="step1a_merge_singlefile.py",
-    arguments=[
-        "--input_path", input_data.as_mount(),
-        "--mapping_csv", mapping_csv_path,
-        "--key_output", "key_reference_output.parquet",
-        "--final_output", step1a_output
-    ],
-    inputs=[input_data, mapping_csv_path],
-    outputs=[step1a_output],
-    compute_target=compute_target,
+run_config = RunConfiguration()
+run_config.target = COMPUTE_NAME
+run_config.environment = env
+
+default_ds = ws.get_default_datastore()
+
+# === Pipeline Outputs ===
+step1_out = OutputFileDatasetConfig(name="data_step1_out")
+step1a_final_output = OutputFileDatasetConfig(name="step1a_final_output")
+step1a_key_output_temp = OutputFileDatasetConfig(name="step1a_key_output_temp")
+
+# === Upload Mapping CSV ===
+default_ds.upload_files(
+    files=['./local_data/high_conf_direct_mapping.csv'],
+    target_path='high_conf_map',
+    overwrite=True,
+    show_progress=True
+)
+high_conf_dataset = Dataset.File.from_files((default_ds, 'high_conf_map'))
+high_conf_mount = high_conf_dataset.as_named_input('high_conf_map').as_mount()
+
+# === Step 1 - Pull raw BOM dataset ===
+step1 = PythonScriptStep(
+    name="Step 1 - Pull Dataset",
+    script_name="step_1_data_pull.py",
     source_directory="scripts",
-    allow_reuse=True,
-    environment=env
+    arguments=["--output_path", step1_out],
+    outputs=[step1_out],
+    runconfig=run_config,
+    compute_target=COMPUTE_NAME,
+    allow_reuse=False
 )
 
-# === Step 2: Preprocessing (Abbreviation + Cleaning + Features) ===
-step2_preprocess = PythonScriptStep(
-    name="Step2_PreProcess",
-    script_name="step2_pre_process.py",
-    arguments=[
-        "--input_path", step1a_output,
-        "--abbrev_map", mapping_csv_path,
-        "--output_path", step2_output
-    ],
-    inputs=[step1a_output, mapping_csv_path],
-    outputs=[step2_output],
-    compute_target=compute_target,
+# === Step 1a - Apply direct mapping & generate final output ===
+step1a = PythonScriptStep(
+    name="Step 1a - High Confidence Merge (Single Output)",
+    script_name="step_1a_extract_and_merge.py",
     source_directory="scripts",
-    allow_reuse=True,
-    environment=env
+    inputs=[step1_out, high_conf_mount],
+    arguments=[
+        "--input_path", step1_out,
+        "--mapping_csv", high_conf_mount,
+        "--final_output", step1a_final_output,
+        "--key_output", step1a_key_output_temp
+    ],
+    outputs=[step1a_final_output, step1a_key_output_temp],
+    runconfig=run_config,
+    compute_target=COMPUTE_NAME,
+    allow_reuse=False
 )
 
-# === Pipeline Definition ===
-pipeline = Pipeline(workspace=ws, steps=[step1a_merge, step2_preprocess])
+
+
+# === Build and Run Pipeline ===
+pipeline = Pipeline(workspace=ws, steps=[step1, step1a])
 pipeline.validate()
 
-# === Submit Run ===
-experiment = Experiment(ws, name="bom_processing_pipeline")
-pipeline_run = experiment.submit(pipeline)
-pipeline_run.wait_for_completion(show_output=True)
+experiment = Experiment(ws, "partial_pipeline_pull_and_merge_v2")
+run = experiment.submit(pipeline)
+run.wait_for_completion(show_output=True)
