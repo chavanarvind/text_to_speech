@@ -1,18 +1,16 @@
 # pipeline_runner_updated.py
 
-from azureml.core import Workspace, Environment, Experiment
-from azureml.pipeline.core import Pipeline, PipelineData
+from azureml.core import Workspace, Environment, Experiment, Dataset
+from azureml.pipeline.core import Pipeline
 from azureml.pipeline.steps import PythonScriptStep
 from azureml.core.runconfig import RunConfiguration
 from azureml.data.datapath import DataPath
 from azureml.data import OutputFileDatasetConfig
-from azureml.core import Dataset
 from azureml.core.authentication import ServicePrincipalAuthentication
-import os
-import sys
 from datetime import datetime
+import sys
 
-# === Load workspace ===
+# === Workspace Config ===
 SUBSCRIPTION_ID = "a8d518a9-4587-4ba2-9a60-68b980c2f000"
 RESOURCE_GROUP = "AZR-WDZ-DTO-AML-Development"
 WORKSPACE_NAME = "AML-DTO-Marmot-dev"
@@ -40,7 +38,7 @@ def get_workspace(use_sp_auth=False, args=None):
             workspace_name=WORKSPACE_NAME
         )
 
-# Initialize workspace
+# === Initialize ===
 ws = get_workspace(use_sp_auth=(len(sys.argv) > 3), args=sys.argv)
 compute_name = "llm-gpu-cluster-2"
 env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
@@ -52,37 +50,36 @@ run_config.environment = env
 
 today = datetime.today().strftime("%d%m%Y")
 
-# Output folders
+# === Output Declarations ===
+step1_out = OutputFileDatasetConfig(name="data_step1_out")
+step1a_final_output = OutputFileDatasetConfig(name="step1a_final_output")
+step1a_key_output_temp = OutputFileDatasetConfig(name="step1a_key_output_temp")
+step2_final_output = OutputFileDatasetConfig(name="step2_final_output")
 
-# Intermediate outputs
-step1a_key_output_temp = OutputFileDatasetConfig(name='step1a_key_output_temp')
-
-# === Step 5 Output: Raw inference per file ===
-final_output_to_adls = OutputFileDatasetConfig(  # <- used in step 5
+final_output_to_adls = OutputFileDatasetConfig(
     name='final_predictions_to_adls',
     destination=(default_ds, f"hbom_category_prediction_inference_per_file/hbom_category_prediction_{today}/")
 )
 
-# === Step 6 Output: Final merged and deduplicated predictions ===
-final_merged_output = OutputFileDatasetConfig(  # <- used in step 6
+final_merged_output = OutputFileDatasetConfig(
     name='final_merged_predictions',
     destination=(default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/")
 )
-# === Upload high_conf_mapping.csv from local folder to datastore ===
+
+# === Upload Mapping & Abbreviation CSVs ===
 default_ds1 = ws.get_default_datastore()
 
-# Upload file as before
+# High Confidence Mapping
 default_ds1.upload_files(
     files=['./local_data/high_conf_direct_mapping.csv'],
-    target_path='high_conf_map',   # <== IMPORTANT: Folder name
+    target_path='high_conf_map',
     overwrite=True,
     show_progress=True
 )
-
-# Register or create file dataset
 high_conf_dataset = Dataset.File.from_files((default_ds1, 'high_conf_map'))
 high_conf_mount = high_conf_dataset.as_named_input('high_conf_map').as_mount()
 
+# Abbreviation Mapping
 default_ds1.upload_files(
     files=['./local_data/abbreviation_expension_updated.csv'],
     target_path='abbrev_map',
@@ -91,9 +88,9 @@ default_ds1.upload_files(
 )
 abbrev_dataset = Dataset.File.from_files((default_ds1, 'abbrev_map'))
 abbrev_mount = abbrev_dataset.as_named_input('abbrev_map').as_mount()
+abbreviation_mount = abbrev_mount  # ✅ fix variable reference
 
-
-# === Step 1 - Pull raw BOM dataset ===
+# === Step 1 - Pull Dataset ===
 step1 = PythonScriptStep(
     name="Step 1 - Pull Dataset",
     script_name="step_1_data_pull.py",
@@ -105,7 +102,7 @@ step1 = PythonScriptStep(
     allow_reuse=False
 )
 
-# === Step 1a - Apply direct mapping & generate final output ===
+# === Step 1a - Direct Mapping ===
 step1a = PythonScriptStep(
     name="Step 1a - High Confidence Merge (Single Output)",
     script_name="step_1a_extract_and_merge.py",
@@ -119,11 +116,11 @@ step1a = PythonScriptStep(
     ],
     outputs=[step1a_final_output, step1a_key_output_temp],
     runconfig=run_config,
-    compute_target=COMPUTE_NAME,
+    compute_target=compute_name,
     allow_reuse=False
 )
 
-# === Step 2 - Preprocessing: abbreviation, cleaning, features ===
+# === Step 2 - Preprocessing ===
 step2 = PythonScriptStep(
     name="Step 2 - Preprocessing",
     script_name="step2_pre_process.py",
@@ -136,11 +133,11 @@ step2 = PythonScriptStep(
     ],
     outputs=[step2_final_output],
     runconfig=run_config,
-    compute_target=COMPUTE_NAME,
+    compute_target=compute_name,
     allow_reuse=False
 )
 
-# === Build and Run Pipeline ===
+# === Pipeline Definition ===
 pipeline = Pipeline(workspace=ws, steps=[step1, step1a, step2])
 pipeline.validate()
 
