@@ -1,31 +1,21 @@
-for idx, file_path in enumerate(parquet_files):
-    print(f"\n🔄 [Processing file]: {os.path.basename(file_path)}")
-    try:
-        df = pd.read_parquet(file_path)
-        df = df[df['CMPNT_MATL_DESC'].notna()].drop_duplicates(subset=["CMPNT_MATL_NUM"])
+Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error:     dataflow = _transform_and_validate(
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/azureml/data/dataset_factory.py", line 1173, in _transform_and_validate
+    _validate_has_data(dataflow, 'Failed to validate the data.')
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/azureml/data/dataset_error_handling.py", line 69, in _validate_has_data
+    raise DatasetValidationError(error_message + '\n' + e.compliant_message, exception=e)
+azureml.data.dataset_error_handling.DatasetValidationError: DatasetValidationError:
+	Message: Failed to validate the data.
+ScriptExecutionException was caused by StreamAccessException.
+  StreamAccessException was caused by NotFoundException.
+    Found no resources for the input provided: '[REDACTED]'
+| session_id=98272ccc-652a-49e4-969c-c16f12ac7ff2
+	InnerException None
+	ErrorResponse 
+{
+    "error": {
+        "code": "UserError",
+        "message": "Failed to validate the data.\nScriptExecutionException was caused by StreamAccessException.\n  StreamAccessException was caused by NotFoundException.\n    Found no resources for the input provided: '[REDACTED]'\n| session_id=98272ccc-652a-49e4-969c-c16f12ac7ff2"
+    }
+}
 
-        # Skip already seen components
-        df = df[~df["CMPNT_MATL_NUM"].isin(seen_components)]
-        if df.empty:
-            print("[SKIPPED] All CMPNT_MATL_NUM already processed in previous files.")
-            continue
-        seen_components.update(df["CMPNT_MATL_NUM"].unique())
 
-        df = ensure_ai_columns(df)
-        df = apply_existing_ai_overrides(df)
-
-        # Mapping logic...
-        # ...
-
-        if idx == 0:
-            register_key_output(df, args.input_path, args.key_output, ws)
-
-        output_file = os.path.join(args.final_output, f"mapped_{os.path.basename(file_path)}")
-        finalize_output(df, output_file)
-
-        # ✅ Stop after one file if flag is set
-        if process_only_one:
-            break
-
-    except Exception as e:
-        print(f"[❌ ERROR] Failed to process {file_path}: {e}")
