@@ -1,16 +1,3 @@
-def load_data(parquet_dir, mapping_csv_dir):
-    import glob
-
-    parquet_files = glob.glob(os.path.join(parquet_dir, "*.parquet"))
-    if not parquet_files:
-        raise FileNotFoundError(f"No .parquet files found in {parquet_dir}")
-
-    df = pd.concat([pd.read_parquet(f) for f in parquet_files], ignore_index=True)
-    df = df[df['CMPNT_MATL_DESC'].notna()].drop_duplicates(subset=["CMPNT_MATL_NUM"])
-
-    csv_files = glob.glob(os.path.join(mapping_csv_dir, "*.csv"))
-    if not csv_files:
-        raise FileNotFoundError(f"No .csv files found in {mapping_csv_dir}")
-    mapping_df = pd.read_csv(csv_files[0])
-
-    return df, mapping_df
+finalize_output(df, args.final_output, ws)
+finalize_output(df, args.final_output)
+finalize_output(df, args.final_output)
