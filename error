@@ -1,84 +1,140 @@
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input_path", type=str, required=True)
-    parser.add_argument("--mapping_csv", type=str, required=True)
-    parser.add_argument("--key_output", type=str, required=True)        # Should be a DIR now
-    parser.add_argument("--final_output", type=str, required=True)
-    args = parser.parse_args()
+import os
+import argparse
+import pandas as pd
+import psutil
+from datetime import datetime
+from azureml.core import Run
 
-    parquet_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
-    if not parquet_files:
-        raise FileNotFoundError(f"No parquet files found in {args.input_path}")
+def log(msg):
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
 
-    csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
-    if not csv_files:
-        raise FileNotFoundError(f"No CSV mapping file found in {args.mapping_csv}")
-    mapping_df = pd.read_csv(csv_files[0])
+REQUIRED_COLUMNS = [
+    "CMPNT_MATL_NUM",
+    "Final_Prediction",
+    "Final Subcategory",
+    "Score",
+    "Subcategory_Score",
+    "inferred_category_model",
+    "Subcategory_Model",
+    "prediction_flag",
+    "prediction_flag_subcategory"
+]
 
-    seen_components = set()
-    seen_keys = set()
-    os.makedirs(args.final_output, exist_ok=True)
-    os.makedirs(args.key_output, exist_ok=True)  # Ensure key dir exists
+RENAMED_COLUMNS = {
+    "Final_Prediction": "AI_FINAL_CATEGORY",
+    "Final Subcategory": "AI_FINAL_SUBCATEGORY",
+    "Score": "AI_FINAL_CATEGORY_CONFIDENCE",
+    "Subcategory_Score": "AI_FINAL_SUBCATEGORY_CONFIDENCE",
+    "inferred_category_model": "AI_MATCHING_REASON_FINAL_CATEGORY",
+    "Subcategory_Model": "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
+}
 
-    for file_path in parquet_files:
-        print(f"\n🔄 Processing: {os.path.basename(file_path)}")
+AI_OUTPUT_COLUMNS = list(RENAMED_COLUMNS.values())
+
+def apply_priority_and_deduplicate(df):
+    df['category_priority'] = df['prediction_flag'].map({
+        'Mapped_PreExtracted': 2,
+        'Mapped': 2,
+        'High Confidence': 1,
+        'Low Confidence': 0
+    }).fillna(0)
+
+    df['subcategory_priority'] = df['prediction_flag_subcategory'].map({
+        'Mapped': 2,
+        'High Confidence': 1,
+        'Low Confidence': 0,
+        'Fallback': -1
+    }).fillna(0)
+
+    df = df.sort_values(
+        by=['CMPNT_MATL_NUM', 'category_priority', 'subcategory_priority'],
+        ascending=[True, False, False]
+    )
+
+    return df.drop_duplicates(subset="CMPNT_MATL_NUM", keep="first")
+
+def main(inference_output_dir, key_output_dir, final_output_dir):
+    run = Run.get_context()
+    os.makedirs(final_output_dir, exist_ok=True)
+
+    log("📂 Loading all inference parquet files using folder-level read...")
+    try:
+        global_df = pd.read_parquet(inference_output_dir)
+        log(f"✅ Loaded global predictions parquet folder (rows: {len(global_df)})")
+    except Exception as e:
+        log(f"❌ Failed to load inference parquet directory")
+        log(f"   Reason: {str(e)}")
+        return
+
+    # Filter only required columns
+    global_df = global_df[[col for col in REQUIRED_COLUMNS if col in global_df.columns]]
+
+    # Drop rows with null CMPNT_MATL_NUM from predictions
+    global_df = global_df[global_df["CMPNT_MATL_NUM"].notnull()]
+
+    # Apply priority & deduplication logic
+    global_df = apply_priority_and_deduplicate(global_df)
+
+    # Rename for output
+    global_df = global_df.rename(columns=RENAMED_COLUMNS)
+
+    # Drop helper columns before saving
+    global_df = global_df.drop(columns=[
+        "category_priority",
+        "subcategory_priority",
+        "prediction_flag",
+        "prediction_flag_subcategory"
+    ], errors="ignore")
+
+    # Save once to disk for reuse
+    global_df_path = os.path.join(final_output_dir, "global_predictions.parquet")
+    global_df.to_parquet(global_df_path, index=False)
+    log(f"✅ Saved global prediction table to: {global_df_path}")
+
+    # Process each key file individually
+    for file in os.listdir(key_output_dir):
+        if not file.endswith(".parquet"):
+            continue
 
         try:
-            df = pd.read_parquet(file_path)
+            log(f"📂 Processing key file: {file}")
+            log(f"💾 Memory usage before load: {psutil.virtual_memory().percent}%")
 
-            # Define required columns
-            mapping_cols = [
-                "CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD",
-                "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD"
-            ]
-            key_cols = [
-                "CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD",
-                "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD", "LOGL_KEY_COMB_COL_VAL"
-            ]
+            key_path = os.path.join(key_output_dir, file)
+            key_df = pd.read_parquet(key_path).drop_duplicates()
+            
 
-            # --- 🔑 Key Processing ---
-            df_key = df[key_cols].copy()
-            df_key = df_key[df_key['LOGL_KEY_COMB_COL_VAL'].notna()].drop_duplicates(subset=["LOGL_KEY_COMB_COL_VAL"])
-            df_key = df_key[~df_key['LOGL_KEY_COMB_COL_VAL'].isin(seen_keys)]
+            # Reload global predictions fresh each time
+            global_df = pd.read_parquet(global_df_path)
+            global_df = global_df[global_df["CMPNT_MATL_NUM"].notnull()]
 
-            if not df_key.empty:
-                seen_keys.update(df_key["LOGL_KEY_COMB_COL_VAL"].unique())
-                key_output_file = os.path.join(args.key_output, f"key_{os.path.basename(file_path)}")
-                df_key.to_parquet(key_output_file, index=False)
-                print(f"🧩 Saved key file: {key_output_file}")
-            else:
-                print("🔁 No new keys to save for this file.")
+            # Merge
+            merged_df = key_df.merge(global_df, how="left", on="CMPNT_MATL_NUM")
 
-            # --- 🧩 Component Mapping ---
-            df_mapping = df[mapping_cols].copy()
-            df_mapping = df_mapping[df_mapping['CMPNT_MATL_DESC'].notna()].drop_duplicates(subset=["CMPNT_MATL_NUM"])
-            df_mapping = df_mapping[~df_mapping["CMPNT_MATL_NUM"].isin(seen_components)]
+            # Clear AI outputs for blank CMPNT_MATL_NUM
+            merged_df.loc[merged_df["CMPNT_MATL_NUM"].isnull(), AI_OUTPUT_COLUMNS] = None
 
-            if not df_mapping.empty:
-                seen_components.update(df_mapping["CMPNT_MATL_NUM"].unique())
+            # Save result
+            out_path = os.path.join(final_output_dir, file)
+            merged_df.to_parquet(out_path, index=False)
 
-                df_mapping = ensure_ai_columns(df_mapping)
-                df_mapping = apply_existing_ai_overrides(df_mapping)
-
-                cat_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Category')
-                cat_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Category')
-                df_mapping = map_values(df_mapping, cat_map_1, cat_map_2, JOIN_COL_1, JOIN_COL_2,
-                                        DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Category', 'Mapped_File_Category')
-
-                sub_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Subcategory')
-                sub_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory')
-                df_mapping = map_values(df_mapping, sub_map_1, sub_map_2, JOIN_COL_1, JOIN_COL_2,
-                                        DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory', 'Mapped_File_Subcategory')
-
-                df_mapping = add_flags(df_mapping)
-
-                mapped_output_file = os.path.join(args.final_output, f"mapped_{os.path.basename(file_path)}")
-                finalize_output(df_mapping, mapped_output_file)
-            else:
-                print("[SKIPPED] All components already processed.")
+            log(f"✅ Merged output saved: {out_path} (rows: {len(merged_df)})")
+            log(f"💾 Memory usage after save: {psutil.virtual_memory().percent}%")
 
         except Exception as e:
-            print(f"[❌ ERROR] Failed processing {file_path}: {e}")
-            traceback.print_exc()
+            log(f"❌ Failed to process key file: {file}")
+            log(f"   Reason: {str(e)}")
 
-    print("\n✅ All files processed successfully.")
+    # Cleanup intermediate global predictions file
+    if os.path.exists(global_df_path):
+        os.remove(global_df_path)
+        log(f"🗑️ Deleted intermediate file: {global_df_path}")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--inference_output_dir", required=True)
+    parser.add_argument("--key_output_dir", required=True)
+    parser.add_argument("--final_output_dir", required=True)
+    args = parser.parse_args()
+
+    main(args.inference_output_dir, args.key_output_dir, args.final_output_dir)
