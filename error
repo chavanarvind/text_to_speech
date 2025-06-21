@@ -8,10 +8,15 @@ step4 = PythonScriptStep(
         "--final_output_dir", final_merged_output
     ],
     inputs=[inference_output, key_output],
-    outputs=[final_merged_output],  # writing final output here
+    outputs=[final_merged_output],
     compute_target=compute_target,
     runconfig=run_config,
     allow_reuse=False
 )
 
 pipeline = Pipeline(workspace=ws, steps=[step1, step2, step4])
+
+final_merged_output = OutputFileDatasetConfig(
+    name="final_merged_predictions",
+    destination=(datastore, f"hbom_category_prediction/hbom_category_prediction_{today}/")
+)
