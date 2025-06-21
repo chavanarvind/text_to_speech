@@ -1,552 +1,140 @@
-#pipeline
-# pipeline_runner_updated.py
-
-from azureml.core import Workspace, Experiment, Environment, Dataset
-from azureml.pipeline.core import Pipeline, PipelineData
-from azureml.pipeline.steps import PythonScriptStep
-from azureml.core.runconfig import RunConfiguration
-from azureml.core.authentication import ServicePrincipalAuthentication
-from datetime import datetime
-import sys
-
-# === Workspace Config ===
-SUBSCRIPTION_ID = "a8d518a9-4587-4ba2-9a60-68b980c2f000"
-RESOURCE_GROUP = "AZR-WDZ-DTO-AML-Development"
-WORKSPACE_NAME = "AML-DTO-Marmot-dev"
-
-
-def get_workspace(use_sp_auth=False, args=None):
-    if use_sp_auth and args and len(args) >= 4:
-        tenant_id = args[1]
-        client_id = args[2]
-        client_secret = args[3]
-        sp_auth = ServicePrincipalAuthentication(
-            tenant_id=tenant_id,
-            service_principal_id=client_id,
-            service_principal_password=client_secret
-        )
-        return Workspace(
-            subscription_id=SUBSCRIPTION_ID,
-            resource_group=RESOURCE_GROUP,
-            workspace_name=WORKSPACE_NAME,
-            auth=sp_auth
-        )
-    else:
-        return Workspace(
-            subscription_id=SUBSCRIPTION_ID,
-            resource_group=RESOURCE_GROUP,
-            workspace_name=WORKSPACE_NAME
-        )
-
-
-# === Initialize ===
-ws = get_workspace(use_sp_auth=(len(sys.argv) > 3), args=sys.argv)
-compute_target = ws.compute_targets["llm-gpu-cluster-2"]
-env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
-run_config = RunConfiguration()
-run_config.target = compute_target.name
-run_config.environment = env
-
-today = datetime.today().strftime("%d%m%Y")
-
-# === Datastore and Uploads ===
-datastore = ws.get_default_datastore()
-
-# Upload mapping and abbreviation CSVs
-mapping_local = './local_data/high_conf_direct_mapping.csv'
-abbrev_local = './local_data/abbreviation_expension_updated.csv'
-
-# Upload mapping CSV
-datastore.upload_files(
-    files=[mapping_local],
-    target_path='high_conf_map',
-    overwrite=True,
-    show_progress=True
-)
-
-# Upload abbreviation CSV
-datastore.upload_files(
-    files=[abbrev_local],
-    target_path='abbrev_map',
-    overwrite=True,
-    show_progress=True
-)
-
-# === Dataset References ===
-high_conf_dataset = Dataset.File.from_files((datastore, "high_conf_map"))
-abbr_dataset = Dataset.File.from_files((datastore, "abbrev_map"))
-
-mapping_csv_mount = high_conf_dataset.as_named_input("high_conf_map").as_mount()
-abbrev_csv_mount = abbr_dataset.as_named_input("abbrev_map").as_mount()
-
-# === PipelineData for Intermediate Outputs ===
-step1_out = PipelineData(name="step1_output", is_directory=True)
-step1a_final_output = PipelineData(name="step1a_final_output", is_directory=True)
-step1a_key_output_temp = PipelineData(name="step1a_key_output_temp", is_directory=True)
-step2_final_output = PipelineData(name="step2_final_output", is_directory=True)
-step3_final_output = PipelineData(name="step3_final_output", is_directory=True)
-
-# === Step 1: Pull Dataset (direct from script using get_by_name) ===
-step1_pull = PythonScriptStep(
-    name="Step 1 - Pull Dataset",
-    script_name="step_1_data_pull.py",
-    source_directory="scripts",
-    arguments=["--output_path", step1_out],
-    outputs=[step1_out],
-    compute_target=compute_target,
-    runconfig=run_config,
-    allow_reuse=False
-)
-
-# === Step 1a: Merge and Map ===
-step1a_merge = PythonScriptStep(
-    name="Step 1a - Merge & Map",
-    script_name="step_1a_extract_and_merge.py",
-    source_directory="scripts",
-    arguments=[
-        "--input_path", step1_out,
-        "--mapping_csv", mapping_csv_mount,
-        "--key_output", step1a_key_output_temp,
-        "--final_output", step1a_final_output
-        
-    ],
-    inputs=[step1_out, mapping_csv_mount],
-    outputs=[step1a_final_output, step1a_key_output_temp],
-    compute_target=compute_target,
-    runconfig=run_config,
-    allow_reuse=False
-)
-
-# === Step 2: Preprocessing ===
-step2_preprocess = PythonScriptStep(
-    name="Step 2 - Preprocessing",
-    script_name="step2_pre_process.py",
-    source_directory="scripts",
-    arguments=[
-        "--input_path", step1a_final_output,
-        "--abbrev_map", abbrev_csv_mount,
-        "--output_path", step2_final_output
-    ],
-    inputs=[step1a_final_output, abbrev_csv_mount],
-    outputs=[step2_final_output],
-    compute_target=compute_target,
-    runconfig=run_config,
-    allow_reuse=False
-)
-
-# === Step 3: Inference Prediction ===
-
-
-step3_inference = PythonScriptStep(
-    name="Step 3 - Inference Prediction",
-    script_name="step3_inference_run.py",
-    source_directory="scripts",
-    arguments=[
-        "--input_path", step2_final_output,
-        "--final_output_dir", step3_final_output
-    ],
-    inputs=[step2_final_output],
-    outputs=[step3_final_output],
-    compute_target=compute_target,
-    runconfig=run_config,
-    allow_reuse=False
-)
-# === Build and Run Pipeline ===
-pipeline = Pipeline(workspace=ws, steps=[step1_pull, step1a_merge, step2_preprocess,step3_inference])
-pipeline.validate()
-
-experiment = Experiment(ws, name="bom_pipeline_pull_merge_preprocess")
-run = experiment.submit(pipeline)
-run.wait_for_completion(show_output=True)
-
-#merge code
-import argparse
-import os
-import glob
-import traceback
-import pandas as pd
-from azureml.core import Run, Dataset
-
-# === Constants ===
-DIRECT_MAP_KEY_1 = "Direct Mapping"
-DIRECT_MAP_KEY_2 = "Direct Mapping"
-JOIN_COL_1 = "CMPNT_CAT_CD_DESC"
-JOIN_COL_2 = "CMPNT_MATL_TYPE_CD"
-KEY_COLS = ["CMPNT_MATL_NUM", "LOGL_KEY_COMB_COL_VAL"]
-
-def ensure_ai_columns(df):
-    expected_cols = [
-        'AI_FINAL_CATEGORY', 'AI_FINAL_CATEGORY_CONFIDENCE', 'AI_MATCHING_REASON_FINAL_CATEGORY',
-        'AI_FINAL_SUBCATEGORY', 'AI_FINAL_SUBCATEGORY_CONFIDENCE', 'AI_MATCHING_REASON_FINAL_SUBCATEG'
-    ]
-    for col in expected_cols:
-        if col not in df.columns:
-            df[col] = None
-    return df
-
-def apply_existing_ai_overrides(df):
-    df['skip_category_mapping'] = (
-        df['AI_FINAL_CATEGORY'].notna() & df['AI_FINAL_CATEGORY'].astype(str).str.strip().ne('') &
-        df['AI_FINAL_CATEGORY_CONFIDENCE'].notna() & df['AI_MATCHING_REASON_FINAL_CATEGORY'].notna()
-    )
-    df['skip_subcategory_mapping'] = (
-        df['AI_FINAL_SUBCATEGORY'].notna() & df['AI_FINAL_SUBCATEGORY'].astype(str).str.strip().ne('') &
-        df['AI_FINAL_SUBCATEGORY_CONFIDENCE'].notna() & df['AI_MATCHING_REASON_FINAL_SUBCATEG'].notna()
-    )
-    df.loc[df['skip_category_mapping'], 'Mapped_File_Category'] = df['AI_FINAL_CATEGORY']
-    df.loc[df['skip_subcategory_mapping'], 'Mapped_File_Subcategory'] = df['AI_FINAL_SUBCATEGORY']
-    return df
-
-def clean_mapping_df(mapping_df, key_col, value_col):
-    mapping_df.columns = mapping_df.columns.str.strip()
-    mapping_df[key_col] = mapping_df[key_col].astype(str).str.upper().str.strip()
-    mapping_df[value_col] = mapping_df[value_col].astype(str).str.strip()
-    df_map = mapping_df[[key_col, value_col]].drop_duplicates()
-    return df_map[df_map[value_col].notna() & df_map[value_col].ne("")]
-
-def map_values(df, map_df1, map_df2, join_col1, join_col2, key1, key2, value_col, output_col):
-    df[join_col1] = df[join_col1].astype(str).str.upper().str.strip()
-    df[join_col2] = df[join_col2].astype(str).str.upper().str.strip()
-    map_dict1 = dict(zip(map_df1[key1], map_df1[value_col]))
-    map_dict2 = dict(zip(map_df2[key2], map_df2[value_col]))
-    df[output_col] = df[join_col1].map(map_dict1)
-    missing = df[output_col].isna() | df[output_col].astype(str).str.strip().eq("")
-    df.loc[missing, output_col] = df.loc[missing, join_col2].map(map_dict2)
-    df[output_col] = df[output_col].replace(["nan", "NaN"], pd.NA)
-    return df
-
-def add_flags(df):
-    df['Mapped_File_Category Filled'] = df['Mapped_File_Category'].notna() & df['Mapped_File_Category'].astype(str).str.strip().ne("")
-    df['Mapped_File_Subcategory Filled'] = df['Mapped_File_Subcategory'].notna() & df['Mapped_File_Subcategory'].astype(str).str.strip().ne("")
-
-    df['category_matching_reason'] = df.apply(
-        lambda row: row['AI_MATCHING_REASON_FINAL_CATEGORY'] if pd.notna(row['AI_MATCHING_REASON_FINAL_CATEGORY']) else (
-            'direct_mapping' if row['Mapped_File_Category Filled'] else 'unmapped'
-        ), axis=1
-    )
-    df['Final Category Confidence Score'] = df.apply(
-        lambda row: row['AI_FINAL_CATEGORY_CONFIDENCE'] if pd.notna(row['AI_FINAL_CATEGORY_CONFIDENCE']) else (
-            1.0 if row['Mapped_File_Category Filled'] else None
-        ), axis=1
-    )
-    df['subcategory_matching_reason'] = df.apply(
-        lambda row: row['AI_MATCHING_REASON_FINAL_SUBCATEG'] if pd.notna(row['AI_MATCHING_REASON_FINAL_SUBCATEG']) else (
-            'direct_mapping' if row['Mapped_File_Subcategory Filled'] else 'unmapped'
-        ), axis=1
-    )
-    df['Final Subcategory Confidence Score'] = df.apply(
-        lambda row: row['AI_FINAL_SUBCATEGORY_CONFIDENCE'] if pd.notna(row['AI_FINAL_SUBCATEGORY_CONFIDENCE']) else (
-            1.0 if row['Mapped_File_Subcategory Filled'] else None
-        ), axis=1
-    )
-
-    df['needs_model'] = ~(df['Mapped_File_Category Filled'] & df['Mapped_File_Subcategory Filled'])
-    df['needs_category_model'] = ~df['Mapped_File_Category Filled']
-    df['needs_subcategory_model'] = ~df['Mapped_File_Subcategory Filled']
-    return df
-
-def register_key_output(key_df, output_path, ws, seen_keys=None):
-    if seen_keys is None:
-        seen_keys = set()
-    if key_df.empty:
-        print("[INFO] No unseen keys to register. Skipping key registration.")
-        return
-    key_file_path = os.path.join(output_path, "key_reference_output.parquet")
-    os.makedirs(os.path.dirname(key_file_path), exist_ok=True)
-    key_df.to_parquet(key_file_path, index=False)
-    datastore = ws.get_default_datastore()
-    datastore.upload_files([key_file_path], "mapped_data/key_reference/", overwrite=True)
-    dataset = Dataset.Tabular.from_parquet_files([(datastore, "mapped_data/key_reference/key_reference_output.parquet")])
-    dataset.register(ws, name="bom_key_reference_dataset", description="Key columns to remap BOM", create_new_version=True)
-    print("✅ Registered key reference dataset")
-
-def register_final_output_dir(output_dir, ws):
-    print(f"[INFO] Registering final mapped output from: {output_dir}")
-    parquet_files = glob.glob(os.path.join(output_dir, "*.parquet"))
-    if not parquet_files:
-        print(f"[WARN] No Parquet files found to register in {output_dir}")
-        return
-    datastore = ws.get_default_datastore()
-    dataset = Dataset.Tabular.from_parquet_files([(datastore, os.path.join(output_dir, "*.parquet"))])
-    dataset.register(ws, name="bom_final_mapped_dataset", description="Final mapped output from step1a", create_new_version=True)
-    print("✅ Registered: bom_final_mapped_dataset")
-
-def finalize_output(df, output_path):
-    df['AI_FINAL_CATEGORY'] = df['Mapped_File_Category']
-    df['AI_FINAL_CATEGORY_CONFIDENCE'] = df['Final Category Confidence Score']
-    df['AI_MATCHING_REASON_FINAL_CATEGORY'] = df['category_matching_reason']
-    df['AI_FINAL_SUBCATEGORY'] = df['Mapped_File_Subcategory']
-    df['AI_FINAL_SUBCATEGORY_CONFIDENCE'] = df['Final Subcategory Confidence Score']
-    df['AI_MATCHING_REASON_FINAL_SUBCATEG'] = df['subcategory_matching_reason']
-
-    for col in ['AI_FINAL_CATEGORY', 'AI_FINAL_SUBCATEGORY']:
-        invalid_mask = df[col].isna() | df[col].astype(str).str.strip().isin(["", "nan", "NaN"])
-        if 'CATEGORY' in col:
-            df.loc[invalid_mask, 'AI_FINAL_CATEGORY_CONFIDENCE'] = None
-            df.loc[invalid_mask, 'AI_MATCHING_REASON_FINAL_CATEGORY'] = None
-            df.loc[invalid_mask, 'needs_category_model'] = True
-        else:
-            df.loc[invalid_mask, 'AI_FINAL_SUBCATEGORY_CONFIDENCE'] = None
-            df.loc[invalid_mask, 'AI_MATCHING_REASON_FINAL_SUBCATEG'] = None
-            df.loc[invalid_mask, 'needs_subcategory_model'] = True
-
-        df.loc[invalid_mask, 'needs_model'] = True
-
-    df.drop(columns=[
-        'Mapped_File_Category', 'Final Category Confidence Score', 'category_matching_reason',
-        'Mapped_File_Subcategory', 'Final Subcategory Confidence Score', 'subcategory_matching_reason'
-    ], inplace=True, errors='ignore')
-
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    df.to_parquet(output_path, index=False)
-    print(f"[✅] Final output saved to: {output_path}")
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input_path", type=str, required=True)
-    parser.add_argument("--mapping_csv", type=str, required=True)
-    parser.add_argument("--key_output", type=str, required=True)        # Should be a DIR now
-    parser.add_argument("--final_output", type=str, required=True)
-    args = parser.parse_args()
-
-    parquet_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
-    if not parquet_files:
-        raise FileNotFoundError(f"No parquet files found in {args.input_path}")
-
-    csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
-    if not csv_files:
-        raise FileNotFoundError(f"No CSV mapping file found in {args.mapping_csv}")
-    mapping_df = pd.read_csv(csv_files[0])
-
-    seen_components = set()
-    seen_keys = set()
-    os.makedirs(args.final_output, exist_ok=True)
-    os.makedirs(args.key_output, exist_ok=True)  # Ensure key dir exists
-
-    for file_path in parquet_files:
-        print(f"\n🔄 Processing: {os.path.basename(file_path)}")
-
-        try:
-            df = pd.read_parquet(file_path)
-
-            # Define required columns
-            mapping_cols = [
-                "CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD",
-                "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD"
-            ]
-            key_cols = [
-                "CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD",
-                "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD", "LOGL_KEY_COMB_COL_VAL"
-            ]
-
-            # --- 🔑 Key Processing ---
-            df_key = df[key_cols].copy()
-            df_key = df_key[df_key['LOGL_KEY_COMB_COL_VAL'].notna()].drop_duplicates(subset=["LOGL_KEY_COMB_COL_VAL"])
-            df_key = df_key[~df_key['LOGL_KEY_COMB_COL_VAL'].isin(seen_keys)]
-
-            if not df_key.empty:
-                seen_keys.update(df_key["LOGL_KEY_COMB_COL_VAL"].unique())
-                key_output_file = os.path.join(args.key_output, f"key_{os.path.basename(file_path)}")
-                df_key.to_parquet(key_output_file, index=False)
-                print(f"🧩 Saved key file: {key_output_file}")
-            else:
-                print("🔁 No new keys to save for this file.")
-
-            # --- 🧩 Component Mapping ---
-            df_mapping = df[mapping_cols].copy()
-            df_mapping = df_mapping[df_mapping['CMPNT_MATL_DESC'].notna()].drop_duplicates(subset=["CMPNT_MATL_NUM"])
-            df_mapping = df_mapping[~df_mapping["CMPNT_MATL_NUM"].isin(seen_components)]
-
-            if not df_mapping.empty:
-                seen_components.update(df_mapping["CMPNT_MATL_NUM"].unique())
-
-                df_mapping = ensure_ai_columns(df_mapping)
-                df_mapping = apply_existing_ai_overrides(df_mapping)
-
-                cat_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Category')
-                cat_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Category')
-                df_mapping = map_values(df_mapping, cat_map_1, cat_map_2, JOIN_COL_1, JOIN_COL_2,
-                                        DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Category', 'Mapped_File_Category')
-
-                sub_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Subcategory')
-                sub_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory')
-                df_mapping = map_values(df_mapping, sub_map_1, sub_map_2, JOIN_COL_1, JOIN_COL_2,
-                                        DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory', 'Mapped_File_Subcategory')
-
-                df_mapping = add_flags(df_mapping)
-
-                mapped_output_file = os.path.join(args.final_output, f"mapped_{os.path.basename(file_path)}")
-                finalize_output(df_mapping, mapped_output_file)
-            else:
-                print("[SKIPPED] All components already processed.")
-
-        except Exception as e:
-            print(f"[❌ ERROR] Failed processing {file_path}: {e}")
-            traceback.print_exc()
-
-    print("\n✅ All files processed successfully.")
-if __name__ == "__main__":
-    main()
-
-#infarance code
-#step3_inference_run.py
-import subprocess
 import os
 import argparse
 import pandas as pd
-import numpy as np
-import torch
-import joblib
-import gc
+import psutil
 from datetime import datetime
-from sentence_transformers import SentenceTransformer
-from azureml.core import Run, Model
-
-subprocess.run(["pip", "install", "lightgbm"], check=True)
+from azureml.core import Run
 
 def log(msg):
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
 
-def encode_descriptions(encoder, texts, batch_size=64):
-    return encoder.encode(texts, batch_size=batch_size, show_progress_bar=True, convert_to_numpy=True)
+REQUIRED_COLUMNS = [
+    "CMPNT_MATL_NUM",
+    "Final_Prediction",
+    "Final Subcategory",
+    "Score",
+    "Subcategory_Score",
+    "inferred_category_model",
+    "Subcategory_Model",
+    "prediction_flag",
+    "prediction_flag_subcategory"
+]
 
-def round_datetime_columns(df):
-    for col in df.select_dtypes(include=["datetime64[ns]"]).columns:
-        df[col] = df[col].dt.round("us")
-    return df
+RENAMED_COLUMNS = {
+    "Final_Prediction": "AI_FINAL_CATEGORY",
+    "Final Subcategory": "AI_FINAL_SUBCATEGORY",
+    "Score": "AI_FINAL_CATEGORY_CONFIDENCE",
+    "Subcategory_Score": "AI_FINAL_SUBCATEGORY_CONFIDENCE",
+    "inferred_category_model": "AI_MATCHING_REASON_FINAL_CATEGORY",
+    "Subcategory_Model": "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
+}
 
-def main(input_path, final_output_dir):
-    run = Run.get_context()
-    ws = run.experiment.workspace
+AI_OUTPUT_COLUMNS = list(RENAMED_COLUMNS.values())
 
-    os.makedirs(final_output_dir, exist_ok=True)
-    log_dir = os.path.join(final_output_dir, "log")
-    os.makedirs(log_dir, exist_ok=True)
+def apply_priority_and_deduplicate(df):
+    df['category_priority'] = df['prediction_flag'].map({
+        'Mapped_PreExtracted': 2,
+        'Mapped': 2,
+        'High Confidence': 1,
+        'Low Confidence': 0
+    }).fillna(0)
 
-    log("🔁 Loading category model and encoders...")
-    model_dir = Model.get_model_path("RPM_Category_model_full_cat", _workspace=ws)
-    model = joblib.load(os.path.join(model_dir, "final_model.joblib"))
-    ordinal = joblib.load(os.path.join(model_dir, "ordinal_encoder.pkl"))
-    scaler = joblib.load(os.path.join(model_dir, "scaler.pkl"))
+    df['subcategory_priority'] = df['prediction_flag_subcategory'].map({
+        'Mapped': 2,
+        'High Confidence': 1,
+        'Low Confidence': 0,
+        'Fallback': -1
+    }).fillna(0)
 
-    encoder = SentenceTransformer(
-        'pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb',
-        device='cuda' if torch.cuda.is_available() else 'cpu'
+    df = df.sort_values(
+        by=['CMPNT_MATL_NUM', 'category_priority', 'subcategory_priority'],
+        ascending=[True, False, False]
     )
-    encoder.max_seq_length = 128
 
-    log("📦 Loading subcategory models...")
-    subcategory_models = {}
-    for cat in ['CHM', 'PKG', 'FNW']:
-        model_path = Model.get_model_path(f"RPM_Category_model_full_{cat}_V1", _workspace=ws)
-        subcategory_models[cat] = {
-            "model": joblib.load(os.path.join(model_path, "final_model.joblib")),
-            "encoder": joblib.load(os.path.join(model_path, "ordinal_encoder.pkl")),
-            "scaler": joblib.load(os.path.join(model_path, "scaler.pkl")),
-        }
+    return df.drop_duplicates(subset="CMPNT_MATL_NUM", keep="first")
 
-    for f in os.listdir(input_path):
-        if not f.endswith(".parquet"):
+def main(inference_output_dir, key_output_dir, final_output_dir):
+    run = Run.get_context()
+    os.makedirs(final_output_dir, exist_ok=True)
+
+    log("📂 Loading all inference parquet files using folder-level read...")
+    try:
+        global_df = pd.read_parquet(inference_output_dir)
+        log(f"✅ Loaded global predictions parquet folder (rows: {len(global_df)})")
+    except Exception as e:
+        log(f"❌ Failed to load inference parquet directory")
+        log(f"   Reason: {str(e)}")
+        return
+
+    # Filter only required columns
+    global_df = global_df[[col for col in REQUIRED_COLUMNS if col in global_df.columns]]
+
+    # Drop rows with null CMPNT_MATL_NUM from predictions
+    global_df = global_df[global_df["CMPNT_MATL_NUM"].notnull()]
+
+    # Apply priority & deduplication logic
+    global_df = apply_priority_and_deduplicate(global_df)
+
+    # Rename for output
+    global_df = global_df.rename(columns=RENAMED_COLUMNS)
+
+    # Drop helper columns before saving
+    global_df = global_df.drop(columns=[
+        "category_priority",
+        "subcategory_priority",
+        "prediction_flag",
+        "prediction_flag_subcategory"
+    ], errors="ignore")
+
+    # Save once to disk for reuse
+    global_df_path = os.path.join(final_output_dir, "global_predictions.parquet")
+    global_df.to_parquet(global_df_path, index=False)
+    log(f"✅ Saved global prediction table to: {global_df_path}")
+
+    # Process each key file individually
+    for file in os.listdir(key_output_dir):
+        if not file.endswith(".parquet"):
             continue
 
-        log(f"🔎 Processing file: {f}")
-        df = pd.read_parquet(os.path.join(input_path, f))
-        df = round_datetime_columns(df)
+        try:
+            log(f"📂 Processing key file: {file}")
+            log(f"💾 Memory usage before load: {psutil.virtual_memory().percent}%")
 
-        # --- Predict Category ---
-        category_idx = df['needs_category_model'] == True
-        df_needs_category = df[category_idx].copy()
+            key_path = os.path.join(key_output_dir, file)
+            key_df = pd.read_parquet(key_path).drop_duplicates()
+            
 
-        if not df_needs_category.empty:
-            descs = df_needs_category['CMPNT_MATL_DESC_CLEAN'].astype(str).tolist()
-            embeddings = encode_descriptions(encoder, descs)
+            # Reload global predictions fresh each time
+            global_df = pd.read_parquet(global_df_path)
+            global_df = global_df[global_df["CMPNT_MATL_NUM"].notnull()]
 
-            X = np.hstack([
-                embeddings,
-                scaler.transform(df_needs_category[['CMPNT_MATL_DESC_LEN']]),
-                ordinal.transform(df_needs_category[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
-            ])
+            # Merge
+            merged_df = key_df.merge(global_df, how="left", on="CMPNT_MATL_NUM")
 
-            probs = model.predict_proba(X)
-            preds = model.predict(X)
-            scores = np.max(probs, axis=1)
+            # Clear AI outputs for blank CMPNT_MATL_NUM
+            merged_df.loc[merged_df["CMPNT_MATL_NUM"].isnull(), AI_OUTPUT_COLUMNS] = None
 
-            df.loc[category_idx, 'AI_FINAL_CATEGORY'] = np.where(scores < 0.6, 'Other', preds)
-            df.loc[category_idx, 'AI_FINAL_CATEGORY_CONFIDENCE'] = scores
-            df.loc[category_idx, 'AI_MATCHING_REASON_FINAL_CATEGORY'] = np.where(
-                scores < 0.6, 'Low Confidence', 'lightgbm_Bert_RPM_Category_model'
-            )
+            # Save result
+            out_path = os.path.join(final_output_dir, file)
+            merged_df.to_parquet(out_path, index=False)
 
-            del descs, embeddings, probs, preds, X
-            gc.collect()
+            log(f"✅ Merged output saved: {out_path} (rows: {len(merged_df)})")
+            log(f"💾 Memory usage after save: {psutil.virtual_memory().percent}%")
 
-        # --- Predict Subcategory ---
-        for cat in ['CHM', 'PKG', 'FNW']:
-            subcat_idx = (df['AI_FINAL_CATEGORY'] == cat) & (df['needs_subcategory_model'] == True)
-            subcat_df = df[subcat_idx].copy()
+        except Exception as e:
+            log(f"❌ Failed to process key file: {file}")
+            log(f"   Reason: {str(e)}")
 
-            if subcat_df.empty:
-                continue
-
-            sub_model = subcategory_models[cat]["model"]
-            sub_encoder = subcategory_models[cat]["encoder"]
-            sub_scaler = subcategory_models[cat]["scaler"]
-
-            descs = subcat_df['CMPNT_MATL_DESC_CLEAN'].astype(str).tolist()
-            embeddings = encode_descriptions(encoder, descs)
-
-            X_sub = np.hstack([
-                embeddings,
-                sub_scaler.transform(subcat_df[['CMPNT_MATL_DESC_LEN']]),
-                sub_encoder.transform(subcat_df[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
-            ])
-
-            probs = sub_model.predict_proba(X_sub)
-            preds = sub_model.predict(X_sub)
-            scores = np.max(probs, axis=1)
-
-            df.loc[subcat_idx, 'AI_FINAL_SUBCATEGORY'] = np.where(scores < 0.6, 'Other', preds)
-            df.loc[subcat_idx, 'AI_FINAL_SUBCATEGORY_CONFIDENCE'] = scores
-            df.loc[subcat_idx, 'AI_MATCHING_REASON_FINAL_SUBCATEG'] = np.where(
-                scores < 0.6, 'Low Confidence', f"RPM_Category_model_full_{cat}_V1"
-            )
-
-            del descs, embeddings, probs, preds, X_sub
-            gc.collect()
-
-        # --- Fallback for other categories ---
-        fallback_idx = (df['needs_subcategory_model'] == True) & (~df['AI_FINAL_CATEGORY'].isin(['CHM', 'PKG', 'FNW']))
-        df.loc[fallback_idx, 'AI_FINAL_SUBCATEGORY'] = df.loc[fallback_idx, 'AI_FINAL_CATEGORY']
-        df.loc[fallback_idx, 'AI_FINAL_SUBCATEGORY_CONFIDENCE'] = 0.9
-        df.loc[fallback_idx, 'AI_MATCHING_REASON_FINAL_SUBCATEG'] = 'Fallback'
-
-        output_path = os.path.join(final_output_dir, f"predicted_{f}")
-        df.to_parquet(output_path, index=False)
-        
-        # Save CSV in working directory -> shows up in 'user_logs' in Azure ML
-        user_log_dir = "user_logs"
-        os.makedirs(user_log_dir, exist_ok=True)
-
-        # Save CSV there
-        csv_output_path = os.path.join(user_log_dir, f"predicted_{f.replace('.parquet', '.csv')}")
-        df.to_csv(csv_output_path, index=False)
-        # # Save summary CSV log
-        # csv_log_path = os.path.join(log_dir, f"summary_{f.replace('.parquet', '.csv')}")
-        # df.to_csv(csv_log_path, index=False)
-        # # Step 5: Save logs
-        # os.makedirs("logs/qc_nlp_list", exist_ok=True)
-        # df.to_csv("log/qc_nlp_list/test.csv", index=False)
-
-        # log(f"💾 Saved prediction: {output_path} (total rows: {len(df)})")
-        # log(f"📝 Saved CSV summary: {csv_log_path}")
-
-        del df
-        gc.collect()
+    # Cleanup intermediate global predictions file
+    if os.path.exists(global_df_path):
+        os.remove(global_df_path)
+        log(f"🗑️ Deleted intermediate file: {global_df_path}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input_path", required=True)
+    parser.add_argument("--inference_output_dir", required=True)
+    parser.add_argument("--key_output_dir", required=True)
     parser.add_argument("--final_output_dir", required=True)
     args = parser.parse_args()
 
-    main(args.input_path, args.final_output_dir)
+    main(args.inference_output_dir, args.key_output_dir, args.final_output_dir)
