@@ -1,10 +1,9 @@
-# pipeline_runner_updated.py
-
 from azureml.core import Workspace, Experiment, Environment, Dataset
 from azureml.pipeline.core import Pipeline, PipelineData
 from azureml.pipeline.steps import PythonScriptStep
 from azureml.core.runconfig import RunConfiguration
 from azureml.core.authentication import ServicePrincipalAuthentication
+from azureml.data import OutputFileDatasetConfig
 from datetime import datetime
 import sys
 
@@ -13,7 +12,7 @@ SUBSCRIPTION_ID = "a8d518a9-4587-4ba2-9a60-68b980c2f000"
 RESOURCE_GROUP = "AZR-WDZ-DTO-AML-Development"
 WORKSPACE_NAME = "AML-DTO-Marmot-dev"
 
-
+# === Initialize Workspace ===
 def get_workspace(use_sp_auth=False, args=None):
     if use_sp_auth and args and len(args) >= 4:
         tenant_id = args[1]
@@ -37,8 +36,6 @@ def get_workspace(use_sp_auth=False, args=None):
             workspace_name=WORKSPACE_NAME
         )
 
-
-# === Initialize ===
 ws = get_workspace(use_sp_auth=(len(sys.argv) > 3), args=sys.argv)
 compute_target = ws.compute_targets["llm-gpu-cluster-2"]
 env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
@@ -55,7 +52,6 @@ datastore = ws.get_default_datastore()
 mapping_local = './local_data/high_conf_direct_mapping.csv'
 abbrev_local = './local_data/abbreviation_expension_updated.csv'
 
-# Upload mapping CSV
 datastore.upload_files(
     files=[mapping_local],
     target_path='high_conf_map',
@@ -63,7 +59,6 @@ datastore.upload_files(
     show_progress=True
 )
 
-# Upload abbreviation CSV
 datastore.upload_files(
     files=[abbrev_local],
     target_path='abbrev_map',
@@ -85,7 +80,13 @@ step1a_key_output_temp = PipelineData(name="step1a_key_output_temp", is_director
 step2_final_output = PipelineData(name="step2_final_output", is_directory=True)
 step3_final_output = PipelineData(name="step3_final_output", is_directory=True)
 
-# === Step 1: Pull Dataset (direct from script using get_by_name) ===
+# === Step 4 Output (Final Merged Output) ===
+final_merged_output = OutputFileDatasetConfig(
+    name="final_merged_predictions",
+    destination=(datastore, f"hbom_category_prediction/hbom_category_prediction_{today}/")
+)
+
+# === Step 1: Pull Dataset ===
 step1_pull = PythonScriptStep(
     name="Step 1 - Pull Dataset",
     script_name="step_1_data_pull.py",
@@ -97,7 +98,7 @@ step1_pull = PythonScriptStep(
     allow_reuse=False
 )
 
-# === Step 1a: Merge and Map ===
+# === Step 1a: Merge & Map ===
 step1a_merge = PythonScriptStep(
     name="Step 1a - Merge & Map",
     script_name="step_1a_extract_and_merge.py",
@@ -107,7 +108,6 @@ step1a_merge = PythonScriptStep(
         "--mapping_csv", mapping_csv_mount,
         "--key_output", step1a_key_output_temp,
         "--final_output", step1a_final_output
-        
     ],
     inputs=[step1_out, mapping_csv_mount],
     outputs=[step1a_final_output, step1a_key_output_temp],
@@ -134,8 +134,6 @@ step2_preprocess = PythonScriptStep(
 )
 
 # === Step 3: Inference Prediction ===
-
-
 step3_inference = PythonScriptStep(
     name="Step 3 - Inference Prediction",
     script_name="step3_inference_run.py",
@@ -151,16 +149,17 @@ step3_inference = PythonScriptStep(
     allow_reuse=False
 )
 
-step4 = PythonScriptStep(
+# === Step 4: Merge Inference Results with Key Files (Final Output) ===
+step4_merge = PythonScriptStep(
     name="Step 4 - Merge Inference Results with Key Files",
     script_name="step_4_merge_with_key_files.py",
     source_directory="scripts",
     arguments=[
-        "--inference_output_dir", inference_output,
-        "--key_output_dir", key_output,
+        "--inference_output_dir", step3_final_output,
+        "--key_output_dir", step1a_key_output_temp,
         "--final_output_dir", final_merged_output
     ],
-    inputs=[inference_output, key_output],
+    inputs=[step3_final_output, step1a_key_output_temp],
     outputs=[final_merged_output],
     compute_target=compute_target,
     runconfig=run_config,
@@ -168,7 +167,13 @@ step4 = PythonScriptStep(
 )
 
 # === Build and Run Pipeline ===
-pipeline = Pipeline(workspace=ws, steps=[step1_pull, step1a_merge, step2_preprocess,step3_inference])
+pipeline = Pipeline(workspace=ws, steps=[
+    step1_pull,
+    step1a_merge,
+    step2_preprocess,
+    step3_inference,
+    step4_merge
+])
 pipeline.validate()
 
 experiment = Experiment(ws, name="bom_pipeline_pull_merge_preprocess")
