@@ -1,41 +1,84 @@
-# --- Key Subset (process independently) ---
-df_key = df[key_cols].copy()
-df_key = df_key[df_key['LOGL_KEY_COMB_COL_VAL'].notna()].drop_duplicates(subset=["LOGL_KEY_COMB_COL_VAL"])
-df_key = df_key[~df_key['LOGL_KEY_COMB_COL_VAL'].isin(seen_keys)]
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_path", type=str, required=True)
+    parser.add_argument("--mapping_csv", type=str, required=True)
+    parser.add_argument("--key_output", type=str, required=True)        # Should be a DIR now
+    parser.add_argument("--final_output", type=str, required=True)
+    args = parser.parse_args()
 
-if not df_key.empty:
-    seen_keys.update(df_key["LOGL_KEY_COMB_COL_VAL"].unique())
-    key_output_file = os.path.join(args.key_output, f"key_{os.path.basename(file_path)}")
-    df_key.to_parquet(key_output_file, index=False)
-    print(f"🧩 Saved key file: {key_output_file}")
-else:
-    print("🔁 No new keys to save for this file.")
+    parquet_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
+    if not parquet_files:
+        raise FileNotFoundError(f"No parquet files found in {args.input_path}")
 
-# --- Mapping Subset (process independently) ---
-df_mapping = df[mapping_cols].copy()
-df_mapping = df_mapping[df_mapping['CMPNT_MATL_DESC'].notna()].drop_duplicates(subset=["CMPNT_MATL_NUM"])
-df_mapping = df_mapping[~df_mapping["CMPNT_MATL_NUM"].isin(seen_components)]
+    csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
+    if not csv_files:
+        raise FileNotFoundError(f"No CSV mapping file found in {args.mapping_csv}")
+    mapping_df = pd.read_csv(csv_files[0])
 
-if not df_mapping.empty:
-    seen_components.update(df_mapping["CMPNT_MATL_NUM"].unique())
+    seen_components = set()
+    seen_keys = set()
+    os.makedirs(args.final_output, exist_ok=True)
+    os.makedirs(args.key_output, exist_ok=True)  # Ensure key dir exists
 
-    # Rest of your mapping and final output logic here
-    df_mapping = ensure_ai_columns(df_mapping)
-    df_mapping = apply_existing_ai_overrides(df_mapping)
+    for file_path in parquet_files:
+        print(f"\n🔄 Processing: {os.path.basename(file_path)}")
 
-    cat_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Category')
-    cat_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Category')
-    df_mapping = map_values(df_mapping, cat_map_1, cat_map_2, JOIN_COL_1, JOIN_COL_2,
-                            DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Category', 'Mapped_File_Category')
+        try:
+            df = pd.read_parquet(file_path)
 
-    sub_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Subcategory')
-    sub_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory')
-    df_mapping = map_values(df_mapping, sub_map_1, sub_map_2, JOIN_COL_1, JOIN_COL_2,
-                            DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory', 'Mapped_File_Subcategory')
+            # Define required columns
+            mapping_cols = [
+                "CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD",
+                "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD"
+            ]
+            key_cols = [
+                "CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD",
+                "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD", "LOGL_KEY_COMB_COL_VAL"
+            ]
 
-    df_mapping = add_flags(df_mapping)
+            # --- 🔑 Key Processing ---
+            df_key = df[key_cols].copy()
+            df_key = df_key[df_key['LOGL_KEY_COMB_COL_VAL'].notna()].drop_duplicates(subset=["LOGL_KEY_COMB_COL_VAL"])
+            df_key = df_key[~df_key['LOGL_KEY_COMB_COL_VAL'].isin(seen_keys)]
 
-    mapped_output_file = os.path.join(args.final_output, f"mapped_{os.path.basename(file_path)}")
-    finalize_output(df_mapping, mapped_output_file)
-else:
-    print("[SKIPPED] All components already processed.")
+            if not df_key.empty:
+                seen_keys.update(df_key["LOGL_KEY_COMB_COL_VAL"].unique())
+                key_output_file = os.path.join(args.key_output, f"key_{os.path.basename(file_path)}")
+                df_key.to_parquet(key_output_file, index=False)
+                print(f"🧩 Saved key file: {key_output_file}")
+            else:
+                print("🔁 No new keys to save for this file.")
+
+            # --- 🧩 Component Mapping ---
+            df_mapping = df[mapping_cols].copy()
+            df_mapping = df_mapping[df_mapping['CMPNT_MATL_DESC'].notna()].drop_duplicates(subset=["CMPNT_MATL_NUM"])
+            df_mapping = df_mapping[~df_mapping["CMPNT_MATL_NUM"].isin(seen_components)]
+
+            if not df_mapping.empty:
+                seen_components.update(df_mapping["CMPNT_MATL_NUM"].unique())
+
+                df_mapping = ensure_ai_columns(df_mapping)
+                df_mapping = apply_existing_ai_overrides(df_mapping)
+
+                cat_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Category')
+                cat_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Category')
+                df_mapping = map_values(df_mapping, cat_map_1, cat_map_2, JOIN_COL_1, JOIN_COL_2,
+                                        DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Category', 'Mapped_File_Category')
+
+                sub_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Subcategory')
+                sub_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory')
+                df_mapping = map_values(df_mapping, sub_map_1, sub_map_2, JOIN_COL_1, JOIN_COL_2,
+                                        DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory', 'Mapped_File_Subcategory')
+
+                df_mapping = add_flags(df_mapping)
+
+                mapped_output_file = os.path.join(args.final_output, f"mapped_{os.path.basename(file_path)}")
+                finalize_output(df_mapping, mapped_output_file)
+            else:
+                print("[SKIPPED] All components already processed.")
+
+        except Exception as e:
+            print(f"[❌ ERROR] Failed processing {file_path}: {e}")
+            traceback.print_exc()
+
+    print("\n✅ All files processed successfully.")
