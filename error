@@ -1,104 +1,122 @@
-#step_4_merge_with_key_files.py
-import os
-import argparse
-import pandas as pd
-import psutil
+# pipeline_bom_prediction.py
+# ---------------------------
+# Azure ML pipeline to run: data pull → key file generation → final merge
+
+from azureml.core import Workspace, Environment, Experiment, Dataset, Datastore
+from azureml.pipeline.core import Pipeline
+from azureml.pipeline.steps import PythonScriptStep
+from azureml.core.runconfig import RunConfiguration
+from azureml.data import OutputFileDatasetConfig
 from datetime import datetime
-from azureml.core import Run
+import sys
 
-def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+# === Config ===
+SUBSCRIPTION_ID = "a8d518a9-4587-4ba2-9a60-68b980c2f000"
+RESOURCE_GROUP = "AZR-WDZ-DTO-AML-Development"
+WORKSPACE_NAME = "AML-DTO-Marmot-dev"
+COMPUTE_NAME = "rpmdataprocess"
+ENV_NAME = "Bom_X_Evaluator"
 
-AI_OUTPUT_COLUMNS = [
-    "AI_FINAL_CATEGORY",
-    "AI_FINAL_CATEGORY_CONFIDENCE",
-    "AI_MATCHING_REASON_FINAL_CATEGORY",
-    "AI_FINAL_SUBCATEGORY",
-    "AI_FINAL_SUBCATEGORY_CONFIDENCE",
-    "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
-]
+# === Dates ===
+today = datetime.today().strftime("%d%m%Y")
 
-def main(inference_output_dir, key_output_dir, final_output_dir):
-    run = Run.get_context()
-    os.makedirs(final_output_dir, exist_ok=True)
+# === Workspace Auth ===
+def get_workspace(use_sp_auth=False, args=None):
+    if use_sp_auth and args and len(args) >= 4:
+        from azureml.core.authentication import ServicePrincipalAuthentication
+        sp_auth = ServicePrincipalAuthentication(
+            tenant_id=args[1],
+            service_principal_id=args[2],
+            service_principal_password=args[3]
+        )
+        return Workspace(subscription_id=SUBSCRIPTION_ID,
+                         resource_group=RESOURCE_GROUP,
+                         workspace_name=WORKSPACE_NAME,
+                         auth=sp_auth)
+    else:
+        return Workspace(subscription_id=SUBSCRIPTION_ID,
+                         resource_group=RESOURCE_GROUP,
+                         workspace_name=WORKSPACE_NAME)
 
-    all_dfs = []
+ws = get_workspace(use_sp_auth=(len(sys.argv) > 3), args=sys.argv)
+compute_target = COMPUTE_NAME
+env = Environment.get(workspace=ws, name=ENV_NAME)
+datastore = ws.datastores["xbomrefadlsg2"]
 
-    log("📁 Scanning inference output directory...")
-    for file in os.listdir(inference_output_dir):
-        if not file.endswith(".parquet"):
-            continue
-        try:
-            file_path = os.path.join(inference_output_dir, file)
-            df = pd.read_parquet(file_path)
+# === Run Config ===
+run_config = RunConfiguration()
+run_config.target = compute_target
+run_config.environment = env
 
-            # Ensure required columns exist
-            selected_cols = ["CMPNT_MATL_NUM"] + AI_OUTPUT_COLUMNS
-            missing_cols = [col for col in selected_cols if col not in df.columns]
-            if missing_cols:
-                log(f"⚠️ Skipping {file} due to missing columns: {missing_cols}")
-                continue
+# === Step 1 Output: Harmonized BOM pull ===
+hbom_raw_output = OutputFileDatasetConfig(
+    name="hbom_raw_data",
+    destination=(ws.get_default_datastore(), f"bom_pipeline_output/harmonized_bom_data_{today}/")
+)
 
-            df = df[selected_cols]
-            df = df[df["CMPNT_MATL_NUM"].notnull()]
-            all_dfs.append(df)
+step1 = PythonScriptStep(
+    name="Step 1 - Pull Harmonized BOM Data",
+    script_name="script_1_download_hbom_data.py",
+    source_directory="scripts",
+    arguments=["--output_path", hbom_raw_output],
+    outputs=[hbom_raw_output],
+    compute_target=compute_target,
+    runconfig=run_config,
+    allow_reuse=False
+)
 
-            log(f"✅ Loaded {file} (rows: {len(df)})")
-        except Exception as e:
-            log(f"❌ Failed to process file: {file} -> {e}")
+# === Step 2 Output: Key File Generation ===
+key_output = OutputFileDatasetConfig(
+    name="hbom_key_files",
+    destination=(ws.get_default_datastore(), f"bom_pipeline_output/hbom_key_files_{today}/")
+)
 
-    if not all_dfs:
-        log("❌ No valid inference files found. Exiting.")
-        return
+step2 = PythonScriptStep(
+    name="Step 2 - Generate Key Files",
+    script_name="script_2_generate_key_files_only.py",
+    source_directory="scripts",
+    arguments=[
+        "--input_path", hbom_raw_output,
+        "--key_output", key_output
+    ],
+    inputs=[hbom_raw_output],
+    outputs=[key_output],
+    compute_target=compute_target,
+    runconfig=run_config,
+    allow_reuse=False
+)
 
-    log("🧩 Concatenating and deduplicating predictions...")
-    global_df = pd.concat(all_dfs, ignore_index=True)
+# === Step 3 Input: raw inference (external) ===
+inference_output = Dataset.get_by_name(ws, "raw_predictions").as_named_input("inference_output_dir").as_mount()
 
-    global_df = global_df.sort_values(
-        by=["CMPNT_MATL_NUM", "AI_FINAL_CATEGORY_CONFIDENCE", "AI_FINAL_SUBCATEGORY_CONFIDENCE"],
-        ascending=[True, False, False]
-    )
-    global_df = global_df.drop_duplicates(subset="CMPNT_MATL_NUM", keep="first")
+# === Step 3 Output: Final Merged Output ===
+final_merged_output = OutputFileDatasetConfig(
+    name="final_merged_predictions",
+    destination=(datastore, f"hbom_category_prediction/hbom_category_prediction_{today}/")
+)
 
-    # Save combined global prediction table
-    global_df_path = os.path.join(final_output_dir, "global_predictions.parquet")
-    global_df.to_parquet(global_df_path, index=False)
-    log(f"✅ Saved global prediction table to: {global_df_path}")
 
-    # Merge with each key file
-    for file in os.listdir(key_output_dir):
-        if not file.endswith(".parquet"):
-            continue
+step3 = PythonScriptStep(
+    name="Step 3 - Finalize Output (Priority + Dedup)",
+    script_name="step_6_finalize_output_global_debug.py",
+    source_directory="scripts",
+    arguments=[
+        "--inference_output_dir", inference_output,
+        "--key_output_dir", key_output,
+        "--final_output_dir", final_merged_output
+    ],
+    inputs=[inference_output, key_output],
+    outputs=[final_merged_output],
+    compute_target=compute_target,
+    runconfig=run_config,
+    allow_reuse=False
+)
 
-        try:
-            log(f"📂 Processing key file: {file}")
-            key_path = os.path.join(key_output_dir, file)
-            key_df = pd.read_parquet(key_path).drop_duplicates()
+# === Assemble Pipeline ===
+pipeline = Pipeline(workspace=ws, steps=[step1, step2, step3])
+pipeline.validate()
 
-            merged_df = key_df.merge(global_df, how="left", on="CMPNT_MATL_NUM")
-
-            # Clear AI columns for nulls
-            merged_df.loc[merged_df["CMPNT_MATL_NUM"].isnull(), AI_OUTPUT_COLUMNS] = None
-
-            out_path = os.path.join(final_output_dir, file)
-            merged_df.to_parquet(out_path, index=False)
-
-            log(f"✅ Merged output saved: {out_path} (rows: {len(merged_df)})")
-            log(f"💾 Memory usage: {psutil.virtual_memory().percent}%")
-
-        except Exception as e:
-            log(f"❌ Failed to process key file: {file} -> {e}")
-
-    # Cleanup intermediate file
-    if os.path.exists(global_df_path):
-        os.remove(global_df_path)
-        log(f"🗑️ Deleted intermediate file: {global_df_path}")
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--inference_output_dir", required=True)
-    parser.add_argument("--key_output_dir", required=True)
-    parser.add_argument("--final_output_dir", required=True)
-    args = parser.parse_args()
-
-    main(args.inference_output_dir, args.key_output_dir, args.final_output_dir)
+# === Submit Pipeline Run ===
+experiment = Experiment(ws, "bom_category_pipeline")
+run = experiment.submit(pipeline)
+run.wait_for_completion(show_output=True)
