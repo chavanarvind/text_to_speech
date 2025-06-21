@@ -10,11 +10,28 @@ def main(output_path):
     # Get dataset by name
     dataset = Dataset.get_by_name(ws, name='harmonized_bom_data_asset')
 
-    # Ensure output directory exists and download dataset
-    os.makedirs(output_path, exist_ok=True)
-    dataset.download(target_path=output_path, overwrite=True)
+    # Get list of file paths in the dataset
+    file_paths = dataset.to_path()
 
-    print(f" Dataset downloaded to: {output_path}")
+    # Filter for Parquet files and take only the first 2
+    parquet_files = [path for path in file_paths if path[0].endswith(".parquet")][:2]
+
+    if not parquet_files:
+        print("No parquet files found.")
+        return
+
+    print("Files selected for download:")
+    for path in parquet_files:
+        print(f" - {path[0]}")
+
+    # Create a dataset from the 2 selected parquet files
+    limited_dataset = Dataset.File.from_files([(dataset.datastore, path[0]) for path in parquet_files])
+
+    # Download to output path
+    os.makedirs(output_path, exist_ok=True)
+    limited_dataset.download(target_path=output_path, overwrite=True)
+
+    print(f"\nSelected Parquet files downloaded to: {output_path}")
 
 
 if __name__ == "__main__":
