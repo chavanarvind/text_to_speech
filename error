@@ -1,11 +1,39 @@
-Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.scriptrun = azureml.core.script_run:ScriptRun._from_run_dto with exception (packaging 23.2 (/opt/conda/envs/ptca/lib/python3.8/site-packages), Requirement.parse('packaging<=23.0,>=20.0')).
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.09159255027770996 seconds
-Traceback (most recent call last):
-  File "step_1a_extract_and_merge.py", line 227, in <module>
-    main()
-  File "step_1a_extract_and_merge.py", line 152, in main
-    raise FileNotFoundError(f"No parquet files found in {args.input_path}")
-FileNotFoundError: No parquet files found in /mnt/azureml/cr/j/d5f974577ea44d7fa3e9f0810fa5559e/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/9c4a7192-36a3-4ebc-bc74-9c45b90b8d95/step1_output
+import os
+import argparse
+from azureml.core import Run, Dataset
+import glob
+import shutil
 
+def main(output_path):
+    run = Run.get_context()
+    ws = run.experiment.workspace
+
+    # Load dataset directly
+    dataset = Dataset.get_by_name(ws, name='harmonized_bom_data_asset')
+
+    # Download full dataset to temp directory
+    temp_dir = os.path.join(output_path, "full_download")
+    os.makedirs(temp_dir, exist_ok=True)
+    dataset.download(target_path=temp_dir, overwrite=True)
+    print(f"✅ Dataset downloaded to temp: {temp_dir}")
+
+    # Find parquet files from downloaded folder
+    all_parquet_files = glob.glob(os.path.join(temp_dir, "**", "*.parquet"), recursive=True)
+
+    if not all_parquet_files:
+        raise FileNotFoundError("❌ No `.parquet` files found in the downloaded dataset.")
+
+    # Pick first 2 parquet files for testing
+    os.makedirs(output_path, exist_ok=True)
+    for i, f in enumerate(all_parquet_files[:2]):
+        shutil.copy(f, os.path.join(output_path, f"test_file_{i+1}.parquet"))
+
+    print(f"✅ Copied {min(2, len(all_parquet_files))} parquet file(s) to: {output_path}")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output_path", type=str, required=True)
+    args = parser.parse_args()
+
+    main(args.output_path)
