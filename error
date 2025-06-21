@@ -1,7 +1,21 @@
-output_path = os.path.join(final_output_dir, f"predicted_{f}")
-df.to_parquet(output_path, index=False)
+Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.scriptrun = azureml.core.script_run:ScriptRun._from_run_dto with exception (packaging 23.2 (/opt/conda/envs/ptca/lib/python3.8/site-packages), Requirement.parse('packaging<=23.0,>=20.0')).
+usage: step_1a_extract_and_merge.py [-h] --input_path INPUT_PATH --mapping_csv
+                                    MAPPING_CSV --key_output KEY_OUTPUT
+                                    --final_output FINAL_OUTPUT
+step_1a_extract_and_merge.py: error: unrecognized arguments: --skip_register
+Cleaning up all outstanding Run operations, waiting 300.0 seconds
+1 items cleaning up...
+Cleanup took 0.0940403938293457 seconds
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 229, in <module>
+    main()
+  File "step_1a_extract_and_merge.py", line 149, in main
+    args = parser.parse_args()
+  File "/opt/conda/envs/ptca/lib/python3.8/argparse.py", line 1771, in parse_args
+    self.error(msg % ' '.join(argv))
+  File "/opt/conda/envs/ptca/lib/python3.8/argparse.py", line 2521, in error
+    self.exit(2, _('%(prog)s: error: %(message)s\n') % args)
+  File "/opt/conda/envs/ptca/lib/python3.8/argparse.py", line 2508, in exit
+    _sys.exit(status)
+SystemExit: 2
 
-# Save CSV in working directory -> shows up in 'user_logs' in Azure ML
-csv_output_path = f"predicted_{f.replace('.parquet', '.csv')}"
-df.to_csv(csv_output_path, index=False)
-log(f"📝 Saved CSV summary: {csv_output_path}")
