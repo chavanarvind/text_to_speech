@@ -1,87 +1,11 @@
-def main():
-    import argparse
-    import os
-    import glob
-    import pandas as pd
-    from your_module import (  # replace with actual import if split
-        ensure_ai_columns, apply_existing_ai_overrides, clean_mapping_df,
-        map_values, add_flags, finalize_output, KEY_COLS,
-        DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, JOIN_COL_1, JOIN_COL_2
-    )
+df_key = df[key_cols].copy()
+df_key = df_key[df_key['LOGL_KEY_COMB_COL_VAL'].notna()].drop_duplicates()
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input_path", type=str, required=True)
-    parser.add_argument("--mapping_csv", type=str, required=True)
-    parser.add_argument("--key_output", type=str, required=True)        # Should be a DIR now
-    parser.add_argument("--final_output", type=str, required=True)
-    args = parser.parse_args()
 
-    parquet_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
-    if not parquet_files:
-        raise FileNotFoundError(f"No parquet files found in {args.input_path}")
+df_key = df[key_cols].copy()
+df_key = df_key[df_key['LOGL_KEY_COMB_COL_VAL'].notna()]
+df_key = df_key[~df_key['LOGL_KEY_COMB_COL_VAL'].isin(seen_keys)]
+df_key = df_key.drop_duplicates()
 
-    csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
-    if not csv_files:
-        raise FileNotFoundError(f"No CSV mapping file found in {args.mapping_csv}")
-    mapping_df = pd.read_csv(csv_files[0])
-
-    seen_components = set()
-    os.makedirs(args.final_output, exist_ok=True)
-    os.makedirs(args.key_output, exist_ok=True)  # Ensure key dir exists
-
-    for file_path in parquet_files:
-        print(f"\n🔄 Processing: {os.path.basename(file_path)}")
-
-        try:
-            df = pd.read_parquet(file_path)
-
-            # Columns required
-            mapping_cols = [
-                "CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD",
-                "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD", "LOGL_KEY_COMB_COL_VAL"
-            ]
-            key_cols = KEY_COLS
-
-            # --- Mapping Subset ---
-            df_mapping = df[mapping_cols].copy()
-            df_mapping = df_mapping[df_mapping['CMPNT_MATL_DESC'].notna()].drop_duplicates(subset=["CMPNT_MATL_NUM"])
-            df_mapping = df_mapping[~df_mapping["CMPNT_MATL_NUM"].isin(seen_components)]
-            if df_mapping.empty:
-                print("[SKIPPED] All components already processed.")
-                continue
-
-            seen_components.update(df_mapping["CMPNT_MATL_NUM"].unique())
-
-            # --- Key Subset ---
-            df_key = df[key_cols].copy()
-            df_key = df_key[df_key['LOGL_KEY_COMB_COL_VAL'].notna()].drop_duplicates()
-
-            # ✅ Save per-file key reference file
-            key_output_file = os.path.join(args.key_output, f"key_{os.path.basename(file_path)}")
-            df_key.to_parquet(key_output_file, index=False)
-            print(f"🧩 Saved key file: {key_output_file}")
-
-            # --- Mapping Logic ---
-            df_mapping = ensure_ai_columns(df_mapping)
-            df_mapping = apply_existing_ai_overrides(df_mapping)
-
-            cat_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Category')
-            cat_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Category')
-            df_mapping = map_values(df_mapping, cat_map_1, cat_map_2, JOIN_COL_1, JOIN_COL_2,
-                                    DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Category', 'Mapped_File_Category')
-
-            sub_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Subcategory')
-            sub_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory')
-            df_mapping = map_values(df_mapping, sub_map_1, sub_map_2, JOIN_COL_1, JOIN_COL_2,
-                                    DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory', 'Mapped_File_Subcategory')
-
-            df_mapping = add_flags(df_mapping)
-
-            # ✅ Save mapped output
-            mapped_output_file = os.path.join(args.final_output, f"mapped_{os.path.basename(file_path)}")
-            finalize_output(df_mapping, mapped_output_file)
-
-        except Exception as e:
-            print(f"[❌ ERROR] Failed processing {file_path}: {e}")
-
-    print("\n✅ All files processed successfully.")
+# Update seen_keys
+seen_keys.update(df_key['LOGL_KEY_COMB_COL_VAL'].dropna().unique())
