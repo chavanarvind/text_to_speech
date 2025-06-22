@@ -1,11 +1,201 @@
-if 'LOGL_KEY_COMB_COL_VAL' in df.columns:
-    total_rows = len(df)
-    non_null_count = df['LOGL_KEY_COMB_COL_VAL'].notnull().sum()
-    all_null = non_null_count == 0
-
-    if all_null:
-        print(f"[🚫 NULL] {basename} ➤ All {total_rows} values in LOGL_KEY_COMB_COL_VAL are NULL.")
-    else:
-        print(f"[✅] {basename} ➤ Non-null LOGL_KEY_COMB_COL_VAL count: {non_null_count} / {total_rows}")
-else:
-    print(f"[⚠️ MISSING] {basename} ➤ Column LOGL_KEY_COMB_COL_VAL is missing entirely!")
+[✅] Final output saved to: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/54177121-274c-4100-970e-cbf113c58802/step1a_final_output/mapped_part-00001-066afd48-9753-4a8c-a5cd-707eef06559c-c000.snappy.parquet
+[✅] Finished processing: part-00001-066afd48-9753-4a8c-a5cd-707eef06559c-c000.snappy.parquet in 20.29 seconds
+     ➤ New unique keys added: 0
+     ➤ New unique components added: 19567
+[❌ ERROR] File: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/63ca0f22-7787-46fa-8e36-7ef9e278f639/step1_output/part-00001-256e8b3d-e2f8-4113-b8c2-54842a706861-c000.snappy.parquet
+local variable 'duration' referenced before assignment
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 203, in process_single_file
+    print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+UnboundLocalError: local variable 'duration' referenced before assignment
+[✅] Final output saved to: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/54177121-274c-4100-970e-cbf113c58802/step1a_final_output/mapped_part-00001-1c7ac0fd-e5cf-4c4e-b408-cb488a2f7f42-c000.snappy.parquet
+[✅] Finished processing: part-00001-1c7ac0fd-e5cf-4c4e-b408-cb488a2f7f42-c000.snappy.parquet in 14.92 seconds
+     ➤ New unique keys added: 0
+     ➤ New unique components added: 29
+[❌ ERROR] File: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/63ca0f22-7787-46fa-8e36-7ef9e278f639/step1_output/part-00001-0ed2f5d5-c793-4b1a-aff4-623798b2caee-c000.snappy.parquet
+local variable 'duration' referenced before assignment
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 203, in process_single_file
+    print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+UnboundLocalError: local variable 'duration' referenced before assignment
+[✅] Final output saved to: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/54177121-274c-4100-970e-cbf113c58802/step1a_final_output/mapped_part-00001-25cfa877-963a-413e-8aa3-ddb9e43989eb-c000.snappy.parquet
+[✅] Finished processing: part-00001-25cfa877-963a-413e-8aa3-ddb9e43989eb-c000.snappy.parquet in 5.39 seconds
+     ➤ New unique keys added: 0
+     ➤ New unique components added: 64
+[❌ ERROR] File: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/63ca0f22-7787-46fa-8e36-7ef9e278f639/step1_output/part-00001-33eaa22c-98a6-4c5b-8e42-07555cf4c1e3-c000.snappy.parquet
+local variable 'duration' referenced before assignment
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 203, in process_single_file
+    print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+UnboundLocalError: local variable 'duration' referenced before assignment
+[✅] Final output saved to: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/54177121-274c-4100-970e-cbf113c58802/step1a_final_output/mapped_part-00001-2ae6ac21-af2f-4b51-95c0-4fb27761a5b4-c000.snappy.parquet
+[✅] Finished processing: part-00001-2ae6ac21-af2f-4b51-95c0-4fb27761a5b4-c000.snappy.parquet in 16.86 seconds
+     ➤ New unique keys added: 0
+     ➤ New unique components added: 112
+[✅] Final output saved to: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/54177121-274c-4100-970e-cbf113c58802/step1a_final_output/mapped_part-00001-068aa10d-2baa-43b2-99e0-28bb30bbe46e-c000.snappy.parquet
+[✅] Finished processing: part-00001-068aa10d-2baa-43b2-99e0-28bb30bbe46e-c000.snappy.parquet in 10.43 seconds
+     ➤ New unique keys added: 0
+     ➤ New unique components added: 19
+[✅] Final output saved to: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/54177121-274c-4100-970e-cbf113c58802/step1a_final_output/mapped_part-00001-3fc257a1-52df-4e15-aefa-b92ed1360311-c000.snappy.parquet
+[✅] Finished processing: part-00001-3fc257a1-52df-4e15-aefa-b92ed1360311-c000.snappy.parquet in 13.88 seconds
+     ➤ New unique keys added: 0
+     ➤ New unique components added: 8
+[❌ ERROR] File: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/63ca0f22-7787-46fa-8e36-7ef9e278f639/step1_output/part-00001-4727fc4a-8dee-40e5-9392-33ddaefbd0b3-c000.snappy.parquet
+local variable 'duration' referenced before assignment
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 203, in process_single_file
+    print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+UnboundLocalError: local variable 'duration' referenced before assignment
+[✅] Final output saved to: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/54177121-274c-4100-970e-cbf113c58802/step1a_final_output/mapped_part-00001-1cce0732-cddc-4464-9d50-06846760392c-c000.snappy.parquet
+[✅] Finished processing: part-00001-1cce0732-cddc-4464-9d50-06846760392c-c000.snappy.parquet in 15.22 seconds
+     ➤ New unique keys added: 0
+     ➤ New unique components added: 477
+[✅] Final output saved to: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/54177121-274c-4100-970e-cbf113c58802/step1a_final_output/mapped_part-00001-0f2e9b00-bd03-4406-9284-a8910db3e112-c000.snappy.parquet
+[✅] Finished processing: part-00001-0f2e9b00-bd03-4406-9284-a8910db3e112-c000.snappy.parquet in 13.59 seconds
+     ➤ New unique keys added: 0
+     ➤ New unique components added: 3
+[✅] Final output saved to: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/54177121-274c-4100-970e-cbf113c58802/step1a_final_output/mapped_part-00001-346ce6a3-c1c1-4502-9c6b-bb00154aa4e4-c000.snappy.parquet
+[✅] Finished processing: part-00001-346ce6a3-c1c1-4502-9c6b-bb00154aa4e4-c000.snappy.parquet in 10.46 seconds
+     ➤ New unique keys added: 0
+     ➤ New unique components added: 18
+[✅] Final output saved to: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/54177121-274c-4100-970e-cbf113c58802/step1a_final_output/mapped_part-00001-2b5b14c1-4612-4cb9-a0ee-ad3ea020e228-c000.snappy.parquet
+[✅] Finished processing: part-00001-2b5b14c1-4612-4cb9-a0ee-ad3ea020e228-c000.snappy.parquet in 10.13 seconds
+     ➤ New unique keys added: 0
+     ➤ New unique components added: 3
+[❌ ERROR] File: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/63ca0f22-7787-46fa-8e36-7ef9e278f639/step1_output/part-00001-4ed36465-70ab-4f6a-81a5-7471cee3bd31-c000.snappy.parquet
+local variable 'duration' referenced before assignment
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 203, in process_single_file
+    print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+UnboundLocalError: local variable 'duration' referenced before assignment
+[✅] Final output saved to: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/54177121-274c-4100-970e-cbf113c58802/step1a_final_output/mapped_part-00001-25fa97c5-c1da-4e60-8418-a4ae464b0bf1-c000.snappy.parquet
+[✅] Finished processing: part-00001-25fa97c5-c1da-4e60-8418-a4ae464b0bf1-c000.snappy.parquet in 15.99 seconds
+     ➤ New unique keys added: 4407
+     ➤ New unique components added: 688
+[❌ ERROR] File: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/63ca0f22-7787-46fa-8e36-7ef9e278f639/step1_output/part-00001-06a631f8-54ab-43de-a266-28e923ce7521-c000.snappy.parquet
+local variable 'duration' referenced before assignment
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 203, in process_single_file
+    print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+UnboundLocalError: local variable 'duration' referenced before assignment
+[❌ ERROR] File: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/63ca0f22-7787-46fa-8e36-7ef9e278f639/step1_output/part-00001-40a69264-b6d6-4556-a2c0-0add52d82eeb-c000.snappy.parquet
+local variable 'duration' referenced before assignment
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 203, in process_single_file
+    print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+UnboundLocalError: local variable 'duration' referenced before assignment
+[❌ ERROR] File: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/63ca0f22-7787-46fa-8e36-7ef9e278f639/step1_output/part-00001-474c27be-acec-4b8c-a2c4-58d0c665129e-c000.snappy.parquet
+local variable 'duration' referenced before assignment
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 203, in process_single_file
+    print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+UnboundLocalError: local variable 'duration' referenced before assignment
+[❌ ERROR] File: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/63ca0f22-7787-46fa-8e36-7ef9e278f639/step1_output/part-00001-5687f54b-4fad-4969-a509-da01f167fb02-c000.snappy.parquet
+local variable 'duration' referenced before assignment
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 203, in process_single_file
+    print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+UnboundLocalError: local variable 'duration' referenced before assignment
+[❌ ERROR] File: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/63ca0f22-7787-46fa-8e36-7ef9e278f639/step1_output/part-00001-1d9fec44-1779-4376-aa52-6e3c36fff221-c000.snappy.parquet
+local variable 'duration' referenced before assignment
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 203, in process_single_file
+    print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+UnboundLocalError: local variable 'duration' referenced before assignment
+[❌ ERROR] File: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/63ca0f22-7787-46fa-8e36-7ef9e278f639/step1_output/part-00001-1230e650-cc7c-4a77-bc6b-6baac2119d54-c000.snappy.parquet
+local variable 'duration' referenced before assignment
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 203, in process_single_file
+    print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+UnboundLocalError: local variable 'duration' referenced before assignment
+[✅] Final output saved to: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/54177121-274c-4100-970e-cbf113c58802/step1a_final_output/mapped_part-00000-c5923c94-8910-47f3-b412-467bca3d7467-c000.snappy.parquet
+[✅] Finished processing: part-00000-c5923c94-8910-47f3-b412-467bca3d7467-c000.snappy.parquet in 453.91 seconds
+     ➤ New unique keys added: 1206344
+     ➤ New unique components added: 262760
+[✅] Final output saved to: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/54177121-274c-4100-970e-cbf113c58802/step1a_final_output/mapped_part-00000-f826a110-f2b5-4e93-b695-36149ddb41ff-c000.snappy.parquet
+[✅] Finished processing: part-00000-f826a110-f2b5-4e93-b695-36149ddb41ff-c000.snappy.parquet in 449.57 seconds
+     ➤ New unique keys added: 500603
+     ➤ New unique components added: 10445
+[❌ ERROR] File: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/63ca0f22-7787-46fa-8e36-7ef9e278f639/step1_output/part-00001-5bfa4058-f586-49e1-8d66-20cf5b7dd4fa-c000.snappy.parquet
+local variable 'duration' referenced before assignment
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 203, in process_single_file
+    print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+UnboundLocalError: local variable 'duration' referenced before assignment
+[✅] Final output saved to: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/54177121-274c-4100-970e-cbf113c58802/step1a_final_output/mapped_part-00001-350187ea-db27-4b06-b940-39ae0f595540-c000.snappy.parquet
+[✅] Finished processing: part-00001-350187ea-db27-4b06-b940-39ae0f595540-c000.snappy.parquet in 405.50 seconds
+     ➤ New unique keys added: 0
+     ➤ New unique components added: 1
+[✅] Final output saved to: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/54177121-274c-4100-970e-cbf113c58802/step1a_final_output/mapped_part-00000-f0acc051-141d-4121-82b0-f19a78462cc5-c000.snappy.parquet
+[✅] Finished processing: part-00000-f0acc051-141d-4121-82b0-f19a78462cc5-c000.snappy.parquet in 466.93 seconds
+     ➤ New unique keys added: 1194861
+     ➤ New unique components added: 1178
+[❌ ERROR] File: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/63ca0f22-7787-46fa-8e36-7ef9e278f639/step1_output/part-00001-2b61ff0f-2e94-46f0-a063-041eddf3597a-c000.snappy.parquet
+local variable 'duration' referenced before assignment
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 203, in process_single_file
+    print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+UnboundLocalError: local variable 'duration' referenced before assignment
+[✅] Final output saved to: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/54177121-274c-4100-970e-cbf113c58802/step1a_final_output/mapped_part-00000-fee60104-2b58-4737-96af-43cd7ed85b2f-c000.snappy.parquet
+[✅] Finished processing: part-00000-fee60104-2b58-4737-96af-43cd7ed85b2f-c000.snappy.parquet in 473.15 seconds
+     ➤ New unique keys added: 967996
+     ➤ New unique components added: 53
+[❌ ERROR] File: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/63ca0f22-7787-46fa-8e36-7ef9e278f639/step1_output/part-00001-4ee44e78-fc1c-4732-b025-0fcbd78fe552-c000.snappy.parquet
+local variable 'duration' referenced before assignment
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 203, in process_single_file
+    print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+UnboundLocalError: local variable 'duration' referenced before assignment
+[❌ ERROR] File: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/63ca0f22-7787-46fa-8e36-7ef9e278f639/step1_output/part-00001-264d5575-2a2d-4f71-b465-e2e504f8f875-c000.snappy.parquet
+local variable 'duration' referenced before assignment
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 203, in process_single_file
+    print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+UnboundLocalError: local variable 'duration' referenced before assignment
+[❌ ERROR] File: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/63ca0f22-7787-46fa-8e36-7ef9e278f639/step1_output/part-00001-411f1b8d-dc7f-442a-a5f3-0efa80c1c9cd-c000.snappy.parquet
+local variable 'duration' referenced before assignment
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 203, in process_single_file
+    print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+UnboundLocalError: local variable 'duration' referenced before assignment
+[❌ ERROR] File: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/63ca0f22-7787-46fa-8e36-7ef9e278f639/step1_output/part-00001-06aadac9-2476-448c-a92e-12248673872d-c000.snappy.parquet
+local variable 'duration' referenced before assignment
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 203, in process_single_file
+    print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+UnboundLocalError: local variable 'duration' referenced before assignment
+[❌ ERROR] File: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/63ca0f22-7787-46fa-8e36-7ef9e278f639/step1_output/part-00001-56c370f6-a010-49a4-9e67-ee5f6ba0fc11-c000.snappy.parquet
+local variable 'duration' referenced before assignment
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 203, in process_single_file
+    print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+UnboundLocalError: local variable 'duration' referenced before assignment
+[❌ ERROR] File: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/63ca0f22-7787-46fa-8e36-7ef9e278f639/step1_output/part-00001-1dc30451-de4a-48c7-ab5b-26ff561e3bc2-c000.snappy.parquet
+local variable 'duration' referenced before assignment
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 203, in process_single_file
+    print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+UnboundLocalError: local variable 'duration' referenced before assignment
+[❌ ERROR] File: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/63ca0f22-7787-46fa-8e36-7ef9e278f639/step1_output/part-00001-4762c617-77a7-4f92-a6ee-47b814e3ce38-c000.snappy.parquet
+local variable 'duration' referenced before assignment
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 203, in process_single_file
+    print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+UnboundLocalError: local variable 'duration' referenced before assignment
+[❌ ERROR] File: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/63ca0f22-7787-46fa-8e36-7ef9e278f639/step1_output/part-00001-12600c53-3fe8-44d5-bf62-04b866d476c6-c000.snappy.parquet
+local variable 'duration' referenced before assignment
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 203, in process_single_file
+    print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+UnboundLocalError: local variable 'duration' referenced before assignment
+[❌ ERROR] File: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/63ca0f22-7787-46fa-8e36-7ef9e278f639/step1_output/part-00001-36e8ca80-c02b-4dac-a47c-44d3a4e44717-c000.snappy.parquet
+local variable 'duration' referenced before assignment
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 203, in process_single_file
+    print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+UnboundLocalError: local variable 'duration' referenced before assignment
+[❌ ERROR] File: /mnt/azureml/cr/j/f142182a9b154315947f1e7eef8ef46d/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/63ca0f22-7787-46fa-8e36-7ef9e278f639/step1_output/part-00001-5c211a06-a99b-409f-b125-12a127d5eef5-c000.snappy.parquet
+local variable 'duration' referenced before assignment
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 203, in process_single_file
+    print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds
