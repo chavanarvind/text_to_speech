@@ -1,21 +1,41 @@
 import os
 import argparse
 from azureml.core import Run, Dataset
+from azureml.data import FileDataset
 
 def main(output_path):
     # Get run context and workspace
     run = Run.get_context()
     ws = run.experiment.workspace
 
-    # Get dataset by name
+    # Get the FileDataset
     dataset = Dataset.get_by_name(ws, name='harmonized_bom_data_asset')
 
-    # Ensure output directory exists and download dataset
+    # Check type
+    if not isinstance(dataset, FileDataset):
+        raise ValueError("Dataset must be a FileDataset to download individual files.")
+
+    # Get all file paths
+    all_files = dataset.file_paths()
+
+    # Filter Parquet files
+    parquet_files = [f for f in all_files if f.path.endswith(".parquet")]
+
+    if len(parquet_files) < 2:
+        raise ValueError("Less than 2 parquet files found in dataset.")
+
+    # Select the first two files
+    selected_files = parquet_files[:2]
+
+    # Ensure output directory exists
     os.makedirs(output_path, exist_ok=True)
-    dataset.download(target_path=output_path, overwrite=True)
 
-    print(f" Dataset downloaded to: {output_path}")
+    # Download only selected files
+    for file in selected_files:
+        dataset.download(target_path=output_path, prefix=file.path, overwrite=True)
+        print(f"✅ Downloaded: {file.path}")
 
+    print(f"\n✅ Successfully downloaded {len(selected_files)} parquet files to: {output_path}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
