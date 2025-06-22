@@ -1,14 +1,3 @@
-Running on local URL:  http://127.0.0.1:7861
-
-Could not create share link. Missing file: C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\gradio\frpc_windows_amd64_v0.2.
-
-Please check your internet connection. This can happen if your antivirus software blocks the download of this file. You can install manually by following these steps:
-
-1. Download this file: https://cdn-media.huggingface.co/frpc-gradio-0.2/frpc_windows_amd64.exe
-2. Rename the downloaded file to: frpc_windows_amd64_v0.2
-3. Move the file to this location: C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\gradio
-"datastore.upload_files" is deprecated after version 1.0.69. Please use "FileDatasetFactory.upload_directory" instead. See Dataset API change notice at https://aka.ms/dataset-deprecation.
-Uploading an estimated of 1 files
-Uploading C:\Users\AChava05\AppData\Local\Temp\gradio\8da72d5fcf139c2608c8159adb9d0447201b0464be470a7bcaefa0757babc7cb\Overview OCC.mp4
-Uploaded C:\Users\AChava05\AppData\Local\Temp\gradio\8da72d5fcf139c2608c8159adb9d0447201b0464be470a7bcaefa0757babc7cb\Overview OCC.mp4, 1 files out of an estimated total of 1
-Uploaded 1 file
+https://cdn-media.huggingface.co/frpc-gradio-0.2/frpc_windows_amd64.exe
+frpc_windows_amd64_v0.2
+C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\gradio
