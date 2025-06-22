@@ -1,28 +1,49 @@
-# === Set headers ===
-$headers = @{
-    "Ocp-Apim-Subscription-Key" = "BBvpAQdmiBQWNukOTc5F2tIb5Ln7TuubMiQGbbkSSO2GJDR6ZK09JQQJ99AKACYeBjFXJ3w3AAAYACOG1LLR"
-    "Operation-Id" = "gradio-test-id-001"
-    "Content-Type" = "application/json"
-}
+$ curl -v -X PUT -H "Ocp-Apim-Subscription-Key: " -H "Operation-Id: Your-Operation-Id-1" -H "Content-Type: application/json" -d '{
+  "displayName": "My translation object",
+  "description": "My translation object for video translation iterations",
+  "input": {
+    "sourceLocale": "es-ES",
+    "targetLocale": "en-US",
+    "voiceKind": "PlatformVoice",
+    "speakerCount": 1,
+    "subtitleMaxCharCountPerSegment": 50,
+    "exportSubtitleInVideo": false,
+    "enableLipSync": false,
+    "videoFileUrl": "https://speechstudioprodpublicsa.blob.core.windows.net/ttsvoice/VideoTranslation/PublicDoc/SampleData/es-ES-TryOutOriginal.mp4"
+  }
+}' "https://cog-speech-dto-epil-dev.cognitiveservices.azure.com/videotranslation/translations/Your-Translation-Id?api-version=2024-05-20"
+* Host cog-speech-dto-epil-dev.cognitiveservices.azure.com:443 was resolved.
+* IPv6: (none)
+* IPv4: 100.64.1.96
+*   Trying 100.64.1.96:443...
+* Connected to cog-speech-dto-epil-dev.cognitiveservices.azure.com (100.64.1.96) port 443
+* schannel: disabled automatic use of client certificate
+* using HTTP/1.x
+> PUT /videotranslation/translations/Your-Translation-Id?api-version=2024-05-20 HTTP/1.1
+> Host: cog-speech-dto-epil-dev.cognitiveservices.azure.com
+> User-Agent: curl/8.7.1
+> Accept: */*
+> Ocp-Apim-Subscription-Key: 
+> Operation-Id: Your-Operation-Id-1
+> Content-Type: application/json
+> Content-Length: 507
+> 
+* upload completely sent off: 507 bytes
+* schannel: remote party requests renegotiation
+* schannel: renegotiating SSL/TLS connection
+* schannel: SSL/TLS connection renegotiated
+* schannel: remote party requests renegotiation
+* schannel: renegotiating SSL/TLS connection
+* schannel: SSL/TLS connection renegotiated
+< HTTP/1.1 404 Resource Not Found
+< Date: Sun, 22 Jun 2025 19:23:49 GMT
+< Content-Type: application/json
+< Content-Length: 56
+< Connection: keep-alive
+< apim-request-id: b8f2b869-16f6-417a-bd2b-e814a61992f1
+< Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+< x-content-type-options: nosniff
+<
+{"error":{"code":"404","message": "Resource not found"}}* Connection #0 to host cog-speech-dto-epil-dev.cognitiveservices.azure.com left intact
 
-# === Set request body ===
-$body = @{
-    displayName = "Test video translation"
-    description = "Test using public sample video"
-    input = @{
-        sourceLocale = "es-ES"
-        targetLocale = "en-US"
-        voiceKind = "PlatformVoice"
-        speakerCount = 1
-        subtitleMaxCharCountPerSegment = 50
-        exportSubtitleInVideo = $false
-        enableLipSync = $false
-        videoFileUrl = "https://speechstudioprodpublicsa.blob.core.windows.net/ttsvoice/VideoTranslation/PublicDoc/SampleData/es-ES-TryOutOriginal.mp4"
-    }
-} | ConvertTo-Json -Depth 5
-
-# === Send request ===
-Invoke-RestMethod -Method Put `
-  -Uri "https://eastus.api.cognitive.microsoft.com/videotranslation/translations/gradio-test-id-001?api-version=2024-05-20" `
-  -Headers $headers `
-  -Body $body
+JX2+AChava05@CPC-AChav-O3V00 MINGW64 ~
