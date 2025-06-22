@@ -1,27 +1,25 @@
+$headers = @{
+    "Ocp-Apim-Subscription-Key" = "BBvpAQdmiBQWNukOTc5F2tIb5Ln7TuubMiQGbbkSSO2GJDR6ZK09JQQJ99AKACYeBjFXJ3w3AAAYACOG1LLR"
+    "Operation-Id" = "test-operation-123"
+    "Content-Type" = "application/json"
+}
+
+$body = @{
+    displayName = "Test video translation"
+    description = "Test using public sample video"
+    input = @{
+        sourceLocale = "es-ES"
+        targetLocale = "en-US"
+        voiceKind = "PlatformVoice"
+        speakerCount = 1
+        subtitleMaxCharCountPerSegment = 50
         exportSubtitleInVideo = $false
->>         enableLipSync = $false
->>         videoFileUrl = "https://speechstudioprodpublicsa.blob.core.windows.net/ttsvoice/VideoTranslation/PublicDoc/SampleData/es-ES-TryOutOriginal.mp4"
->>     }
->> } | ConvertTo-Json -Depth 5
-PS C:\Users\AChava05> Invoke-RestMethod -Method PUT
->>   -Uri https://eastus.api.cognitive.microsoft.com/videotranslation/translations/gradio-job-test123?api-version=2024-05-20
+        enableLipSync = $false
+        videoFileUrl = "https://speechstudioprodpublicsa.blob.core.windows.net/ttsvoice/VideoTranslation/PublicDoc/SampleData/es-ES-TryOutOriginal.mp4"
+    }
+} | ConvertTo-Json -Depth 5
 
-cmdlet Invoke-RestMethod at command pipeline position 1
-Supply values for the following parameters:
-Uri: "https://eastus.api.cognitive.microsoft.com/videotranslation/translations/gradio-job-test123?api-version=2024-05-20"
-Invoke-RestMethod : Invalid URI: The hostname could not be parsed.
-At line:1 char:1
-+ Invoke-RestMethod -Method PUT
-+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (:) [Invoke-RestMethod], UriFormatException
-    + FullyQualifiedErrorId : System.UriFormatException,Microsoft.PowerShell.Commands.InvokeRestMethodCommand
-
--Uri : The term '-Uri' is not recognized as the name of a cmdlet, function, script file, or operable program. Check
-the spelling of the name, or if a path was included, verify that the path is correct and try again.
-At line:2 char:3
-+   -Uri https://eastus.api.cognitive.microsoft.com/videotranslation/tr ...
-+   ~~~~
-    + CategoryInfo          : ObjectNotFound: (-Uri:String) [], CommandNotFoundException
-    + FullyQualifiedErrorId : CommandNotFoundException
-
-PS C:\Users\AChava05>
+Invoke-RestMethod -Method Put `
+  -Uri "https://eastus.api.cognitive.microsoft.com/videotranslation/translations/test-operation-123?api-version=2024-05-20" `
+  -Headers $headers `
+  -Body $body
