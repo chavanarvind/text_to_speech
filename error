@@ -6,7 +6,12 @@ import pandas as pd
 import time
 from multiprocessing import Pool, Manager, cpu_count
 from azureml.core import Dataset
-import sqlite3
+try:
+    import sqlite3
+except ImportError:
+    import subprocess
+    subprocess.check_call(["pip", "install", "pysqlite3-binary"])
+    import sqlite3
 
 # === Constants ===
 DIRECT_MAP_KEY_1 = "Direct Mapping"
