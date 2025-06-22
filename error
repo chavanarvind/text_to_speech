@@ -1,12 +1,14 @@
-Uploaded C:\Users\AChava05\AppData\Local\Temp\gradio\8da72d5fcf139c2608c8159adb9d0447201b0464be470a7bcaefa0757babc7cb\Overview OCC.mp4, 1 files out of an estimated total of 1
-[2025-06-22 23:46:40,886] Uploaded C:\Users\AChava05\AppData\Local\Temp\gradio\8da72d5fcf139c2608c8159adb9d0447201b0464be470a7bcaefa0757babc7cb\Overview OCC.mp4, 1 files out of an estimated total of 1
-Uploaded 1 files
-[2025-06-22 23:46:40,886] Uploaded 1 files
-[2025-06-22 23:46:40,886] Finished AzureBlobDatastore.upload with count=1.
-[2025-06-22 23:46:40,886] Upload complete: https://blobdtoamlmarmot.blob.core.windows.net/azureml-blobstore-975b0280-8ce5-42df-bdeb-51637f5ddbc7/video-uploads/Overview OCC.mp4?se=2025-06-23T00%3A16%3A40Z&sp=r&sv=2024-11-04&sr=b&sig=nbl%2BVZqCqS0SatsPKdw8Xif3Qg7o63oUA8v1DxthdTg%3D
-[2025-06-22 23:46:40,886] Submitting video translation job to Azure...
-[ERROR] Failed to submit translation job:
-Status Code: 404
-Response: {"error":{"code":"404","message": "Resource not found"}}
-[2025-06-22 23:46:41,610] Job submitted: None
-[2025-06-22 23:46:41,610] Polling job status...
+curl -v -X PUT -H "Ocp-Apim-Subscription-Key: YourSpeechResourceKey" -H "Operation-Id: Your-Operation-Id-1" -H "Content-Type: application/json" -d '{
+  "displayName": "My translation object",
+  "description": "My translation object for video translation iterations",
+  "input": {
+    "sourceLocale": "es-ES",
+    "targetLocale": "en-US",
+    "voiceKind": "PlatformVoice",
+    "speakerCount": 1,
+    "subtitleMaxCharCountPerSegment": 50,
+    "exportSubtitleInVideo": false,
+    "enableLipSync": false,
+    "videoFileUrl": "https://speechstudioprodpublicsa.blob.core.windows.net/ttsvoice/VideoTranslation/PublicDoc/SampleData/es-ES-TryOutOriginal.mp4"
+  }
+}' "https://YourSpeechResourceRegion.api.cognitive.microsoft.com/videotranslation/translations/Your-Translation-Id?api-version=2024-05-20"
