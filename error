@@ -1,1 +1,122 @@
-https://ngrok.com/download
+# === Initialize AML Workspace ===
+ws = Workspace(
+    subscription_id=SUBSCRIPTION_ID,
+    resource_group=RESOURCE_GROUP,
+    workspace_name=WORKSPACE_NAME
+)
+
+def upload_to_default_blobstore(ws, local_path):
+    default_ds = ws.get_default_datastore()
+    target_path = f"video-uploads/{os.path.basename(local_path)}"
+
+    # Upload to Blob
+    default_ds.upload_files(
+        files=[local_path],
+        target_path=target_path,
+        overwrite=True,
+        show_progress=True
+    )
+
+    # Generate SAS URL
+    sas_token = generate_blob_sas(
+        account_name=default_ds.account_name,
+        container_name=default_ds.container_name,
+        blob_name=target_path,
+        account_key=default_ds.account_key,
+        permission=BlobSasPermissions(read=True),
+        expiry=datetime.utcnow() + timedelta(hours=1)
+    )
+    blob_url = f"https://{default_ds.account_name}.blob.core.windows.net/{default_ds.container_name}/{target_path}?{sas_token}"
+    return blob_url
+
+def create_video_translation_job(blob_url, source_lang, target_lang, output_format):
+    url = f"{ENDPOINT}/speechtotext/v3.1-preview1/videoTranslationJobs"
+    headers = {
+        "Ocp-Apim-Subscription-Key": AZURE_SPEECH_KEY,
+        "Content-Type": "application/json"
+    }
+
+    job_id = f"gradio-job-{uuid.uuid4()}"
+    payload = {
+        "displayName": job_id,
+        "description": "Gradio video translation",
+        "source": {
+            "url": blob_url,
+            "language": source_lang
+        },
+        "targets": [
+            {
+                "language": target_lang,
+                "outputFormat": output_format
+            }
+        ],
+        "properties": {
+            "diarizationEnabled": "true",
+            "ttsVoice": f"{target_lang}-DeniseNeural"
+        }
+    }
+
+    response = requests.post(url, headers=headers, json=payload)
+    return response.json().get("id")
+
+def poll_job_and_get_output(job_id):
+    url = f"{ENDPOINT}/speechtotext/v3.1-preview1/videoTranslationJobs/{job_id}"
+    headers = {"Ocp-Apim-Subscription-Key": AZURE_SPEECH_KEY}
+    for _ in range(30):
+        resp = requests.get(url, headers=headers)
+        result = resp.json()
+        status = result.get("status")
+        if status == "Succeeded":
+            return result.get("results", {}).get("urls", {})
+        elif status == "Failed":
+            return {"error": "Translation failed."}
+        time.sleep(10)
+    return {"error": "Timeout waiting for translation to finish."}
+
+def translate_video(video_file, source_lang, target_lang, output_format):
+    import tempfile
+    blob_url = upload_to_default_blobstore(ws, video_file.name)
+    job_id = create_video_translation_job(blob_url, source_lang, target_lang, output_format)
+    result = poll_job_and_get_output(job_id)
+    translated_url = result.get(output_format, f"{output_format.upper()} not available")
+
+    if output_format == "video" and translated_url.startswith("http"):
+        response = requests.get(translated_url)
+        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+        tmp_file.write(response.content)
+        tmp_file.close()
+        return blob_url, tmp_file.name  # Local file path for Gradio video
+
+    return blob_url, translated_url
+
+# === Gradio UI ===
+with gr.Blocks() as app:
+    gr.Markdown("# Azure Video Translator using AML Workspace Storage")
+    video = gr.File(label="Upload Video File", file_types=[".mp4", ".mov", ".avi"])
+    source = gr.Textbox(label="Source Language (e.g. en)")
+    target = gr.Dropdown(label="Target Language", choices=[
+        "fr", "de", "es", "it", "pt", "zh-Hans", "ja", "ko", "ar", "ru"
+    ], value="fr")
+    output_format = gr.Dropdown(label="Output Format", choices=["video", "srt", "webvtt"], value="video")
+    gr.Markdown("### Original Video")
+    original_display = gr.Video()
+    gr.Markdown("### Translated Output")
+    translated_display = gr.Video()
+    subtitle_display = gr.Textbox(label="Subtitle Output Link")
+
+    btn = gr.Button("Translate Video")
+
+    def handle_translation(vfile, sl, tl, fmt):
+        orig_url, result_url = translate_video(vfile, sl, tl, fmt)
+        if fmt == "video":
+            return orig_url, result_url, ""
+        else:
+            return orig_url, None, result_url
+
+    btn.click(
+        fn=handle_translation,
+        inputs=[video, source, target, output_format],
+        outputs=[original_display, translated_display, subtitle_display]
+    )
+
+app.launch(share=True)
