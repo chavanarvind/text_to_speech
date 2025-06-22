@@ -1,24 +1,12 @@
-def is_new_key_safe(key, lock, retries=3, delay=1):
-    for attempt in range(retries):
-        try:
-            with lock:
-                conn = sqlite3.connect(SQLITE_DB_PATH, timeout=5)  # Set a 5s timeout
-                cursor = conn.cursor()
-                cursor.execute(f"INSERT INTO {KEY_TABLE} (key) VALUES (?)", (key,))
-                conn.commit()
-                return True
-        except sqlite3.IntegrityError:
-            return False
-        except sqlite3.OperationalError as e:
-            if "database is locked" in str(e):
-                print(f"[RETRY] DB locked for key {key}, retrying ({attempt + 1}/{retries})")
-                time.sleep(delay)
-            else:
-                raise
-        finally:
-            try:
-                conn.close()
-            except:
-                pass
-    print(f"[SKIPPED] Gave up on key: {key}")
-    return False
+✅] Finished: part-00001-ddb91d5f-8fde-41c8-92d1-e22abadc618f-c000.snappy.parquet in 1.95s ➤ Keys added: 0, Components added: 0
+[✅] Finished: part-00001-ddea34e0-7f82-4ce7-b5e9-a86f48343d3f-c000.snappy.parquet in 1.93s ➤ Keys added: 0, Components added: 0
+[✅] Finished: part-00001-de2f2fed-3f45-4c25-b7b5-6f857eb85d21-c000.snappy.parquet in 1.91s ➤ Keys added: 0, Components added: 0
+[✅] Finished: part-00001-def6e147-ddd4-43a1-80f4-ca7feccd16ea-c000.snappy.parquet in 1.93s ➤ Keys added: 0, Components added: 0
+[✅] Final output saved to: /mnt/azureml/cr/j/45d394308dc5494e97416b50c23ba5fe/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/6bddafa5-8177-46a4-963a-1810f7630f67/step1a_final_output/mapped_part-00000-f826a110-f2b5-4e93-b695-36149ddb41ff-c000.snappy.parquet
+[✅] Finished: part-00000-f826a110-f2b5-4e93-b695-36149ddb41ff-c000.snappy.parquet in 2759.24s ➤ Keys added: 500601, Components added: 265386
+[✅] Final output saved to: /mnt/azureml/cr/j/45d394308dc5494e97416b50c23ba5fe/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/6bddafa5-8177-46a4-963a-1810f7630f67/step1a_final_output/mapped_part-00000-d64af6b9-260f-4888-8495-7afe212f2cee-c000.snappy.parquet
+[✅] Finished: part-00000-d64af6b9-260f-4888-8495-7afe212f2cee-c000.snappy.parquet in 4748.85s ➤ Keys added: 973894, Components added: 496
+[✅] Final output saved to: /mnt/azureml/cr/j/45d394308dc5494e97416b50c23ba5fe/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/6bddafa5-8177-46a4-963a-1810f7630f67/step1a_final_output/mapped_part-00000-f0acc051-141d-4121-82b0-f19a78462cc5-c000.snappy.parquet
+[✅] Finished: part-00000-f0acc051-141d-4121-82b0-f19a78462cc5-c000.snappy.parquet in 5675.83s ➤ Keys added: 1195585, Components added: 8473
+[✅] Final output saved to: /mnt/azureml/cr/j/45d394308dc5494e97416b50c23ba5fe/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/6bddafa5-8177-46a4-963a-1810f7630f67/step1a_final_output/mapped_part-00000-e4a08465-fabd-4dc8-92d6-50d1bad021c3-c000.snappy.parquet
+[✅] Finished: part-00000-e4a08465-fabd-4dc8-92d6-50d1bad021c3-c000.snappy.parquet in 5894.08s ➤ Keys added: 1244310, Components added: 86
