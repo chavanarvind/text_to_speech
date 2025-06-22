@@ -1,10 +1,45 @@
-Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.scriptrun = azureml.core.script_run:ScriptRun._from_run_dto with exception (packaging 23.2 (/opt/conda/envs/ptca/lib/python3.8/site-packages), Requirement.parse('packaging<=23.0,>=20.0')).
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.11911988258361816 seconds
-Traceback (most recent call last):
-  File "step_1_data_pull.py", line 45, in <module>
+import os
+import argparse
+from azureml.core import Run, Dataset
+from azureml.data import FileDataset
+
+def main(output_path):
+    # Get run context and workspace
+    run = Run.get_context()
+    ws = run.experiment.workspace
+
+    # Get the FileDataset
+    dataset = Dataset.get_by_name(ws, name='harmonized_bom_data_asset')
+
+    # Check type
+    if not isinstance(dataset, FileDataset):
+        raise ValueError("Dataset must be a FileDataset to download individual files.")
+
+    # Get all file paths (each is a tuple: (path, timestamp))
+    all_files = dataset.to_path()
+
+    # Filter Parquet files
+    parquet_files = [f[0] for f in all_files if f[0].endswith(".parquet")]
+
+    if len(parquet_files) < 2:
+        raise ValueError("Less than 2 parquet files found in dataset.")
+
+    # Select first 2 files
+    selected_files = parquet_files[:2]
+
+    # Ensure output directory exists
+    os.makedirs(output_path, exist_ok=True)
+
+    # Download each selected file using its prefix
+    for file_path in selected_files:
+        dataset.download(target_path=output_path, prefix=file_path, overwrite=True)
+        print(f"✅ Downloaded: {file_path}")
+
+    print(f"\n✅ Successfully downloaded {len(selected_files)} parquet files to: {output_path}")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output_path", type=str, required=True)
+    args = parser.parse_args()
+
     main(args.output_path)
-  File "step_1_data_pull.py", line 19, in main
-    all_files = dataset.file_paths()
-AttributeError: 'FileDataset' object has no attribute 'file_paths'
