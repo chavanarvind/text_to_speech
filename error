@@ -1,10 +1,35 @@
-df['category_matching_reason'] = df.apply(
-    lambda row: row['AI_MATCHING_REASON_FINAL_CATEGORY'] if pd.notna(row['AI_MATCHING_REASON_FINAL_CATEGORY']) else (
-        'direct_mapping' if row['Mapped_File_Category Filled'] else 'unmapped'
-    ), axis=1
-)
+def add_flags(df):
+    # Fast boolean flags
+    df['Mapped_File_Category Filled'] = df['Mapped_File_Category'].notna() & df['Mapped_File_Category'].astype(str).str.strip().ne("")
+    df['Mapped_File_Subcategory Filled'] = df['Mapped_File_Subcategory'].notna() & df['Mapped_File_Subcategory'].astype(str).str.strip().ne("")
 
-df['category_matching_reason'] = df['AI_MATCHING_REASON_FINAL_CATEGORY'].where(
-    df['AI_MATCHING_REASON_FINAL_CATEGORY'].notna(),
-    df['Mapped_File_Category Filled'].map({True: 'direct_mapping', False: 'unmapped'})
-)
+    # category_matching_reason
+    df['category_matching_reason'] = df['AI_MATCHING_REASON_FINAL_CATEGORY'].where(
+        df['AI_MATCHING_REASON_FINAL_CATEGORY'].notna(),
+        df['Mapped_File_Category Filled'].map({True: 'direct_mapping', False: 'unmapped'})
+    )
+
+    # subcategory_matching_reason
+    df['subcategory_matching_reason'] = df['AI_MATCHING_REASON_FINAL_SUBCATEGORY'].where(
+        df['AI_MATCHING_REASON_FINAL_SUBCATEGORY'].notna(),
+        df['Mapped_File_Subcategory Filled'].map({True: 'direct_mapping', False: 'unmapped'})
+    )
+
+    # Final Category Confidence Score
+    df['Final Category Confidence Score'] = df['AI_FINAL_CATEGORY_CONFIDENCE'].where(
+        df['AI_FINAL_CATEGORY_CONFIDENCE'].notna(),
+        df['Mapped_File_Category Filled'].map({True: 1.0, False: None})
+    )
+
+    # Final Subcategory Confidence Score
+    df['Final Subcategory Confidence Score'] = df['AI_FINAL_SUBCATEGORY_CONFIDENCE'].where(
+        df['AI_FINAL_SUBCATEGORY_CONFIDENCE'].notna(),
+        df['Mapped_File_Subcategory Filled'].map({True: 1.0, False: None})
+    )
+
+    # Flags for model requirements
+    df['needs_model'] = ~(df['Mapped_File_Category Filled'] & df['Mapped_File_Subcategory Filled'])
+    df['needs_category_model'] = ~df['Mapped_File_Category Filled']
+    df['needs_subcategory_model'] = ~df['Mapped_File_Subcategory Filled']
+
+    return df
