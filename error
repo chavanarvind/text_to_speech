@@ -1,34 +1,8 @@
-job_id="gradio-job-$(uuidgen)"
-api_version="2024-05-20"
-endpoint="https://eastus.api.cognitive.microsoft.com"
-blob_url="https://yourbloburl.com/yourvideo.mp4"  # ← Replace with actual URL
+job_id="gradio-job-test123"
 
-curl -X PUT "${endpoint}/videotranslation/translations/${job_id}?api-version=${api_version}" \
-  -H "Ocp-Apim-Subscription-Key: YOUR_SUBSCRIPTION_KEY" \
+curl -X PUT "https://eastus.api.cognitive.microsoft.com/videotranslation/translations/$job_id?api-version=2024-05-20" \
+  -H "Ocp-Apim-Subscription-Key: YOUR_SPEECH_KEY" \
   -H "Content-Type: application/json" \
-  -H "Operation-Id: ${job_id}" \
+  -H "Operation-Id: $job_id" \
   -d "{
-    \"displayName\": \"${job_id}\",
-    \"description\": \"Gradio video translation via curl\",
-    \"input\": {
-      \"sourceLocale\": \"es-ES\",
-      \"targetLocale\": \"en-US\",
-      \"voiceKind\": \"PlatformVoice\",
-      \"speakerCount\": 1,
-      \"subtitleMaxCharCountPerSegment\": 50,
-      \"exportSubtitleInVideo\": true,
-      \"enableLipSync\": false,
-      \"videoFileUrl\": \"${blob_url}\"
-    },
-    \"targets\": [
-      {
-        \"language\": \"en-US\",
-        \"outputFormat\": \"video\"
-      }
-    ],
-    \"properties\": {
-      \"diarizationEnabled\": \"true\",
-      \"ttsVoice\": \"en-US-DeniseNeural\"
-    }
-  }"
-
+    \"displayName\": \"$job_id\",
