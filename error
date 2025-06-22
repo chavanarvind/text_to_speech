@@ -1,1 +1,4 @@
-curl -X GET "https://eastus.api.cognitive.microsoft.com/videotranslation/operations?api-version=2024-05-20" -H "Ocp-Apim-Subscription-Key: YOUR_SPEECH_KEY"
+Invoke-WebRequest : Cannot bind parameter 'Headers'. Cannot convert the "Ocp-Apim-Subscription-Key:
+XXXXXXXX" value of type "System.String" to
+type "System.Collections.IDictionary".
+At line:1 char:112
