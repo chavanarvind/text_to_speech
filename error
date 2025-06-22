@@ -1,18 +1,1 @@
-curl -X PUT "https://eastus.api.cognitive.microsoft.com/videotranslation/translations/gradio-job-test123?api-version=2024-05-20" \
-  -H "Ocp-Apim-Subscription-Key: BBvpAQdmiBQWNukOTc5F2tIb5Ln7TuubMiQGbbkSSO2GJDR6ZK09JQQJ99AKACYeBjFXJ3w3AAAYACOG1LLR" \
-  -H "Operation-Id: gradio-job-test123" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "displayName": "My translation object",
-    "description": "Video Translation Test",
-    "input": {
-      "sourceLocale": "es-ES",
-      "targetLocale": "en-US",
-      "voiceKind": "PlatformVoice",
-      "speakerCount": 1,
-      "subtitleMaxCharCountPerSegment": 50,
-      "exportSubtitleInVideo": false,
-      "enableLipSync": false,
-      "videoFileUrl": "https://speechstudioprodpublicsa.blob.core.windows.net/ttsvoice/VideoTranslation/PublicDoc/SampleData/es-ES-TryOutOriginal.mp4"
-    }
-  }'
+
