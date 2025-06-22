@@ -1,105 +1,248 @@
-#step_4_merge_with_key_files.py
-import os
 import argparse
+import os
+import glob
+import traceback
 import pandas as pd
-import psutil
-from datetime import datetime
-from azureml.core import Run
+import time
+from multiprocessing import Pool, Manager, cpu_count
+from azureml.core import Run, Dataset
 
-def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+# === Constants ===
+DIRECT_MAP_KEY_1 = "Direct Mapping"
+DIRECT_MAP_KEY_2 = "Direct Mapping"
+JOIN_COL_1 = "CMPNT_CAT_CD_DESC"
+JOIN_COL_2 = "CMPNT_MATL_TYPE_CD"
+KEY_COLS = ["CMPNT_MATL_NUM", "LOGL_KEY_COMB_COL_VAL"]
 
-AI_OUTPUT_COLUMNS = [
-    "AI_FINAL_CATEGORY",
-    "AI_FINAL_CATEGORY_CONFIDENCE",
-    "AI_MATCHING_REASON_FINAL_CATEGORY",
-    "AI_FINAL_SUBCATEGORY",
-    "AI_FINAL_SUBCATEGORY_CONFIDENCE",
-    "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
-]
+def ensure_ai_columns(df):
+    expected_cols = [
+        'AI_FINAL_CATEGORY', 'AI_FINAL_CATEGORY_CONFIDENCE', 'AI_MATCHING_REASON_FINAL_CATEGORY',
+        'AI_FINAL_SUBCATEGORY', 'AI_FINAL_SUBCATEGORY_CONFIDENCE', 'AI_MATCHING_REASON_FINAL_SUBCATEGORY'
+    ]
+    for col in expected_cols:
+        if col not in df.columns:
+            df[col] = None
+    return df
 
-def main(inference_output_dir, key_output_dir, final_output_dir):
-    run = Run.get_context()
-    os.makedirs(final_output_dir, exist_ok=True)
-
-    all_dfs = []
-
-    log("📁 Scanning inference output directory...")
-    for file in os.listdir(inference_output_dir):
-        if not file.endswith(".parquet"):
-            continue
-        try:
-            file_path = os.path.join(inference_output_dir, file)
-            df = pd.read_parquet(file_path)
-
-            # Ensure required columns exist
-            selected_cols = ["CMPNT_MATL_NUM"] + AI_OUTPUT_COLUMNS
-            missing_cols = [col for col in selected_cols if col not in df.columns]
-            if missing_cols:
-                log(f"⚠️ Skipping {file} due to missing columns: {missing_cols}")
-                continue
-
-            df = df[selected_cols]
-            df = df[df["CMPNT_MATL_NUM"].notnull()]
-            all_dfs.append(df)
-
-            log(f"✅ Loaded {file} (rows: {len(df)})")
-        except Exception as e:
-            log(f"❌ Failed to process file: {file} -> {e}")
-
-    if not all_dfs:
-        log("❌ No valid inference files found. Exiting.")
-        return
-
-    log("🧩 Concatenating and deduplicating predictions...")
-    global_df = pd.concat(all_dfs, ignore_index=True)
-
-    global_df = global_df.sort_values(
-        by=["CMPNT_MATL_NUM", "AI_FINAL_CATEGORY_CONFIDENCE", "AI_FINAL_SUBCATEGORY_CONFIDENCE"],
-        ascending=[True, False, False]
+def apply_existing_ai_overrides(df):
+    df['skip_category_mapping'] = (
+        df['AI_FINAL_CATEGORY'].notna() & df['AI_FINAL_CATEGORY'].astype(str).str.strip().ne('') &
+        df['AI_FINAL_CATEGORY_CONFIDENCE'].notna() & df['AI_MATCHING_REASON_FINAL_CATEGORY'].notna()
     )
-    global_df = global_df.drop_duplicates(subset="CMPNT_MATL_NUM", keep="first")
+    df['skip_subcategory_mapping'] = (
+        df['AI_FINAL_SUBCATEGORY'].notna() & df['AI_FINAL_SUBCATEGORY'].astype(str).str.strip().ne('') &
+        df['AI_FINAL_SUBCATEGORY_CONFIDENCE'].notna() & df['AI_MATCHING_REASON_FINAL_SUBCATEGORY'].notna()
+    )
+    df.loc[df['skip_category_mapping'], 'Mapped_File_Category'] = df['AI_FINAL_CATEGORY']
+    df.loc[df['skip_subcategory_mapping'], 'Mapped_File_Subcategory'] = df['AI_FINAL_SUBCATEGORY']
+    return df
 
-    # Save combined global prediction table
-    global_df_path = os.path.join(final_output_dir, "global_predictions.parquet")
-    global_df.to_parquet(global_df_path, index=False)
-    log(f"✅ Saved global prediction table to: {global_df_path}")
+def clean_mapping_df(mapping_df, key_col, value_col):
+    mapping_df.columns = mapping_df.columns.str.strip()
+    mapping_df[key_col] = mapping_df[key_col].astype(str).str.upper().str.strip()
+    mapping_df[value_col] = mapping_df[value_col].astype(str).str.strip()
+    df_map = mapping_df[[key_col, value_col]].drop_duplicates()
+    return df_map[df_map[value_col].notna() & df_map[value_col].ne("")]
 
-    # Merge with each key file
-    for file in os.listdir(key_output_dir):
-        if not file.endswith(".parquet"):
-            continue
+def map_values(df, map_df1, map_df2, join_col1, join_col2, key1, key2, value_col, output_col):
+    df[join_col1] = df[join_col1].astype(str).str.upper().str.strip()
+    df[join_col2] = df[join_col2].astype(str).str.upper().str.strip()
+    map_dict1 = dict(zip(map_df1[key1], map_df1[value_col]))
+    map_dict2 = dict(zip(map_df2[key2], map_df2[value_col]))
+    df[output_col] = df[join_col1].map(map_dict1)
+    missing = df[output_col].isna() | df[output_col].astype(str).str.strip().eq("")
+    df.loc[missing, output_col] = df.loc[missing, join_col2].map(map_dict2)
+    df[output_col] = df[output_col].replace(["nan", "NaN"], pd.NA)
+    return df
 
-        try:
-            log(f"📂 Processing key file: {file}")
-            key_path = os.path.join(key_output_dir, file)
-            key_df = pd.read_parquet(key_path).drop_duplicates()
+def add_flags(df):
+    # Fast boolean flags
+    df['Mapped_File_Category Filled'] = df['Mapped_File_Category'].notna() & df['Mapped_File_Category'].astype(str).str.strip().ne("")
+    df['Mapped_File_Subcategory Filled'] = df['Mapped_File_Subcategory'].notna() & df['Mapped_File_Subcategory'].astype(str).str.strip().ne("")
 
-            merged_df = key_df.merge(global_df, how="left", on="CMPNT_MATL_NUM")
-            merged_df["File_Name"] = file
-            log(f"🧾 Columns after merge: {list(merged_df.columns)}")
-            # Clear AI columns for nulls
-            merged_df.loc[merged_df["CMPNT_MATL_NUM"].isnull(), AI_OUTPUT_COLUMNS] = None
+    # category_matching_reason
+    df['category_matching_reason'] = df['AI_MATCHING_REASON_FINAL_CATEGORY'].where(
+        df['AI_MATCHING_REASON_FINAL_CATEGORY'].notna(),
+        df['Mapped_File_Category Filled'].map({True: 'direct_mapping', False: 'unmapped'})
+    )
 
-            out_path = os.path.join(final_output_dir, file)
-            merged_df.to_parquet(out_path, index=False)
+    # subcategory_matching_reason
+    df['subcategory_matching_reason'] = df['AI_MATCHING_REASON_FINAL_SUBCATEGORY'].where(
+        df['AI_MATCHING_REASON_FINAL_SUBCATEGORY'].notna(),
+        df['Mapped_File_Subcategory Filled'].map({True: 'direct_mapping', False: 'unmapped'})
+    )
 
-            log(f"✅ Merged output saved: {out_path} (rows: {len(merged_df)})")
-            log(f"💾 Memory usage: {psutil.virtual_memory().percent}%")
+    # Final Category Confidence Score
+    df['Final Category Confidence Score'] = df['AI_FINAL_CATEGORY_CONFIDENCE'].where(
+        df['AI_FINAL_CATEGORY_CONFIDENCE'].notna(),
+        df['Mapped_File_Category Filled'].map({True: 1.0, False: None})
+    )
 
-        except Exception as e:
-            log(f"❌ Failed to process key file: {file} -> {e}")
+    # Final Subcategory Confidence Score
+    df['Final Subcategory Confidence Score'] = df['AI_FINAL_SUBCATEGORY_CONFIDENCE'].where(
+        df['AI_FINAL_SUBCATEGORY_CONFIDENCE'].notna(),
+        df['Mapped_File_Subcategory Filled'].map({True: 1.0, False: None})
+    )
 
-    # Cleanup intermediate file
-    if os.path.exists(global_df_path):
-        os.remove(global_df_path)
-        log(f"🗑️ Deleted intermediate file: {global_df_path}")
+    # Flags for model requirements
+    df['needs_model'] = ~(df['Mapped_File_Category Filled'] & df['Mapped_File_Subcategory Filled'])
+    df['needs_category_model'] = ~df['Mapped_File_Category Filled']
+    df['needs_subcategory_model'] = ~df['Mapped_File_Subcategory Filled']
 
-if __name__ == "__main__":
+    return df
+
+def register_key_output(key_df, output_path, ws, seen_keys=None):
+    if seen_keys is None:
+        seen_keys = set()
+    if key_df.empty:
+        print("[INFO] No unseen keys to register. Skipping key registration.")
+        return
+    key_file_path = os.path.join(output_path, "key_reference_output.parquet")
+    os.makedirs(os.path.dirname(key_file_path), exist_ok=True)
+    key_df.to_parquet(key_file_path, index=False)
+    datastore = ws.get_default_datastore()
+    datastore.upload_files([key_file_path], "mapped_data/key_reference/", overwrite=True)
+    dataset = Dataset.Tabular.from_parquet_files([(datastore, "mapped_data/key_reference/key_reference_output.parquet")])
+    dataset.register(ws, name="bom_key_reference_dataset", description="Key columns to remap BOM", create_new_version=True)
+    print("✅ Registered key reference dataset")
+
+def register_final_output_dir(output_dir, ws):
+    print(f"[INFO] Registering final mapped output from: {output_dir}")
+    parquet_files = glob.glob(os.path.join(output_dir, "*.parquet"))
+    if not parquet_files:
+        print(f"[WARN] No Parquet files found to register in {output_dir}")
+        return
+    datastore = ws.get_default_datastore()
+    dataset = Dataset.Tabular.from_parquet_files([(datastore, os.path.join(output_dir, "*.parquet"))])
+    dataset.register(ws, name="bom_final_mapped_dataset", description="Final mapped output from step1a", create_new_version=True)
+    print("✅ Registered: bom_final_mapped_dataset")
+
+def finalize_output(df, output_path):
+    df['AI_FINAL_CATEGORY'] = df['Mapped_File_Category']
+    df['AI_FINAL_CATEGORY_CONFIDENCE'] = df['Final Category Confidence Score']
+    df['AI_MATCHING_REASON_FINAL_CATEGORY'] = df['category_matching_reason']
+    df['AI_FINAL_SUBCATEGORY'] = df['Mapped_File_Subcategory']
+    df['AI_FINAL_SUBCATEGORY_CONFIDENCE'] = df['Final Subcategory Confidence Score']
+    df['AI_MATCHING_REASON_FINAL_SUBCATEGORY'] = df['subcategory_matching_reason']
+
+    for col in ['AI_FINAL_CATEGORY', 'AI_FINAL_SUBCATEGORY']:
+        invalid_mask = df[col].isna() | df[col].astype(str).str.strip().isin(["", "nan", "NaN"])
+        if 'CATEGORY' in col:
+            df.loc[invalid_mask, 'AI_FINAL_CATEGORY_CONFIDENCE'] = None
+            df.loc[invalid_mask, 'AI_MATCHING_REASON_FINAL_CATEGORY'] = None
+            df.loc[invalid_mask, 'needs_category_model'] = True
+        else:
+            df.loc[invalid_mask, 'AI_FINAL_SUBCATEGORY_CONFIDENCE'] = None
+            df.loc[invalid_mask, 'AI_MATCHING_REASON_FINAL_SUBCATEGORY'] = None
+            df.loc[invalid_mask, 'needs_subcategory_model'] = True
+
+        df.loc[invalid_mask, 'needs_model'] = True
+
+    df.drop(columns=[
+        'Mapped_File_Category', 'Final Category Confidence Score', 'category_matching_reason',
+        'Mapped_File_Subcategory', 'Final Subcategory Confidence Score', 'subcategory_matching_reason'
+    ], inplace=True, errors='ignore')
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    df.to_parquet(output_path, index=False)
+    print(f"[✅] Final output saved to: {output_path}")
+
+# === Updated process_single_file with manager.dict() and locking ===
+def process_single_file(args):
+    file_path, mapping_df, final_output_dir, key_output_dir, seen_keys, seen_components, lock = args
+    start_time = time.time()
+    try:
+        df = pd.read_parquet(file_path)
+        basename = os.path.basename(file_path)
+        print(f"[🔄] Started processing: {basename}")
+
+        mapping_cols = ["CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD", "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD"]
+        key_cols = mapping_cols + ["LOGL_KEY_COMB_COL_VAL"]
+
+        df_key = df[key_cols].dropna(subset=["LOGL_KEY_COMB_COL_VAL"]).drop_duplicates(subset=["LOGL_KEY_COMB_COL_VAL"])
+        new_key_rows = []
+        with lock:
+            for key in df_key["LOGL_KEY_COMB_COL_VAL"]:
+                if key not in seen_keys:
+                    seen_keys[key] = True
+                    new_key_rows.append(key)
+        df_key = df_key[df_key["LOGL_KEY_COMB_COL_VAL"].isin(new_key_rows)]
+
+        if not df_key.empty:
+            key_output_file = os.path.join(key_output_dir, f"key_{basename}")
+            df_key.to_parquet(key_output_file, index=False)
+
+        df_mapping = df[mapping_cols].dropna(subset=["CMPNT_MATL_DESC"]).drop_duplicates(subset=["CMPNT_MATL_NUM"])
+        new_ids = []
+        with lock:
+            for comp_id in df_mapping["CMPNT_MATL_NUM"]:
+                if comp_id not in seen_components:
+                    seen_components[comp_id] = True
+                    new_ids.append(comp_id)
+        df_mapping = df_mapping[df_mapping["CMPNT_MATL_NUM"].isin(new_ids)]
+
+        if not df_mapping.empty:
+            df_mapping = ensure_ai_columns(df_mapping)
+            df_mapping = apply_existing_ai_overrides(df_mapping)
+
+            cat_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Category')
+            cat_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Category')
+            df_mapping = map_values(df_mapping, cat_map_1, cat_map_2, JOIN_COL_1, JOIN_COL_2,
+                                    DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Category', 'Mapped_File_Category')
+
+            sub_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Subcategory')
+            sub_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory')
+            df_mapping = map_values(df_mapping, sub_map_1, sub_map_2, JOIN_COL_1, JOIN_COL_2,
+                                    DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory', 'Mapped_File_Subcategory')
+
+            df_mapping = add_flags(df_mapping)
+            mapped_output_file = os.path.join(final_output_dir, f"mapped_{basename}")
+            finalize_output(df_mapping, mapped_output_file)
+
+            duration = time.time() - start_time
+        print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+        print(f"     ➤ New unique keys added: {len(new_key_rows)}")
+        print(f"     ➤ New unique components added: {len(new_ids)}")
+
+    except Exception as e:
+        print(f"[❌ ERROR] File: {file_path}\n{e}")
+        traceback.print_exc()
+
+# === Updated main function to use manager.dict() and Lock ===
+def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--inference_output_dir", required=True)
-    parser.add_argument("--key_output_dir", required=True)
-    parser.add_argument("--final_output_dir", required=True)
+    parser.add_argument("--input_path", type=str, required=True)
+    parser.add_argument("--mapping_csv", type=str, required=True)
+    parser.add_argument("--key_output", type=str, required=True)
+    parser.add_argument("--final_output", type=str, required=True)
     args = parser.parse_args()
 
-    main(args.inference_output_dir, args.key_output_dir, args.final_output_dir)
+    parquet_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
+    if not parquet_files:
+        raise FileNotFoundError(f"No parquet files found in {args.input_path}")
+
+    csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
+    if not csv_files:
+        raise FileNotFoundError(f"No CSV mapping file found in {args.mapping_csv}")
+    mapping_df = pd.read_csv(csv_files[0])
+
+    os.makedirs(args.final_output, exist_ok=True)
+    os.makedirs(args.key_output, exist_ok=True)
+
+    with Manager() as manager:
+        seen_keys = manager.dict()
+        seen_components = manager.dict()
+        lock = manager.Lock()
+
+        args_list = [
+            (f, mapping_df, args.final_output, args.key_output, seen_keys, seen_components, lock)
+            for f in parquet_files
+        ]
+
+        with Pool(cpu_count() - 1) as pool:
+            pool.map(process_single_file, args_list)
+
+    print("\n✅ All files processed with strict deduplication.")
+
+if __name__ == "__main__":
+    main()
