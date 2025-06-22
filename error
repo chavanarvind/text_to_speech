@@ -1,25 +1,9 @@
-$headers = @{
-    "Ocp-Apim-Subscription-Key" = "BBvpAQdmiBQWNukOTc5F2tIb5Ln7TuubMiQGbbkSSO2GJDR6ZK09JQQJ99AKACYeBjFXJ3w3AAAYACOG1LLR"
-    "Operation-Id" = "test-operation-123"
-    "Content-Type" = "application/json"
-}
-
-$body = @{
-    displayName = "Test video translation"
-    description = "Test using public sample video"
-    input = @{
-        sourceLocale = "es-ES"
-        targetLocale = "en-US"
-        voiceKind = "PlatformVoice"
-        speakerCount = 1
-        subtitleMaxCharCountPerSegment = 50
-        exportSubtitleInVideo = $false
-        enableLipSync = $false
-        videoFileUrl = "https://speechstudioprodpublicsa.blob.core.windows.net/ttsvoice/VideoTranslation/PublicDoc/SampleData/es-ES-TryOutOriginal.mp4"
-    }
-} | ConvertTo-Json -Depth 5
-
-Invoke-RestMethod -Method Put `
-  -Uri "https://eastus.api.cognitive.microsoft.com/videotranslation/translations/test-operation-123?api-version=2024-05-20" `
-  -Headers $headers `
-  -Body $body
+cmdlet Invoke-RestMethod at command pipeline position 1
+Supply values for the following parameters:
+Uri: "https://eastus.api.cognitive.microsoft.com/videotranslation/translations/test-operation-123?api-version=2024-05-20"
+Invoke-RestMethod : Invalid URI: The hostname could not be parsed.
+At line:1 char:1
++ Invoke-RestMethod -Method Put
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [Invoke-RestMethod], UriFormatException
+    + FullyQualifiedErrorId : System.UriFormatException,Microsoft.PowerShell.Commands.InvokeRestMethodCommand
