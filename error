@@ -7,12 +7,45 @@ import time
 from multiprocessing import Pool, Manager, cpu_count
 from azureml.core import Run, Dataset
 
+# === SQLite setup for seen_keys ===
+try:
+    import sqlite3
+except ImportError:
+    import subprocess
+    subprocess.check_call(["pip", "install", "pysqlite3-binary"])
+    import sqlite3
+
+SQLITE_DB_PATH = "key_cache.sqlite"
+KEY_TABLE = "keys"
+
+def init_sqlite_db():
+    conn = sqlite3.connect(SQLITE_DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(f"""
+        CREATE TABLE IF NOT EXISTS {KEY_TABLE} (
+            key TEXT PRIMARY KEY
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def is_new_key(key):
+    conn = sqlite3.connect(SQLITE_DB_PATH)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(f"INSERT INTO {KEY_TABLE} (key) VALUES (?)", (key,))
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+    finally:
+        conn.close()
+
 # === Constants ===
 DIRECT_MAP_KEY_1 = "Direct Mapping"
 DIRECT_MAP_KEY_2 = "Direct Mapping"
 JOIN_COL_1 = "CMPNT_CAT_CD_DESC"
 JOIN_COL_2 = "CMPNT_MATL_TYPE_CD"
-KEY_COLS = ["CMPNT_MATL_NUM", "LOGL_KEY_COMB_COL_VAL"]
 
 def ensure_ai_columns(df):
     expected_cols = [
@@ -56,66 +89,34 @@ def map_values(df, map_df1, map_df2, join_col1, join_col2, key1, key2, value_col
     return df
 
 def add_flags(df):
-    # Fast boolean flags
     df['Mapped_File_Category Filled'] = df['Mapped_File_Category'].notna() & df['Mapped_File_Category'].astype(str).str.strip().ne("")
     df['Mapped_File_Subcategory Filled'] = df['Mapped_File_Subcategory'].notna() & df['Mapped_File_Subcategory'].astype(str).str.strip().ne("")
 
-    # category_matching_reason
     df['category_matching_reason'] = df['AI_MATCHING_REASON_FINAL_CATEGORY'].where(
         df['AI_MATCHING_REASON_FINAL_CATEGORY'].notna(),
         df['Mapped_File_Category Filled'].map({True: 'direct_mapping', False: 'unmapped'})
     )
 
-    # subcategory_matching_reason
     df['subcategory_matching_reason'] = df['AI_MATCHING_REASON_FINAL_SUBCATEGORY'].where(
         df['AI_MATCHING_REASON_FINAL_SUBCATEGORY'].notna(),
         df['Mapped_File_Subcategory Filled'].map({True: 'direct_mapping', False: 'unmapped'})
     )
 
-    # Final Category Confidence Score
     df['Final Category Confidence Score'] = df['AI_FINAL_CATEGORY_CONFIDENCE'].where(
         df['AI_FINAL_CATEGORY_CONFIDENCE'].notna(),
         df['Mapped_File_Category Filled'].map({True: 1.0, False: None})
     )
 
-    # Final Subcategory Confidence Score
     df['Final Subcategory Confidence Score'] = df['AI_FINAL_SUBCATEGORY_CONFIDENCE'].where(
         df['AI_FINAL_SUBCATEGORY_CONFIDENCE'].notna(),
         df['Mapped_File_Subcategory Filled'].map({True: 1.0, False: None})
     )
 
-    # Flags for model requirements
     df['needs_model'] = ~(df['Mapped_File_Category Filled'] & df['Mapped_File_Subcategory Filled'])
     df['needs_category_model'] = ~df['Mapped_File_Category Filled']
     df['needs_subcategory_model'] = ~df['Mapped_File_Subcategory Filled']
 
     return df
-
-def register_key_output(key_df, output_path, ws, seen_keys=None):
-    if seen_keys is None:
-        seen_keys = set()
-    if key_df.empty:
-        print("[INFO] No unseen keys to register. Skipping key registration.")
-        return
-    key_file_path = os.path.join(output_path, "key_reference_output.parquet")
-    os.makedirs(os.path.dirname(key_file_path), exist_ok=True)
-    key_df.to_parquet(key_file_path, index=False)
-    datastore = ws.get_default_datastore()
-    datastore.upload_files([key_file_path], "mapped_data/key_reference/", overwrite=True)
-    dataset = Dataset.Tabular.from_parquet_files([(datastore, "mapped_data/key_reference/key_reference_output.parquet")])
-    dataset.register(ws, name="bom_key_reference_dataset", description="Key columns to remap BOM", create_new_version=True)
-    print("✅ Registered key reference dataset")
-
-def register_final_output_dir(output_dir, ws):
-    print(f"[INFO] Registering final mapped output from: {output_dir}")
-    parquet_files = glob.glob(os.path.join(output_dir, "*.parquet"))
-    if not parquet_files:
-        print(f"[WARN] No Parquet files found to register in {output_dir}")
-        return
-    datastore = ws.get_default_datastore()
-    dataset = Dataset.Tabular.from_parquet_files([(datastore, os.path.join(output_dir, "*.parquet"))])
-    dataset.register(ws, name="bom_final_mapped_dataset", description="Final mapped output from step1a", create_new_version=True)
-    print("✅ Registered: bom_final_mapped_dataset")
 
 def finalize_output(df, output_path):
     df['AI_FINAL_CATEGORY'] = df['Mapped_File_Category']
@@ -135,7 +136,6 @@ def finalize_output(df, output_path):
             df.loc[invalid_mask, 'AI_FINAL_SUBCATEGORY_CONFIDENCE'] = None
             df.loc[invalid_mask, 'AI_MATCHING_REASON_FINAL_SUBCATEGORY'] = None
             df.loc[invalid_mask, 'needs_subcategory_model'] = True
-
         df.loc[invalid_mask, 'needs_model'] = True
 
     df.drop(columns=[
@@ -147,32 +147,28 @@ def finalize_output(df, output_path):
     df.to_parquet(output_path, index=False)
     print(f"[✅] Final output saved to: {output_path}")
 
-# === Updated process_single_file with manager.dict() and locking ===
 def process_single_file(args):
-    file_path, mapping_df, final_output_dir, key_output_dir, seen_keys, seen_components, lock = args
+    file_path, mapping_df, final_output_dir, key_output_dir, seen_components, lock = args
     start_time = time.time()
-    duration = None
     try:
         df = pd.read_parquet(file_path)
         basename = os.path.basename(file_path)
-        
 
         mapping_cols = ["CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD", "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD"]
         key_cols = mapping_cols + ["LOGL_KEY_COMB_COL_VAL"]
 
+        # Deduplicate keys using SQLite
         df_key = df[key_cols].dropna(subset=["LOGL_KEY_COMB_COL_VAL"]).drop_duplicates(subset=["LOGL_KEY_COMB_COL_VAL"])
         new_key_rows = []
-        with lock:
-            for key in df_key["LOGL_KEY_COMB_COL_VAL"]:
-                if key not in seen_keys:
-                    seen_keys[key] = True
-                    new_key_rows.append(key)
+        for key in df_key["LOGL_KEY_COMB_COL_VAL"]:
+            if is_new_key(key):
+                new_key_rows.append(key)
         df_key = df_key[df_key["LOGL_KEY_COMB_COL_VAL"].isin(new_key_rows)]
-
         if not df_key.empty:
             key_output_file = os.path.join(key_output_dir, f"key_{basename}")
             df_key.to_parquet(key_output_file, index=False)
 
+        # Deduplicate components in memory
         df_mapping = df[mapping_cols].dropna(subset=["CMPNT_MATL_DESC"]).drop_duplicates(subset=["CMPNT_MATL_NUM"])
         new_ids = []
         with lock:
@@ -200,16 +196,13 @@ def process_single_file(args):
             mapped_output_file = os.path.join(final_output_dir, f"mapped_{basename}")
             finalize_output(df_mapping, mapped_output_file)
 
-            duration = time.time() - start_time
-        print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
-        print(f"     ➤ New unique keys added: {len(new_key_rows)}")
-        print(f"     ➤ New unique components added: {len(new_ids)}")
+        duration = time.time() - start_time
+        print(f"[✅] Finished: {basename} in {duration:.2f}s ➤ Keys added: {len(new_key_rows)}, Components added: {len(new_ids)}")
 
     except Exception as e:
         print(f"[❌ ERROR] File: {file_path}\n{e}")
         traceback.print_exc()
 
-# === Updated main function to use manager.dict() and Lock ===
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_path", type=str, required=True)
@@ -230,20 +223,22 @@ def main():
     os.makedirs(args.final_output, exist_ok=True)
     os.makedirs(args.key_output, exist_ok=True)
 
+    # Initialize SQLite only once
+    init_sqlite_db()
+
     with Manager() as manager:
-        seen_keys = manager.dict()
         seen_components = manager.dict()
         lock = manager.Lock()
 
         args_list = [
-            (f, mapping_df, args.final_output, args.key_output, seen_keys, seen_components, lock)
+            (f, mapping_df, args.final_output, args.key_output, seen_components, lock)
             for f in parquet_files
         ]
 
         with Pool(cpu_count() - 1) as pool:
             pool.map(process_single_file, args_list)
 
-    print("\n✅ All files processed with strict deduplication.")
+    print("\n✅ All files processed with key deduplication on disk.")
 
 if __name__ == "__main__":
     main()
