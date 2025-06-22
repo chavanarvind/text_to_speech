@@ -1,67 +1,54 @@
-from multiprocessing import Pool, cpu_count
-
-# Global variables for multiprocessing
-mapping_df = None
-final_output_dir = None
-key_output_dir = None
-
-def process_single_file(file_path):
-    import pandas as pd
-    import os
-    import traceback
-
+def process_single_file(args):
+    file_path, mapping_df, final_output_dir, key_output_dir, seen_keys, seen_components = args
+    start_time = time.time()
     try:
-        basename = os.path.basename(file_path)
         df = pd.read_parquet(file_path)
+        basename = os.path.basename(file_path)
+        print(f"[🔄] Started processing: {basename}")
 
-        mapped_output_file = os.path.join(final_output_dir, f"mapped_{basename}")
-        key_output_file = os.path.join(key_output_dir, f"key_{basename}")
-
-        # Required columns
         mapping_cols = ["CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD", "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD"]
         key_cols = mapping_cols + ["LOGL_KEY_COMB_COL_VAL"]
 
-        # --- 🔑 Key Save Logic ---
         df_key = df[key_cols].dropna(subset=["LOGL_KEY_COMB_COL_VAL"]).drop_duplicates(subset=["LOGL_KEY_COMB_COL_VAL"])
+        df_key = df_key[~df_key["LOGL_KEY_COMB_COL_VAL"].isin(seen_keys)]
+        new_keys = df_key["LOGL_KEY_COMB_COL_VAL"].unique().tolist()
+        seen_keys.extend(new_keys)
+
         if not df_key.empty:
+            key_output_file = os.path.join(key_output_dir, f"key_{basename}")
             df_key.to_parquet(key_output_file, index=False)
 
-        # --- 🧩 Mapping Logic ---
         df_mapping = df[mapping_cols].dropna(subset=["CMPNT_MATL_DESC"]).drop_duplicates(subset=["CMPNT_MATL_NUM"])
-        if df_mapping.empty:
-            print(f"[SKIPPED] No new components in: {basename}")
-            return
+        df_mapping = df_mapping[~df_mapping["CMPNT_MATL_NUM"].isin(seen_components)]
+        new_ids = df_mapping["CMPNT_MATL_NUM"].unique().tolist()
+        seen_components.extend(new_ids)
 
-        df_mapping = ensure_ai_columns(df_mapping)
-        df_mapping = apply_existing_ai_overrides(df_mapping)
+        if not df_mapping.empty:
+            df_mapping = ensure_ai_columns(df_mapping)
+            df_mapping = apply_existing_ai_overrides(df_mapping)
 
-        cat_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Category')
-        cat_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Category')
-        df_mapping = map_values(df_mapping, cat_map_1, cat_map_2, JOIN_COL_1, JOIN_COL_2,
-                                DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Category', 'Mapped_File_Category')
+            cat_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Category')
+            cat_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Category')
+            df_mapping = map_values(df_mapping, cat_map_1, cat_map_2, JOIN_COL_1, JOIN_COL_2,
+                                    DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Category', 'Mapped_File_Category')
 
-        sub_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Subcategory')
-        sub_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory')
-        df_mapping = map_values(df_mapping, sub_map_1, sub_map_2, JOIN_COL_1, JOIN_COL_2,
-                                DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory', 'Mapped_File_Subcategory')
+            sub_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Subcategory')
+            sub_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory')
+            df_mapping = map_values(df_mapping, sub_map_1, sub_map_2, JOIN_COL_1, JOIN_COL_2,
+                                    DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory', 'Mapped_File_Subcategory')
 
-        df_mapping = add_flags(df_mapping)
-        finalize_output(df_mapping, mapped_output_file)
+            df_mapping = add_flags(df_mapping)
+            mapped_output_file = os.path.join(final_output_dir, f"mapped_{basename}")
+            finalize_output(df_mapping, mapped_output_file)
 
-        print(f"[✅] Processed: {basename}")
+        duration = time.time() - start_time
+        print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+
     except Exception as e:
         print(f"[❌ ERROR] File: {file_path}\n{e}")
         traceback.print_exc()
 
-
 def main():
-    import argparse
-    import os
-    import glob
-    import pandas as pd
-
-    global mapping_df, final_output_dir, key_output_dir
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_path", type=str, required=True)
     parser.add_argument("--mapping_csv", type=str, required=True)
@@ -69,14 +56,6 @@ def main():
     parser.add_argument("--final_output", type=str, required=True)
     args = parser.parse_args()
 
-    # Prepare directories
-    os.makedirs(args.key_output, exist_ok=True)
-    os.makedirs(args.final_output, exist_ok=True)
-
-    final_output_dir = args.final_output
-    key_output_dir = args.key_output
-
-    # Load all input files
     parquet_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
     if not parquet_files:
         raise FileNotFoundError(f"No parquet files found in {args.input_path}")
@@ -86,9 +65,22 @@ def main():
         raise FileNotFoundError(f"No CSV mapping file found in {args.mapping_csv}")
     mapping_df = pd.read_csv(csv_files[0])
 
-    print(f"[INFO] Processing {len(parquet_files)} parquet files in parallel...")
+    os.makedirs(args.final_output, exist_ok=True)
+    os.makedirs(args.key_output, exist_ok=True)
 
-    with Pool(cpu_count() - 1) as pool:
-        pool.map(process_single_file, parquet_files)
+    with Manager() as manager:
+        seen_keys = manager.list()
+        seen_components = manager.list()
 
-    print("\n✅ All files processed successfully.")
+        args_list = [
+            (f, mapping_df, args.final_output, args.key_output, seen_keys, seen_components)
+            for f in parquet_files
+        ]
+
+        with Pool(cpu_count() - 1) as pool:
+            pool.map(process_single_file, args_list)
+
+    print("\n✅ All files processed with safe deduplication.")
+
+if __name__ == "__main__":
+    main()
