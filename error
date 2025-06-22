@@ -1,11 +1,10 @@
-AI_FINAL_SUBCATEGORY_CONFIDENCE,AI_FINAL_SUBCATEGORY
-
 import argparse
 import os
 import glob
 import re
 import pandas as pd
 from multiprocessing import Pool, cpu_count
+from functools import partial
 
 # === UNIT_GROUP and CMPNT_MATL_TYPE_CATEGORY mappings ===
 unit_group_map = {
@@ -28,7 +27,6 @@ unit_group_map = {
 
 def map_cmpnt_type_category(val):
     if pd.isna(val): return 'OTHER'
-    val_clean = str(val).strip().upper()
     erp_type_map = {
         'FERT': 'FINISHED_PRODUCT', 'HALB': 'SEMI_FINISHED', 'ROH': 'RAW_MATERIAL',
         'VERP': 'PACKAGING_MATERIAL', 'TRAD': 'TRADED_GOOD', 'ERSA': 'SUBCONTRACT_COMPONENT',
@@ -37,13 +35,12 @@ def map_cmpnt_type_category(val):
         'ZROH': 'RAW_MATERIAL', 'SAPR': 'PACKAGING', 'IM': 'INTERMEDIATE', 'UNBW': 'NON_VALUATED',
         'IG': 'INTERMEDIATE_GOOD'
     }
-    return erp_type_map.get(val_clean, 'OTHER')
+    return erp_type_map.get(str(val).strip().upper(), 'OTHER')
 
-# --- Clean function ---
 def clean_text(text):
     text = str(text).lower()
     text = re.sub(r'[-/]', ' ', text)
-    text = re.sub(r'[^A-Za-z0-9&% ]+', '', text)
+    text = re.sub(r'[^a-z0-9&% ]+', '', text)
     text = re.sub(r'\s*%\s*', '% ', text)
     text = re.sub(r'canada\s*\d*|can\s*\d*|ca\s*\d*|ca$|can$|ca\s', '', text)
     text = re.sub(r'(\D)(\d+)(\s*)(ml|l|gr|gm|g|ct)', r'\1 \2\3\4 ', text)
@@ -53,43 +50,50 @@ def clean_text(text):
     text = re.sub(r'\b\d{5,}\b$', '', text)
     text = re.sub(r'\b\d+\b', '', text)
     text = re.sub(r'\s+', ' ', text).strip()
-    return ' '.join(dict.fromkeys(text.split()))  # remove duplicate words
+    return ' '.join(dict.fromkeys(text.split()))
 
-# --- Abbreviation Replacer ---
-def expand_abbreviations(text, abbrev_map):
+def expand_abbreviations(text, abbrev_map, pattern):
     def repl(m): return abbrev_map.get(m.group(0).lower(), m.group(0))
-    pattern = re.compile(r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b', flags=re.IGNORECASE)
     return pattern.sub(repl, text)
 
-# --- Per-file Processor ---
-def process_file(file_path, abbrev_map, output_path):
+def process_file(file_path, abbrev_map, pattern, output_path):
     try:
         df = pd.read_parquet(file_path)
 
-        # Step 1: Expand Abbreviations
-        df['CMPNT_MATL_DESC_CLEAN'] = df['CMPNT_MATL_DESC'].astype(str).apply(lambda x: expand_abbreviations(x, abbrev_map))
+        # Identify rows to process (confidence <= 0 or missing)
+        mask_process = (
+            df.get('AI_FINAL_SUBCATEGORY_CONFIDENCE', 0).fillna(0) <= 0
+        ) & (
+            df.get('AI_FINAL_CATEGORY_CONFIDENCE', 0).fillna(0) <= 0
+        )
 
-        # Step 2: Clean Text
-        df['CMPNT_MATL_DESC_CLEAN'] = df['CMPNT_MATL_DESC_CLEAN'].apply(clean_text)
+        df_to_process = df[mask_process].copy()
+        df_to_skip = df[~mask_process].copy()
 
-        # Step 3: Feature Engineering
-        df['CMPNT_MATL_DESC_LEN'] = df['CMPNT_MATL_DESC'].astype(str).str.len()
-        df['UNIT_GROUP'] = df['CMPNT_UOM_CD'].fillna('').str.upper().map(unit_group_map).fillna('Unclassified')
-        df['CMPNT_MATL_TYPE_CATEGORY'] = df['CMPNT_MATL_TYPE_CD'].apply(map_cmpnt_type_category)
+        if not df_to_process.empty:
+            df_to_process['CMPNT_MATL_DESC_CLEAN'] = df_to_process['CMPNT_MATL_DESC'].astype(str).map(
+                lambda x: expand_abbreviations(x, abbrev_map, pattern)
+            )
+            df_to_process['CMPNT_MATL_DESC_CLEAN'] = df_to_process['CMPNT_MATL_DESC_CLEAN'].map(clean_text)
+            df_to_process['CMPNT_MATL_DESC_LEN'] = df_to_process['CMPNT_MATL_DESC'].astype(str).str.len()
+            df_to_process['UNIT_GROUP'] = df_to_process['CMPNT_UOM_CD'].fillna('').str.upper().map(unit_group_map).fillna('Unclassified')
+            df_to_process['CMPNT_MATL_TYPE_CATEGORY'] = df_to_process['CMPNT_MATL_TYPE_CD'].map(map_cmpnt_type_category)
 
-        # Save
+        # Merge processed and skipped rows
+        df_final = pd.concat([df_to_process, df_to_skip], ignore_index=True)
+
         out_file = os.path.join(output_path, os.path.basename(file_path))
-        df.to_parquet(out_file, index=False)
+        df_final.to_parquet(out_file, index=False)
         print(f"✅ Processed: {os.path.basename(file_path)}")
     except Exception as e:
         print(f"❌ Failed: {os.path.basename(file_path)} -> {e}")
 
-# --- Main ---
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--input_path', required=True)
     parser.add_argument('--abbrev_map', required=True)
     parser.add_argument('--output_path', required=True)
+    parser.add_argument('--n_jobs', type=int, default=cpu_count())
     args = parser.parse_args()
 
     # Load abbreviation map
@@ -98,12 +102,14 @@ def main():
         raise FileNotFoundError("No abbreviation map CSV found.")
     abbrev_df = pd.read_csv(abbrev_csv[0])
     abbrev_map = dict(zip(abbrev_df['Abbreviation_list'].str.lower(), abbrev_df['Abbreviation_Expension']))
+    pattern = re.compile(r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b', flags=re.IGNORECASE)
 
     os.makedirs(args.output_path, exist_ok=True)
     parquet_files = glob.glob(os.path.join(args.input_path, '*.parquet'))
 
-    for f in parquet_files:
-        process_file(f, abbrev_map, args.output_path)
+    func = partial(process_file, abbrev_map=abbrev_map, pattern=pattern, output_path=args.output_path)
+    with Pool(processes=args.n_jobs) as pool:
+        pool.map(func, parquet_files)
 
 if __name__ == '__main__':
     main()
