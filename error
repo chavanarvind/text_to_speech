@@ -1,13 +1,87 @@
-start_time = time.time()
-duration = None
-try:
-    # your main processing logic here...
-    duration = time.time() - start_time
-except Exception as e:
-    print(f"[❌ ERROR] File: {file_path}\n{e}")
-    traceback.print_exc()
-finally:
-    if duration is not None:
-        print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
-    else:
-        print(f"[⚠️] Skipped duration log for {basename} due to earlier error.")
+def process_single_file(args):
+    import traceback
+    import os
+    import time
+    import pandas as pd
+
+    file_path, mapping_df, final_output_dir, key_output_dir, seen_keys, seen_components, lock = args
+    start_time = time.time()
+    duration = None
+    basename = os.path.basename(file_path)
+
+    try:
+        print(f"[🔄] Started processing: {basename}")
+        df = pd.read_parquet(file_path)
+
+        # ✅ Inspect LOGL_KEY_COMB_COL_VAL presence
+        if 'LOGL_KEY_COMB_COL_VAL' in df.columns:
+            total_rows = len(df)
+            non_null_keys = df['LOGL_KEY_COMB_COL_VAL'].notnull().sum()
+            if non_null_keys == 0:
+                print(f"[🚫 NULL] {basename}: All {total_rows} values in LOGL_KEY_COMB_COL_VAL are NULL.")
+            else:
+                print(f"[✅] {basename}: {non_null_keys}/{total_rows} non-null LOGL_KEY_COMB_COL_VAL")
+        else:
+            print(f"[⚠️ MISSING] {basename}: LOGL_KEY_COMB_COL_VAL column is missing!")
+
+        # === Key creation ===
+        mapping_cols = ["CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD", "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD"]
+        key_cols = mapping_cols + ["LOGL_KEY_COMB_COL_VAL"]
+        df_key = df[key_cols].dropna(subset=["LOGL_KEY_COMB_COL_VAL"]).drop_duplicates(subset=["LOGL_KEY_COMB_COL_VAL"])
+
+        new_key_rows = []
+        with lock:
+            for key in df_key["LOGL_KEY_COMB_COL_VAL"]:
+                if key not in seen_keys:
+                    seen_keys[key] = True
+                    new_key_rows.append(key)
+        df_key = df_key[df_key["LOGL_KEY_COMB_COL_VAL"].isin(new_key_rows)]
+
+        if not df_key.empty:
+            key_output_file = os.path.join(key_output_dir, f"key_{basename}")
+            df_key.to_parquet(key_output_file, index=False)
+
+        # === Final Mapping and Saving ===
+        df_mapping = df[mapping_cols].dropna(subset=["CMPNT_MATL_DESC"]).drop_duplicates(subset=["CMPNT_MATL_NUM"])
+
+        new_ids = []
+        with lock:
+            for comp_id in df_mapping["CMPNT_MATL_NUM"]:
+                if comp_id not in seen_components:
+                    seen_components[comp_id] = True
+                    new_ids.append(comp_id)
+        df_mapping = df_mapping[df_mapping["CMPNT_MATL_NUM"].isin(new_ids)]
+
+        if not df_mapping.empty:
+            df_mapping = ensure_ai_columns(df_mapping)
+            df_mapping = apply_existing_ai_overrides(df_mapping)
+
+            cat_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Category')
+            cat_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Category')
+            df_mapping = map_values(df_mapping, cat_map_1, cat_map_2, JOIN_COL_1, JOIN_COL_2,
+                                    DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Category', 'Mapped_File_Category')
+
+            sub_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Subcategory')
+            sub_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory')
+            df_mapping = map_values(df_mapping, sub_map_1, sub_map_2, JOIN_COL_1, JOIN_COL_2,
+                                    DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory', 'Mapped_File_Subcategory')
+
+            df_mapping = add_flags(df_mapping)
+
+            mapped_output_file = os.path.join(final_output_dir, f"mapped_{basename}")
+            finalize_output(df_mapping, mapped_output_file)
+
+        # ✅ Duration only computed if no error so far
+        duration = time.time() - start_time
+
+    except Exception as e:
+        print(f"[❌ ERROR] File: {file_path} ➤ {type(e).__name__}: {e}")
+        traceback.print_exc()
+
+    finally:
+        if duration is not None:
+            print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
+            print(f"     ➤ New unique keys added: {len(new_key_rows)}")
+            print(f"     ➤ New unique components added: {len(new_ids)}")
+        else:
+            print(f"[⚠️] Skipped duration log for {basename} due to earlier error.")
