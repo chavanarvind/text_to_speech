@@ -1,5 +1,7 @@
-def expand_abbreviations(text, abbrev_map, pattern=None):
-    def repl(m): return abbrev_map.get(m.group(0).lower(), m.group(0))
-    if pattern is None:
-        pattern = re.compile(r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b', flags=re.IGNORECASE)
-    return pattern.sub(repl, text)
+My Recommendation: Standard_NC24as_T4_v3
+🔹 Why it's a smart upgrade from your current NC16as_T4_v3:
+Feature	Current (NC16as_T4_v3)	Suggested (NC24as_T4_v3)
+GPU	1 × NVIDIA T4 (16GB)	1 × NVIDIA T4 (16GB)
+vCPUs	16	24
+RAM	110 GB	220 GB
+Cost	~$1.20/hr	~$1.70/hr
