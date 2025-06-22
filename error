@@ -1,2 +1,1 @@
-curl -X GET "https://eastus.api.cognitive.microsoft.com/videotranslation/operations?api-version=2024-05-20" \
-  -H "Ocp-Apim-Subscription-Key: YOUR_SPEECH_KEY"
+curl -X GET "https://eastus.api.cognitive.microsoft.com/videotranslation/operations?api-version=2024-05-20" -H "Ocp-Apim-Subscription-Key: YOUR_SPEECH_KEY"
