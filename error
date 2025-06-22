@@ -1,1 +1,15 @@
-ss
+curl -v -X PUT -H "Ocp-Apim-Subscription-Key: [YourResourceKey]" -H "Operation-Id: [operationId]" -H "Content-Type: application/json" -d "{
+  displayName: "[YourDisplayName]",
+  description: "[OptionalYourDescription]",
+  input: {
+    "sourceLocale": "[VideoSourceLocale]",
+    "targetLocale": "[TranslationTargetLocale]",
+    "voiceKind": "[PlatformVoice/PersonalVoice]",
+    "speakerCount": [OptionalVideoSpeakerCount],
+    "subtitleMaxCharCountPerSegment": [OptionalYourPreferredSubtitleMaxCharCountPerSegment],
+    "exportSubtitleInVideo": [Optional true/false],
+    "videoFileUrl": "[AzureBlobUrlWithSas]"
+  }
+}"
+"
+https: //[YourSpeechRegion].api.cognitive.microsoft.com/videotranslation/translations/[translationId]?api-version=2024-05-20-preview"
