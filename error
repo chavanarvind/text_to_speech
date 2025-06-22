@@ -1,3 +1,18 @@
+import gradio as gr
+import os, uuid, time, requests
+from azureml.core import Workspace
+from azure.storage.blob import generate_blob_sas, BlobSasPermissions
+from datetime import datetime, timedelta
+from azureml.core.datastore import Datastore
+
+# === Azure ML Workspace Config ===
+SUBSCRIPTION_ID = "your-subscription-id"
+RESOURCE_GROUP = "your-resource-group"
+WORKSPACE_NAME = "your-workspace-name"
+AZURE_SPEECH_KEY = "your-speech-key"
+AZURE_REGION = "eastus"
+ENDPOINT = f"https://{AZURE_REGION}.api.cognitive.microsoft.com"
+
 # === Initialize AML Workspace ===
 ws = Workspace(
     subscription_id=SUBSCRIPTION_ID,
@@ -75,17 +90,38 @@ def poll_job_and_get_output(job_id):
 
 def translate_video(video_file, source_lang, target_lang, output_format):
     import tempfile
+    import logging
+
+    logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s")
+    logger = logging.getLogger("video-translator")
+
+    logger.info("Uploading video to Azure Blob Storage...")
     blob_url = upload_to_default_blobstore(ws, video_file.name)
+    logger.info(f"Upload complete: {blob_url}")
+
+    logger.info("Submitting video translation job to Azure...")
     job_id = create_video_translation_job(blob_url, source_lang, target_lang, output_format)
+    logger.info(f"Job submitted: {job_id}")
+
+    logger.info("Polling job status...")
     result = poll_job_and_get_output(job_id)
-    translated_url = result.get(output_format, f"{output_format.upper()} not available")
+
+    translated_url = result.get(output_format)
+    if not translated_url:
+        logger.error(f"Translation failed or no result for format: {output_format}")
+        return blob_url, f"{output_format.upper()} not available"
+
+    logger.info(f"Translation completed. Output URL: {translated_url}")
 
     if output_format == "video" and translated_url.startswith("http"):
+        logger.info("Downloading translated video to local system...")
         response = requests.get(translated_url)
-        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-        tmp_file.write(response.content)
-        tmp_file.close()
-        return blob_url, tmp_file.name  # Local file path for Gradio video
+        local_path = os.path.join("translated_outputs", os.path.basename(video_file.name).replace(".", f"_translated.{target_lang}."))
+        os.makedirs("translated_outputs", exist_ok=True)
+        with open(local_path, "wb") as f:
+            f.write(response.content)
+        logger.info(f"Saved translated video to {local_path}")
+        return blob_url, local_path
 
     return blob_url, translated_url
 
