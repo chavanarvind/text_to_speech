@@ -1,99 +1,109 @@
-# === Updated process_single_file with manager.dict() and locking ===
-def process_single_file(args):
-    file_path, mapping_df, final_output_dir, key_output_dir, seen_keys, seen_components, lock = args
-    start_time = time.time()
+
+
+import argparse
+import os
+import glob
+import re
+import pandas as pd
+from multiprocessing import Pool, cpu_count
+
+# === UNIT_GROUP and CMPNT_MATL_TYPE_CATEGORY mappings ===
+unit_group_map = {
+    'KG': 'CHM', 'KGS': 'CHM', 'KGA': 'CHM', 'KGW': 'CHM', 'G': 'CHM', 'GR': 'CHM', 'GM': 'CHM', 'MG': 'CHM',
+    'LB': 'CHM', 'LBS': 'CHM', 'OZ': 'CHM', 'OZA': 'CHM', 'GW': 'CHM', 'TON': 'CHM', 'DR': 'CHM',
+    'L': 'Liquid', 'LT': 'Liquid', 'ML': 'Liquid', 'CC': 'Liquid', 'CL': 'Liquid', 'CCM': 'Liquid', 'GLL': 'Liquid',
+    'EA': 'Discrete', 'PC': 'Discrete', 'PCS': 'Discrete', 'Pcs': 'Discrete', 'PKT': 'Discrete', 'PK': 'Discrete',
+    'PAK': 'Discrete', 'PCK': 'Discrete', 'CS': 'Discrete', 'CSE': 'Discrete', 'CT': 'Discrete', 'CA': 'Discrete',
+    'ST': 'Discrete', 'GRO': 'Discrete', 'BX': 'Discrete',
+    'BOT': 'Containers', 'BOTTLE': 'Containers', 'ROLL': 'Containers', 'ROL': 'Containers', 'REEL': 'Containers', 'KAR': 'Containers',
+    'FT': 'Dimensional', 'YD': 'Dimensional', 'KM': 'Dimensional', 'DM': 'Dimensional', 'M': 'Dimensional',
+    'M1': 'Dimensional', 'M2': 'Dimensional', 'KM2': 'Dimensional', 'YD2': 'Dimensional', 'FT3': 'Dimensional',
+    'SQM': 'Dimensional', 'sqm': 'Dimensional', 'MYD': 'Dimensional', 'MI': 'Dimensional', 'SM': 'Dimensional',
+    'LM': 'Dimensional', 'LF': 'Dimensional', 'MH': 'Dimensional', 'KN': 'Dimensional', 'CH': 'Dimensional',
+    'TH': 'Unclassified', 'THU': 'Unclassified', 'IM': 'Unclassified', 'NOS': 'Unclassified', 'NO': 'Unclassified',
+    'TS': 'Unclassified', 'KA': 'Unclassified', 'ZPC': 'Unclassified', 'ZCT': 'Unclassified', '0%': 'Unclassified',
+    'KP': 'Unclassified', 'GP': 'Unclassified', 'KAI': 'Unclassified', 'SY': 'Unclassified', 'UN': 'Unclassified',
+    'MU': 'Unclassified', 'UM': 'Unclassified', 'HU': 'Unclassified'
+}
+
+def map_cmpnt_type_category(val):
+    if pd.isna(val): return 'OTHER'
+    val_clean = str(val).strip().upper()
+    erp_type_map = {
+        'FERT': 'FINISHED_PRODUCT', 'HALB': 'SEMI_FINISHED', 'ROH': 'RAW_MATERIAL',
+        'VERP': 'PACKAGING_MATERIAL', 'TRAD': 'TRADED_GOOD', 'ERSA': 'SUBCONTRACT_COMPONENT',
+        'API': 'API', 'TPF': 'TRADE_PRODUCT', 'PACK': 'PACKAGING', 'ZHBG': 'INTERMEDIATE',
+        'EPC': 'EXCIPIENT', 'EPF': 'FINISHED_PRODUCT', 'HAWA': 'TRADING_GOOD', 'ZEXI': 'EXCIPIENT',
+        'ZROH': 'RAW_MATERIAL', 'SAPR': 'PACKAGING', 'IM': 'INTERMEDIATE', 'UNBW': 'NON_VALUATED',
+        'IG': 'INTERMEDIATE_GOOD'
+    }
+    return erp_type_map.get(val_clean, 'OTHER')
+
+# --- Clean function ---
+def clean_text(text):
+    text = str(text).lower()
+    text = re.sub(r'[-/]', ' ', text)
+    text = re.sub(r'[^A-Za-z0-9&% ]+', '', text)
+    text = re.sub(r'\s*%\s*', '% ', text)
+    text = re.sub(r'canada\s*\d*|can\s*\d*|ca\s*\d*|ca$|can$|ca\s', '', text)
+    text = re.sub(r'(\D)(\d+)(\s*)(ml|l|gr|gm|g|ct)', r'\1 \2\3\4 ', text)
+    text = re.sub(r'(\s)(spf)\s*([\d+])', r'\1\2\3', text)
+    text = re.sub(r'(\d+)\s*(ml|l|gr|gm|g|ct)(?: |$)', lambda z: z.group().replace(" ", ""), text)
+    text = re.sub(r'(\D)(spf\d+)', r'\1 \2 ', text)
+    text = re.sub(r'\b\d{5,}\b$', '', text)
+    text = re.sub(r'\b\d+\b', '', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return ' '.join(dict.fromkeys(text.split()))  # remove duplicate words
+
+# --- Abbreviation Replacer ---
+def expand_abbreviations(text, abbrev_map):
+    def repl(m): return abbrev_map.get(m.group(0).lower(), m.group(0))
+    pattern = re.compile(r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b', flags=re.IGNORECASE)
+    return pattern.sub(repl, text)
+
+# --- Per-file Processor ---
+def process_file(file_path, abbrev_map, output_path):
     try:
         df = pd.read_parquet(file_path)
-        basename = os.path.basename(file_path)
-        print(f"[🔄] Started processing: {basename}")
 
-        mapping_cols = ["CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD", "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD"]
-        key_cols = mapping_cols + ["LOGL_KEY_COMB_COL_VAL"]
+        # Step 1: Expand Abbreviations
+        df['CMPNT_MATL_DESC_CLEAN'] = df['CMPNT_MATL_DESC'].astype(str).apply(lambda x: expand_abbreviations(x, abbrev_map))
 
-        df_key = df[key_cols].dropna(subset=["LOGL_KEY_COMB_COL_VAL"]).drop_duplicates(subset=["LOGL_KEY_COMB_COL_VAL"])
-        new_key_rows = []
-        with lock:
-            for key in df_key["LOGL_KEY_COMB_COL_VAL"]:
-                if key not in seen_keys:
-                    seen_keys[key] = True
-                    new_key_rows.append(key)
-        df_key = df_key[df_key["LOGL_KEY_COMB_COL_VAL"].isin(new_key_rows)]
+        # Step 2: Clean Text
+        df['CMPNT_MATL_DESC_CLEAN'] = df['CMPNT_MATL_DESC_CLEAN'].apply(clean_text)
 
-        if not df_key.empty:
-            key_output_file = os.path.join(key_output_dir, f"key_{basename}")
-            df_key.to_parquet(key_output_file, index=False)
+        # Step 3: Feature Engineering
+        df['CMPNT_MATL_DESC_LEN'] = df['CMPNT_MATL_DESC'].astype(str).str.len()
+        df['UNIT_GROUP'] = df['CMPNT_UOM_CD'].fillna('').str.upper().map(unit_group_map).fillna('Unclassified')
+        df['CMPNT_MATL_TYPE_CATEGORY'] = df['CMPNT_MATL_TYPE_CD'].apply(map_cmpnt_type_category)
 
-        df_mapping = df[mapping_cols].dropna(subset=["CMPNT_MATL_DESC"]).drop_duplicates(subset=["CMPNT_MATL_NUM"])
-        new_ids = []
-        with lock:
-            for comp_id in df_mapping["CMPNT_MATL_NUM"]:
-                if comp_id not in seen_components:
-                    seen_components[comp_id] = True
-                    new_ids.append(comp_id)
-        df_mapping = df_mapping[df_mapping["CMPNT_MATL_NUM"].isin(new_ids)]
-
-        if not df_mapping.empty:
-            df_mapping = ensure_ai_columns(df_mapping)
-            df_mapping = apply_existing_ai_overrides(df_mapping)
-
-            cat_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Category')
-            cat_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Category')
-            df_mapping = map_values(df_mapping, cat_map_1, cat_map_2, JOIN_COL_1, JOIN_COL_2,
-                                    DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Category', 'Mapped_File_Category')
-
-            sub_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Subcategory')
-            sub_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory')
-            df_mapping = map_values(df_mapping, sub_map_1, sub_map_2, JOIN_COL_1, JOIN_COL_2,
-                                    DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory', 'Mapped_File_Subcategory')
-
-            df_mapping = add_flags(df_mapping)
-            mapped_output_file = os.path.join(final_output_dir, f"mapped_{basename}")
-            finalize_output(df_mapping, mapped_output_file)
-
-                duration = time.time() - start_time
-        print(f"[✅] Finished processing: {basename} in {duration:.2f} seconds")
-        print(f"     ➤ New unique keys added: {len(new_key_rows)}")
-        print(f"     ➤ New unique components added: {len(new_ids)}")
-
+        # Save
+        out_file = os.path.join(output_path, os.path.basename(file_path))
+        df.to_parquet(out_file, index=False)
+        print(f"✅ Processed: {os.path.basename(file_path)}")
     except Exception as e:
-        print(f"[❌ ERROR] File: {file_path}\n{e}")
-        traceback.print_exc()
+        print(f"❌ Failed: {os.path.basename(file_path)} -> {e}")
 
-# === Updated main function to use manager.dict() and Lock ===
+# --- Main ---
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input_path", type=str, required=True)
-    parser.add_argument("--mapping_csv", type=str, required=True)
-    parser.add_argument("--key_output", type=str, required=True)
-    parser.add_argument("--final_output", type=str, required=True)
+    parser.add_argument('--input_path', required=True)
+    parser.add_argument('--abbrev_map', required=True)
+    parser.add_argument('--output_path', required=True)
     args = parser.parse_args()
 
-    parquet_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
-    if not parquet_files:
-        raise FileNotFoundError(f"No parquet files found in {args.input_path}")
+    # Load abbreviation map
+    abbrev_csv = glob.glob(os.path.join(args.abbrev_map, '*.csv'))
+    if not abbrev_csv:
+        raise FileNotFoundError("No abbreviation map CSV found.")
+    abbrev_df = pd.read_csv(abbrev_csv[0])
+    abbrev_map = dict(zip(abbrev_df['Abbreviation_list'].str.lower(), abbrev_df['Abbreviation_Expension']))
 
-    csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
-    if not csv_files:
-        raise FileNotFoundError(f"No CSV mapping file found in {args.mapping_csv}")
-    mapping_df = pd.read_csv(csv_files[0])
+    os.makedirs(args.output_path, exist_ok=True)
+    parquet_files = glob.glob(os.path.join(args.input_path, '*.parquet'))
 
-    os.makedirs(args.final_output, exist_ok=True)
-    os.makedirs(args.key_output, exist_ok=True)
+    for f in parquet_files:
+        process_file(f, abbrev_map, args.output_path)
 
-    with Manager() as manager:
-        seen_keys = manager.dict()
-        seen_components = manager.dict()
-        lock = manager.Lock()
-
-        args_list = [
-            (f, mapping_df, args.final_output, args.key_output, seen_keys, seen_components, lock)
-            for f in parquet_files
-        ]
-
-        with Pool(cpu_count() - 1) as pool:
-            pool.map(process_single_file, args_list)
-
-    print("\n✅ All files processed with strict deduplication.")
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
