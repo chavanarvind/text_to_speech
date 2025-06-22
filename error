@@ -1,16 +1,11 @@
-Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.scriptrun = azureml.core.script_run:ScriptRun._from_run_dto with exception (packaging 23.2 (/opt/conda/envs/ptca/lib/python3.8/site-packages), Requirement.parse('packaging<=23.0,>=20.0')).
-[🔄] Started processing: test_file_2.parquet
-[🔄] Started processing: test_file_1.parquet
-[✅] Final output saved to: /mnt/azureml/cr/j/b84467a42d9e43bf95ea25c4813061d3/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/b86233f6-cd82-4fdf-97fe-3bc51e04ff58/step1a_final_output/mapped_test_file_2.parquet
-[✅] Finished processing: test_file_2.parquet in 3.50 seconds
-     ➤ New unique keys added: 0
-     ➤ New unique components added: 18910
-[✅] Final output saved to: /mnt/azureml/cr/j/b84467a42d9e43bf95ea25c4813061d3/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/b86233f6-cd82-4fdf-97fe-3bc51e04ff58/step1a_final_output/mapped_test_file_1.parquet
-[✅] Finished processing: test_file_1.parquet in 4.07 seconds
-     ➤ New unique keys added: 0
-     ➤ New unique components added: 1258
+if 'LOGL_KEY_COMB_COL_VAL' in df.columns:
+    total_rows = len(df)
+    non_null_count = df['LOGL_KEY_COMB_COL_VAL'].notnull().sum()
+    all_null = non_null_count == 0
 
-✅ All files processed with strict deduplication.
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.10925149917602539 seconds
+    if all_null:
+        print(f"[🚫 NULL] {basename} ➤ All {total_rows} values in LOGL_KEY_COMB_COL_VAL are NULL.")
+    else:
+        print(f"[✅] {basename} ➤ Non-null LOGL_KEY_COMB_COL_VAL count: {non_null_count} / {total_rows}")
+else:
+    print(f"[⚠️ MISSING] {basename} ➤ Column LOGL_KEY_COMB_COL_VAL is missing entirely!")
