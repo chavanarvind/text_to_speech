@@ -1,4 +1,3 @@
-Invoke-WebRequest : Cannot bind parameter 'Headers'. Cannot convert the "Ocp-Apim-Subscription-Key:
-XXXXXXXX" value of type "System.String" to
-type "System.Collections.IDictionary".
-At line:1 char:112
+Invoke-RestMethod -Method Get `
+  -Uri "https://eastus.api.cognitive.microsoft.com/videotranslation/operations?api-version=2024-05-20" `
+  -Headers @{ "Ocp-Apim-Subscription-Key" = "0123456789abcdef0123456789abcdef" }
