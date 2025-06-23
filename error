@@ -1,19 +1,67 @@
 from azureml.core import Workspace, Datastore
+from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
+from datetime import datetime, timedelta
+import os
+from urllib.parse import quote_plus
+import requests, certifi
 
-# Load AzureML workspace (will use config from config.json or interactive auth)
-ws = Workspace(
-    subscription_id="a8d518a9-4587-4ba2-9a60-68b980c2f000",
-    resource_group="AZR-WDZ-DTO-AML-Development",
-    workspace_name="AML-DTO-Marmot-dev"
-)
+# Sanitize filename to avoid space-related issues
+def sanitize_filename(filename):
+    return filename.replace(" ", "_")
 
-# Register the custom blob container as a datastore
-datastore = Datastore.register_azure_blob_container(
-    workspace=ws,
-    datastore_name="video_container_ds",         # You can change this name as needed
-    container_name="video",                      # This is your existing container name
-    account_name="adlsdtodsdev",                 # Your storage account name
-    overwrite=True                               # Overwrite if datastore already exists
-)
+# Upload using registered AzureML datastore
+def upload_to_blob_storage(local_path):
+    # Connect to AzureML workspace
+    ws = Workspace(
+        subscription_id="a8d518a9-4587-4ba2-9a60-68b980c2f000",
+        resource_group="AZR-WDZ-DTO-AML-Development",
+        workspace_name="AML-DTO-Marmot-dev"
+    )
 
-print(f"Datastore '{datastore.name}' registered successfully.")
+    # Get the registered datastore
+    datastore = Datastore.get(ws, datastore_name="video_container_ds")
+
+    # Build upload path
+    sanitized_name = sanitize_filename(os.path.basename(local_path))
+    blob_path = f"video-uploads/{sanitized_name}"
+
+    # Create Blob client
+    blob_service_client = BlobServiceClient(
+        account_url=f"https://{datastore.account_name}.blob.core.windows.net",
+        credential=datastore.account_key
+    )
+    container_client = blob_service_client.get_container_client(datastore.container_name)
+
+    # Upload the file
+    with open(local_path, "rb") as data:
+        try:
+            container_client.upload_blob(name=blob_path, data=data, overwrite=True)
+        except Exception as e:
+            print(f"[ERROR] Upload failed: {e}")
+            raise
+
+    # Generate SAS token
+    start_time = datetime.utcnow() - timedelta(minutes=5)
+    expiry_time = datetime.utcnow() + timedelta(hours=6)
+    sas_token = generate_blob_sas(
+        account_name=datastore.account_name,
+        container_name=datastore.container_name,
+        blob_name=blob_path,
+        account_key=datastore.account_key,
+        permission=BlobSasPermissions(read=True),
+        expiry=expiry_time,
+        start=start_time
+    )
+
+    encoded_path = quote_plus(blob_path)
+    blob_url = f"https://{datastore.account_name}.blob.core.windows.net/{datastore.container_name}/{encoded_path}?{sas_token}"
+
+    # Optional: Validate access
+    try:
+        r = requests.head(blob_url, verify=certifi.where())
+        r.raise_for_status()
+    except Exception as e:
+        print(f"[ERROR] SAS URL check failed: {e}")
+        raise
+
+    return blob_url
