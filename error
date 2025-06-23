@@ -1,98 +1,172 @@
 import gradio as gr
-import os
-import requests
-import time
+import os, uuid, time, requests
+from azureml.core import Workspace
+from azure.storage.blob import generate_blob_sas, BlobSasPermissions
+from datetime import datetime, timedelta
+from azureml.core.datastore import Datastore
 
-# Constants (fill with your own values)
-SPEECH_KEY = os.getenv("SPEECH_KEY")  # Or hardcode your Azure key here
-ENDPOINT = "https://eastus.api.cognitive.microsoft.com"
-API_VERSION = "2025-05-20"
+# === Azure ML Workspace Config ===
+SUBSCRIPTION_ID = 
+RESOURCE_GROUP = 
+WORKSPACE_NAME =
 
-def translate_video(video_path, source_lang, target_lang):
-    logs = []
-    logs.append("Starting translation process...")
+AZURE_SPEECH_KEY = 
+AZURE_REGION = "eastus"
+ENDPOINT = "https://cog-speech-dto-epil-dev.cognitiveservices.azure.com/"
 
-    VIDEO_URL = os.getenv("VIDEO_SAS_URL")
-    if not VIDEO_URL:
-        return "Set VIDEO_SAS_URL as environment variable with your blob SAS URL"
-    logs.append(f"Using VIDEO_SAS_URL: {VIDEO_URL}")
+# === Initialize AML Workspace ===
+ws = Workspace(
+    subscription_id=SUBSCRIPTION_ID,
+    resource_group=RESOURCE_GROUP,
+    workspace_name=WORKSPACE_NAME
+)
 
+def upload_to_default_blobstore(ws, local_path):
+    default_ds = ws.get_default_datastore()
+    target_path = f"video-uploads/{os.path.basename(local_path)}"
+
+    # Upload to Blob
+    default_ds.upload_files(
+        files=[local_path],
+        target_path=target_path,
+        overwrite=True,
+        show_progress=True
+    )
+
+    # Generate SAS URL
+    sas_token = generate_blob_sas(
+        account_name=default_ds.account_name,
+        container_name=default_ds.container_name,
+        blob_name=target_path,
+        account_key=default_ds.account_key,
+        permission=BlobSasPermissions(read=True),
+        expiry=datetime.utcnow() + timedelta(hours=6)
+    )
+    blob_url = f"https://{default_ds.account_name}.blob.core.windows.net/{default_ds.container_name}/{target_path}?{sas_token}"
+    return blob_url
+
+def create_video_translation_job(blob_url, source_lang, target_lang, output_format):
+    job_id = f"gradio-job-{uuid.uuid4()}"
+    url = f"{ENDPOINT}/videotranslation/translations/{job_id}?api-version=2024-05-20"
     headers = {
-        "Ocp-Apim-Subscription-Key": SPEECH_KEY,
+        "Ocp-Apim-Subscription-Key": AZURE_SPEECH_KEY,
         "Content-Type": "application/json",
-        "Operation-Id": "CreateOp01"
+        "Operation-Id": job_id
     }
 
-    translation_name = "GradioTransDemo"
-    create_url = f"{ENDPOINT}/videotranslation/translations/{translation_name}?api-version={API_VERSION}"
-    create_payload = {
-        "displayName": "Gradio Video Translation",
+    job_id = f"gradio-job-{uuid.uuid4()}"
+    payload = {
+        "displayName": job_id,
+        "description": "Gradio video translation",
         "input": {
-            "sourceLocale": source_lang,
-            "targetLocale": target_lang,
-            "voiceKind": "PlatformVoice",
-            "videoFileUrl": VIDEO_URL
+        "sourceLocale": source_lang,
+        "targetLocale": target_lang,
+        "voiceKind": "PlatformVoice",
+        "speakerCount": 1,
+        "subtitleMaxCharCountPerSegment": 50,
+        "exportSubtitleInVideo": output_format == "video",
+        "enableLipSync": False,
+        "videoFileUrl": blob_url
+    },
+    "targets": [
+            {
+                "language": target_lang,
+                "outputFormat": output_format
+            }
+        ],
+        "properties": {
+            "diarizationEnabled": "true",
+            "ttsVoice": f"{target_lang}-DeniseNeural"
         }
     }
 
-    logs.append("Creating translation object...")
-    r = requests.put(create_url, headers=headers, json=create_payload)
-    logs.append(f"Create response: {r.status_code} {r.text}")
-    if r.status_code not in [200, 201]:
-        return "\n".join(logs + ["Create failed."])
+    response = requests.put(url, headers=headers, json=payload)
+    if response.status_code >= 400:
+        print("[ERROR] Failed to submit translation job:")
+        print(f"Status Code: {response.status_code}")
+        print(f"Response: {response.text}")
+        return None
+    return response.json().get("id")
 
-    headers["Operation-Id"] = "StartIter01"
-    start_url = f"{ENDPOINT}/videotranslation/translations/{translation_name}/iterations/Initial?api-version={API_VERSION}"
-    iter_payload = {
-        "speakerCount": 1,
-        "exportSubtitleInVideo": True,
-        "enableLipSync": False
-    }
-
-    logs.append("Starting translation iteration...")
-    r = requests.put(start_url, headers=headers, json=iter_payload)
-    logs.append(f"Start iteration response: {r.status_code} {r.text}")
-    if r.status_code not in [200, 202]:
-        return "\n".join(logs + ["Start iteration failed."])
-
-    status_url = f"{ENDPOINT}/videotranslation/operations/StartIter01?api-version={API_VERSION}"
-    logs.append("Polling for translation status...")
-    while True:
-        r = requests.get(status_url, headers={"Ocp-Apim-Subscription-Key": SPEECH_KEY})
-        data = r.json()
-        status = data.get("status")
-        logs.append(f"Current status: {status}")
-        if status in ["Succeeded", "Failed"]:
-            break
+def poll_job_and_get_output(job_id):
+    url = "https://cog-speech-dto-epil-dev.cognitiveservices.azure.com/videotranslation/translations/{job_id}?api-version=2024-05-20"
+    headers = {"Ocp-Apim-Subscription-Key": AZURE_SPEECH_KEY}
+    for _ in range(30):
+        resp = requests.get(url, headers=headers)
+        result = resp.json()
+        status = result.get("status")
+        if status == "Succeeded":
+            return result.get("results", {}).get("urls", {})
+        elif status == "Failed":
+            return {"error": "Translation failed."}
         time.sleep(10)
+    return {"error": "Timeout waiting for translation to finish."}
 
-    if status == "Failed":
-        return "\n".join(logs + ["Translation failed."])
+def translate_video(video_file, source_lang, target_lang, output_format):
+    import tempfile
+    import logging
 
-    result_url = f"{ENDPOINT}/videotranslation/translations/{translation_name}?api-version={API_VERSION}"
-    r = requests.get(result_url, headers={"Ocp-Apim-Subscription-Key": SPEECH_KEY})
-    logs.append(f"Final result fetch response: {r.status_code} {r.text}")
-    try:
-        result = r.json()["latestIteration"]["result"]
-        translated_url = result["translatedVideoFileUrl"]
-        logs.append(f"Translated video URL: {translated_url}")
-        return "\n".join(logs + ["\nFinal Translated Video URL:", translated_url])
-    except Exception as e:
-        logs.append(f"Failed to parse translated URL: {str(e)}")
-        return "\n".join(logs)
+    logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s")
+    logger = logging.getLogger("video-translator")
 
-def gradio_interface(video, source_lang, target_lang):
-    return translate_video(video, source_lang, target_lang)
+    logger.info("Uploading video to Azure Blob Storage...")
+    blob_url = upload_to_default_blobstore(ws, video_file.name)
+    logger.info(f"Upload complete: {blob_url}")
 
-iface = gr.Interface(
-    fn=gradio_interface,
-    inputs=[
-        gr.Video(label="Upload Video (.mp4)"),
-        gr.Textbox(label="Source Language (e.g., en-US)", value="en-US"),
-        gr.Textbox(label="Target Language (e.g., es-ES)", value="es-ES")
-    ],
-    outputs=gr.Textbox(label="Logs and Translated Video URL"),
-    title="Azure Video Translator (Preview with Logs)"
-)
+    logger.info("Submitting video translation job to Azure...")
+    job_id = create_video_translation_job(blob_url, source_lang, target_lang, output_format)
+    logger.info(f"Job submitted: {job_id}")
 
-iface.launch()
+    logger.info("Polling job status...")
+    result = poll_job_and_get_output(job_id)
+
+    translated_url = result.get(output_format)
+    if not translated_url:
+        logger.error(f"Translation failed or no result for format: {output_format}")
+        return blob_url, f"{output_format.upper()} not available"
+
+    logger.info(f"Translation completed. Output URL: {translated_url}")
+
+    if output_format == "video" and translated_url.startswith("http"):
+        logger.info("Downloading translated video to local system...")
+        response = requests.get(translated_url)
+        local_path = os.path.join("translated_outputs", os.path.basename(video_file.name).replace(".", f"_translated.{target_lang}."))
+        os.makedirs("translated_outputs", exist_ok=True)
+        with open(local_path, "wb") as f:
+            f.write(response.content)
+        logger.info(f"Saved translated video to {local_path}")
+        return blob_url, local_path
+
+    return blob_url, translated_url
+
+# === Gradio UI ===
+with gr.Blocks() as app:
+    gr.Markdown("# Azure Video Translator using AML Workspace Storage")
+    video = gr.File(label="Upload Video File", file_types=[".mp4", ".mov", ".avi"])
+    source = gr.Textbox(label="Source Language (e.g. en)")
+    target = gr.Dropdown(label="Target Language", choices=[
+        "fr", "de", "es", "it", "pt", "zh-Hans", "ja", "ko", "ar", "ru"
+    ], value="fr")
+    output_format = gr.Dropdown(label="Output Format", choices=["video", "srt", "webvtt"], value="video")
+    gr.Markdown("### Original Video")
+    original_display = gr.Video()
+    gr.Markdown("### Translated Output")
+    translated_display = gr.Video()
+    subtitle_display = gr.Textbox(label="Subtitle Output Link")
+
+    btn = gr.Button("Translate Video")
+
+    def handle_translation(vfile, sl, tl, fmt):
+        orig_url, result_url = translate_video(vfile, sl, tl, fmt)
+        if fmt == "video":
+            return orig_url, result_url, ""
+        else:
+            return orig_url, None, result_url
+
+    btn.click(
+        fn=handle_translation,
+        inputs=[video, source, target, output_format],
+        outputs=[original_display, translated_display, subtitle_display]
+    )
+
+app.launch()
