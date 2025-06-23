@@ -1,38 +1,157 @@
+import gradio as gr
+import os
+import uuid
+import time
+import requests
+import certifi
+from datetime import datetime, timedelta
+from azureml.core import Workspace, Datastore
 
-# === Workspace Config ===
+# === AzureML Workspace and Datastore Config ===
 SUBSCRIPTION_ID = "a8d518a9-4587-4ba2-9a60-68b980c2f000"
 RESOURCE_GROUP = "AZR-WDZ-DTO-AML-Development"
 WORKSPACE_NAME = "AML-DTO-Marmot-dev"
+DATASTORE_NAME = "xbomrefadlsg2"
 
-# === Initialize Workspace ===
-def get_workspace(use_sp_auth=False, args=None):
-    if use_sp_auth and args and len(args) >= 4:
-        tenant_id = args[1]
-        client_id = args[2]
-        client_secret = args[3]
-        sp_auth = ServicePrincipalAuthentication(
-            tenant_id=tenant_id,
-            service_principal_id=client_id,
-            service_principal_password=client_secret
-        )
-        return Workspace(
-            subscription_id=SUBSCRIPTION_ID,
-            resource_group=RESOURCE_GROUP,
-            workspace_name=WORKSPACE_NAME,
-            auth=sp_auth
-        )
+AZURE_SPEECH_KEY = os.getenv("SPEECH_KEY")
+AZURE_REGION = "eastus"
+ENDPOINT = f"https://{AZURE_REGION}.api.speech.microsoft.com"
+API_VERSION = "2025-05-20"
+
+# === Upload using Azure ML Blob Datastore ===
+def upload_to_blob_storage(local_path):
+    ws = Workspace(
+        subscription_id=SUBSCRIPTION_ID,
+        resource_group=RESOURCE_GROUP,
+        workspace_name=WORKSPACE_NAME
+    )
+    datastore = Datastore.get(ws, DATASTORE_NAME)
+    target_path = f"video-uploads/{os.path.basename(local_path)}"
+
+    datastore.upload_files(
+        files=[local_path],
+        target_path=target_path,
+        overwrite=True,
+        show_progress=True
+    )
+
+    from azure.storage.blob import generate_blob_sas, BlobSasPermissions
+    start_time = datetime.utcnow() - timedelta(minutes=5)
+    expiry_time = datetime.utcnow() + timedelta(hours=6)
+    sas_token = generate_blob_sas(
+        account_name=datastore.account_name,
+        container_name=datastore.container_name,
+        blob_name=target_path,
+        account_key=datastore.account_key,
+        permission=BlobSasPermissions(read=True),
+        expiry=expiry_time,
+        start=start_time
+    )
+    blob_url = f"https://{datastore.account_name}.blob.core.windows.net/{datastore.container_name}/{target_path}?{sas_token}"
+    return blob_url
+
+def create_video_translation_job(blob_url, source_lang, target_lang):
+    job_id = f"gradio-job-{uuid.uuid4()}"
+    url = f"{ENDPOINT}/videotranslation/translations/{job_id}?api-version={API_VERSION}"
+    headers = {
+        "Ocp-Apim-Subscription-Key": AZURE_SPEECH_KEY,
+        "Content-Type": "application/json",
+        "Operation-Id": job_id
+    }
+
+    payload = {
+        "displayName": job_id,
+        "description": "Gradio video translation",
+        "input": {
+            "sourceLocale": source_lang,
+            "targetLocale": target_lang,
+            "voiceKind": "PlatformVoice",
+            "speakerCount": 1,
+            "subtitleMaxCharCountPerSegment": 50,
+            "exportSubtitleInVideo": True,
+            "enableLipSync": False,
+            "videoFileUrl": blob_url
+        },
+        "targets": [
+            {
+                "language": target_lang,
+                "outputFormat": "video"
+            }
+        ],
+        "properties": {
+            "diarizationEnabled": "true",
+            "ttsVoice": f"{target_lang}-DeniseNeural"
+        }
+    }
+
+    response = requests.put(url, headers=headers, json=payload, verify=certifi.where())
+    if response.status_code >= 400:
+        return None, f"[ERROR] Failed to submit translation job: {response.status_code}\n{response.text}"
+    return job_id, None
+
+def poll_job_and_get_output(job_id):
+    url = f"{ENDPOINT}/videotranslation/translations/{job_id}?api-version={API_VERSION}"
+    headers = {"Ocp-Apim-Subscription-Key": AZURE_SPEECH_KEY}
+    for _ in range(30):
+        resp = requests.get(url, headers=headers, verify=certifi.where())
+        result = resp.json()
+        status = result.get("status")
+        if status == "Succeeded":
+            return result.get("results", {}).get("urls", {})
+        elif status == "Failed":
+            return {"error": "Translation failed."}
+        time.sleep(10)
+    return {"error": "Timeout waiting for translation to finish."}
+
+def translate_video(video_file, source_lang, target_lang):
+    import logging
+
+    logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s")
+    logger = logging.getLogger("video-translator")
+
+    logger.info("Uploading video to Azure Blob Storage...")
+    if hasattr(video_file, "name"):
+        video_path = video_file.name
     else:
-        return Workspace(
-            subscription_id=SUBSCRIPTION_ID,
-            resource_group=RESOURCE_GROUP,
-            workspace_name=WORKSPACE_NAME
-        )
+        video_path = video_file
 
-ws = get_workspace(use_sp_auth=(len(sys.argv) > 3), args=sys.argv)
-#compute_target = ws.compute_targets["llm-gpu-cluster-2"]
-env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
-compute_target = ws.compute_targets["rpmdataprocess"]
-default_ds = Datastore.get(ws, "xbomrefadlsg2")
-run_config = RunConfiguration()
-run_config.target = compute_target.name
-run_config.environment = env
+    blob_url = upload_to_blob_storage(video_path)
+    logger.info(f"Upload complete: {blob_url}")
+
+    logger.info("Submitting video translation job to Azure...")
+    job_id, error = create_video_translation_job(blob_url, source_lang, target_lang)
+    if error:
+        logger.error(error)
+        return blob_url, "Translation job submission failed.", ""
+
+    logger.info(f"Job submitted: {job_id}")
+    logger.info("Polling job status...")
+    result = poll_job_and_get_output(job_id)
+
+    translated_url = result.get("video")
+    if not translated_url:
+        logger.error("Translation failed or no result video.")
+        return blob_url, "Translation failed or timed out.", ""
+
+    logger.info(f"Translation completed. Output URL: {translated_url}")
+    return blob_url, "Translation succeeded.", translated_url
+
+def gradio_interface(video, source_lang, target_lang):
+    return translate_video(video, source_lang, target_lang)
+
+iface = gr.Interface(
+    fn=gradio_interface,
+    inputs=[
+        gr.Video(label="Upload Video (.mp4)"),
+        gr.Textbox(label="Source Language (e.g., en-US)", value="en-US"),
+        gr.Textbox(label="Target Language (e.g., es-ES)", value="es-ES")
+    ],
+    outputs=[
+        gr.Textbox(label="Original Video Blob URL"),
+        gr.Textbox(label="Status"),
+        gr.Textbox(label="Translated Video URL")
+    ],
+    title="Azure Video Translator using AML Blob Datastore"
+)
+
+iface.launch()
