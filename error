@@ -1,10 +1,29 @@
-import gradio as gr
-import os
-import uuid
-import time
-import requests
-import certifi
-from datetime import datetime, timedelta
-from azureml.core import Workspace
-from azure.storage.blob import generate_blob_sas, BlobSasPermissions
-from azureml.core.datastore import Datastore
+ File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 528, in send        
+    raise RuntimeError("Response content longer than Content-Length")
+RuntimeError: Response content longer than Content-Length
+[2025-06-23 12:26:42,210] Uploading video to Azure Blob Storage...
+[2025-06-23 12:26:42,211] <azureml.core.authentication.InteractiveLoginAuthentication object at 0x000002A552844850>
+[2025-06-23 12:26:44,088] "datastore.upload_files" is deprecated after version 1.0.69. Please use "FileDatasetFactory.upload_directory" instead. See Dataset API change notice at https://aka.ms/dataset-deprecation.
+[2025-06-23 12:26:44,088] Called AzureBlobDatastore.upload_files
+Uploading an estimated of 1 files
+[2025-06-23 12:26:44,089] Uploading an estimated of 1 files
+Uploading C:\Users\AChava05\AppData\Local\Temp\gradio\8da72d5fcf139c2608c8159adb9d0447201b0464be470a7bcaefa0757babc7cb\Overview OCC.mp4
+[2025-06-23 12:26:51,096] Uploading C:\Users\AChava05\AppData\Local\Temp\gradio\8da72d5fcf139c2608c8159adb9d0447201b0464be470a7bcaefa0757babc7cb\Overview OCC.mp4
+Uploaded C:\Users\AChava05\AppData\Local\Temp\gradio\8da72d5fcf139c2608c8159adb9d0447201b0464be470a7bcaefa0757babc7cb\Overview OCC.mp4, 1 files out of an estimated total of 1  
+[2025-06-23 12:26:51,096] Uploaded C:\Users\AChava05\AppData\Local\Temp\gradio\8da72d5fcf139c2608c8159adb9d0447201b0464be470a7bcaefa0757babc7cb\Overview OCC.mp4, 1 files out of an estimated total of 1
+Uploaded 1 files
+[2025-06-23 12:26:51,097] Uploaded 1 files
+[2025-06-23 12:26:51,097] Finished AzureBlobDatastore.upload with count=1.
+[2025-06-23 12:26:51,097] Upload complete: https://blobdtoamlmarmot.blob.core.windows.net/azureml-blobstore-975b0280-8ce5-42df-bdeb-51637f5ddbc7/video-uploads/Overview OCC.mp4?se=2025-06-23T12%3A56%3A51Z&sp=r&sv=2024-11-04&sr=b&sig=VTTjRnOFVRtm9E9hO7/aIe46e1oASBc0NFbCXXKXsnM%3D
+[2025-06-23 12:26:51,098] Submitting video translation job to Azure...
+[2025-06-23 12:26:52,092] [ERROR] Failed to submit translation job: 400
+{
+  "error": {
+    "code": "BadRequest",
+    "message": "Request is invalid.",
+    "innererror": {
+      "code": "InvalidPayload",
+      "message": "mediaFileUri is not accessible."
+    }
+  }
+}
