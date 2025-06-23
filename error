@@ -1,3 +1,4 @@
+
 # === Initialize AML Workspace ===
 ws = Workspace(
     subscription_id=SUBSCRIPTION_ID,
