@@ -1,9 +1,1 @@
-Cleanup took 0.0993504524230957 seconds
-Traceback (most recent call last):
-  File "<string>", line 197, in <module>
-  File "<string>", line 193, in main
-  File "/opt/conda/envs/ptca/lib/python3.8/runpy.py", line 264, in run_path
-    code, fname = _get_code_from_file(run_name, path_name)
-  File "/opt/conda/envs/ptca/lib/python3.8/runpy.py", line 239, in _get_code_from_file
-    code = compile(f.read(), fname, 'exec')
-ValueError: source code string cannot contain null bytes
+but it is normally the same for matl_num. For example, you can have SOURCE SYSTEM=CAD, MATL_NUM=123, COMP_ID=789 and SOURCE SYSTEM=ZET, MATL_NUM=345, COMP_ID=789
