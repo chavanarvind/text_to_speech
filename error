@@ -5,6 +5,7 @@ import traceback
 import pandas as pd
 import time
 from multiprocessing import Pool, Lock, cpu_count
+
 try:
     import sqlite3
 except ImportError:
@@ -20,6 +21,9 @@ JOIN_COL_2 = "CMPNT_MATL_TYPE_CD"
 SQLITE_DB_PATH = "component_cache.sqlite"
 TABLE_NAME = "processed_components"
 
+# === Global lock ===
+lock = None
+
 # === SQLite setup ===
 def init_sqlite_db():
     conn = sqlite3.connect(SQLITE_DB_PATH)
@@ -34,7 +38,8 @@ def init_sqlite_db():
     conn.commit()
     conn.close()
 
-def insert_and_filter_new_components(component_ids, lock):
+def insert_and_filter_new_components(component_ids):
+    global lock
     unique_ids = list(set(component_ids))
     values = [(cid,) for cid in unique_ids]
     new_ids = []
@@ -45,14 +50,11 @@ def insert_and_filter_new_components(component_ids, lock):
         cursor = conn.cursor()
         cursor.executemany(f"INSERT OR IGNORE INTO {TABLE_NAME} (comp_id) VALUES (?)", values)
         conn.commit()
-
-        # Get actually inserted ones (new ones)
         cursor.execute(f"SELECT comp_id FROM {TABLE_NAME} WHERE comp_id IN ({','.join(['?']*len(unique_ids))})", unique_ids)
         new_ids = [row[0] for row in cursor.fetchall()]
         conn.close()
     return new_ids
 
-# === Core logic ===
 def ensure_ai_columns(df):
     for col in [
         'AI_FINAL_CATEGORY', 'AI_FINAL_CATEGORY_CONFIDENCE', 'AI_MATCHING_REASON_FINAL_CATEGORY',
@@ -147,7 +149,7 @@ def finalize_output(df, output_path):
     print(f"[✅] Final output saved to: {output_path}")
 
 def process_single_file(args):
-    file_path, mapping_df, final_output_dir, lock = args
+    file_path, mapping_df, final_output_dir = args
     start_time = time.time()
     try:
         df = pd.read_parquet(file_path)
@@ -157,7 +159,7 @@ def process_single_file(args):
         df_mapping = df[mapping_cols].dropna(subset=["CMPNT_MATL_DESC"]).drop_duplicates(subset=["CMPNT_MATL_NUM"])
 
         comp_ids = df_mapping["CMPNT_MATL_NUM"].dropna().astype(str).tolist()
-        new_ids = insert_and_filter_new_components(comp_ids, lock)
+        new_ids = insert_and_filter_new_components(comp_ids)
         df_mapping = df_mapping[df_mapping["CMPNT_MATL_NUM"].astype(str).isin(new_ids)]
 
         if not df_mapping.empty:
@@ -185,6 +187,10 @@ def process_single_file(args):
         print(f"[❌ ERROR] File: {file_path}\n{e}")
         traceback.print_exc()
 
+def init_worker():
+    global lock
+    lock = Lock()
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_path", type=str, required=True)
@@ -204,10 +210,9 @@ def main():
     os.makedirs(args.final_output, exist_ok=True)
     init_sqlite_db()
 
-    lock = Lock()
-    args_list = [(f, mapping_df, args.final_output, lock) for f in parquet_files]
+    args_list = [(f, mapping_df, args.final_output) for f in parquet_files]
 
-    with Pool(cpu_count() - 2) as pool:
+    with Pool(cpu_count() - 2, initializer=init_worker) as pool:
         for _ in pool.imap_unordered(process_single_file, args_list):
             pass
 
@@ -215,28 +220,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.scriptrun = azureml.core.script_run:ScriptRun._from_run_dto with exception (packaging 23.2 (/opt/conda/envs/ptca/lib/python3.8/site-packages), Requirement.parse('packaging<=23.0,>=20.0')).
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.13029026985168457 seconds
-Traceback (most recent call last):
-  File "step_1a_extract_and_merge.py", line 217, in <module>
-    main()
-  File "step_1a_extract_and_merge.py", line 211, in main
-    for _ in pool.imap_unordered(process_single_file, args_list):
-  File "/opt/conda/envs/ptca/lib/python3.8/multiprocessing/pool.py", line 868, in next
-    raise value
-  File "/opt/conda/envs/ptca/lib/python3.8/multiprocessing/pool.py", line 537, in _handle_tasks
-    put(task)
-  File "/opt/conda/envs/ptca/lib/python3.8/multiprocessing/connection.py", line 206, in send
-    self._send_bytes(_ForkingPickler.dumps(obj))
-  File "/opt/conda/envs/ptca/lib/python3.8/multiprocessing/reduction.py", line 51, in dumps
-    cls(buf, protocol).dump(obj)
-  File "/opt/conda/envs/ptca/lib/python3.8/multiprocessing/synchronize.py", line 101, in __getstate__
-    context.assert_spawning(self)
-  File "/opt/conda/envs/ptca/lib/python3.8/multiprocessing/context.py", line 359, in assert_spawning
-    raise RuntimeError(
-RuntimeError: Lock objects should only be shared between processes through inheritance
-
