@@ -1,67 +1,11 @@
-from azureml.core import Workspace, Datastore
-from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
-from datetime import datetime, timedelta
-import os
-from urllib.parse import quote_plus
-import requests, certifi
-
-# Sanitize filename to avoid space-related issues
-def sanitize_filename(filename):
-    return filename.replace(" ", "_")
-
-# Upload using registered AzureML datastore
-def upload_to_blob_storage(local_path):
-    # Connect to AzureML workspace
-    ws = Workspace(
-        subscription_id="a8d518a9-4587-4ba2-9a60-68b980c2f000",
-        resource_group="AZR-WDZ-DTO-AML-Development",
-        workspace_name="AML-DTO-Marmot-dev"
-    )
-
-    # Get the registered datastore
-    datastore = Datastore.get(ws, datastore_name="video_container_ds")
-
-    # Build upload path
-    sanitized_name = sanitize_filename(os.path.basename(local_path))
-    blob_path = f"video-uploads/{sanitized_name}"
-
-    # Create Blob client
-    blob_service_client = BlobServiceClient(
-        account_url=f"https://{datastore.account_name}.blob.core.windows.net",
-        credential=datastore.account_key
-    )
-    container_client = blob_service_client.get_container_client(datastore.container_name)
-
-    # Upload the file
-    with open(local_path, "rb") as data:
-        try:
-            container_client.upload_blob(name=blob_path, data=data, overwrite=True)
-        except Exception as e:
-            print(f"[ERROR] Upload failed: {e}")
-            raise
-
-    # Generate SAS token
-    start_time = datetime.utcnow() - timedelta(minutes=5)
-    expiry_time = datetime.utcnow() + timedelta(hours=6)
-    sas_token = generate_blob_sas(
-        account_name=datastore.account_name,
-        container_name=datastore.container_name,
-        blob_name=blob_path,
-        account_key=datastore.account_key,
-        permission=BlobSasPermissions(read=True),
-        expiry=expiry_time,
-        start=start_time
-    )
-
-    encoded_path = quote_plus(blob_path)
-    blob_url = f"https://{datastore.account_name}.blob.core.windows.net/{datastore.container_name}/{encoded_path}?{sas_token}"
-
-    # Optional: Validate access
-    try:
-        r = requests.head(blob_url, verify=certifi.where())
-        r.raise_for_status()
-    except Exception as e:
-        print(f"[ERROR] SAS URL check failed: {e}")
-        raise
-
-    return blob_url
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azure\storage\blob\_generated\operations\_block_blob_operations.py", line 855, in upload
+    map_error(status_code=response.status_code, response=response, error_map=error_map)
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azure\core\exceptions.py", line 164, in map_error
+    raise error
+azure.core.exceptions.ClientAuthenticationError: Server failed to authenticate the request. Please refer to the information in the www-authenticate header.
+RequestId:4dfd1bb3-901e-0021-1822-e48846000000
+Time:2025-06-23T09:35:20.5257427Z
+ErrorCode:NoAuthenticationInformation
+Content: <?xml version="1.0" encoding="utf-8"?><Error><Code>NoAuthenticationInformation</Code><Message>Server failed to authenticate the request. Please refer to the information in the www-authenticate header.
+RequestId:4dfd1bb3-901e-0021-1822-e48846000000
+Time:2025-06-23T09:35:20.5257427Z</Message></Error>
