@@ -1,142 +1,522 @@
-# === Upload to Azure Blob Storage directly ===
-def upload_to_blob_storage(local_path):
-    ws = Workspace(
-        subscription_id=SUBSCRIPTION_ID,
-        resource_group=RESOURCE_GROUP,
-        workspace_name=WORKSPACE_NAME
-    )
-    default_ds = ws.get_default_datastore()
-    blob_service_client = BlobServiceClient(
-        account_url=f"https://{default_ds.account_name}.blob.core.windows.net",
-        credential=default_ds.account_key
-    )
-    container_client = blob_service_client.get_container_client(default_ds.container_name)
+#extarct and mergege code
+import argparse
+import os
+import glob
+import traceback
+import pandas as pd
+import time
+from multiprocessing import Pool, Manager, cpu_count
+from azureml.core import Dataset
+try:
+    import sqlite3
+except ImportError:
+    import subprocess
+    subprocess.check_call(["pip", "install", "pysqlite3-binary"])
+    import sqlite3
 
-    # Ensure 'video-uploads' virtual folder path (not actual container)
-    target_path = f"video-uploads/{os.path.basename(local_path)}"
-    with open(local_path, "rb") as data:
-        try:
-            container_client.upload_blob(name=target_path, data=data, overwrite=True)
-        except Exception as e:
-            print(f"[ERROR] Upload failed: {e}")
-            raise
+# === Constants ===
+DIRECT_MAP_KEY_1 = "Direct Mapping"
+DIRECT_MAP_KEY_2 = "Direct Mapping"
+JOIN_COL_1 = "CMPNT_CAT_CD_DESC"
+JOIN_COL_2 = "CMPNT_MATL_TYPE_CD"
+SQLITE_DB_PATH = "key_cache.sqlite"
+KEY_TABLE = "keys"
 
-    start_time = datetime.utcnow() - timedelta(minutes=5)
-    expiry_time = datetime.utcnow() + timedelta(hours=6)
-    sas_token = generate_blob_sas(
-        account_name=default_ds.account_name,
-        container_name=default_ds.container_name,
-        blob_name=target_path,
-        account_key=default_ds.account_key,
-        permission=BlobSasPermissions(read=True),
-        expiry=expiry_time,
-        start=start_time
-    )
-    blob_url = f"https://{default_ds.account_name}.blob.core.windows.net/{default_ds.container_name}/{target_path}?{sas_token}"
-    return blob_url
+# === SQLite logic ===
+def init_sqlite_db():
+    conn = sqlite3.connect(SQLITE_DB_PATH)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
+    cursor = conn.cursor()
+    cursor.execute(f"""
+        CREATE TABLE IF NOT EXISTS {KEY_TABLE} (
+            key TEXT PRIMARY KEY
+        )
+    """)
+    conn.commit()
+    conn.close()
 
-def create_video_translation_job(blob_url, source_lang, target_lang):
-    job_id = f"gradio-job-{uuid.uuid4()}"
-    url = f"{ENDPOINT}/videotranslation/translations/{job_id}?api-version={API_VERSION}"
-    headers = {
-        "Ocp-Apim-Subscription-Key": AZURE_SPEECH_KEY,
-        "Content-Type": "application/json",
-        "Operation-Id": job_id
+def insert_keys_batch(keys, lock):
+    unique_keys = list(set(keys))
+    values = [(k,) for k in unique_keys]
+    with lock:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+        cursor = conn.cursor()
+        cursor.executemany(f"INSERT OR IGNORE INTO {KEY_TABLE} (key) VALUES (?)", values)
+        conn.commit()
+        conn.close()
+    return unique_keys
+
+# === Core logic ===
+def ensure_ai_columns(df):
+    for col in [
+        'AI_FINAL_CATEGORY', 'AI_FINAL_CATEGORY_CONFIDENCE', 'AI_MATCHING_REASON_FINAL_CATEGORY',
+        'AI_FINAL_SUBCATEGORY', 'AI_FINAL_SUBCATEGORY_CONFIDENCE', 'AI_MATCHING_REASON_FINAL_SUBCATEGORY']:
+        if col not in df.columns:
+            df[col] = None
+    return df
+
+def apply_existing_ai_overrides(df):
+    df['skip_category_mapping'] = (
+        df['AI_FINAL_CATEGORY'].notna() & df['AI_FINAL_CATEGORY'].astype(str).str.strip().ne('') &
+        df['AI_FINAL_CATEGORY_CONFIDENCE'].notna() & df['AI_MATCHING_REASON_FINAL_CATEGORY'].notna())
+
+    df['skip_subcategory_mapping'] = (
+        df['AI_FINAL_SUBCATEGORY'].notna() & df['AI_FINAL_SUBCATEGORY'].astype(str).str.strip().ne('') &
+        df['AI_FINAL_SUBCATEGORY_CONFIDENCE'].notna() & df['AI_MATCHING_REASON_FINAL_SUBCATEGORY'].notna())
+
+    df.loc[df['skip_category_mapping'], 'Mapped_File_Category'] = df['AI_FINAL_CATEGORY']
+    df.loc[df['skip_subcategory_mapping'], 'Mapped_File_Subcategory'] = df['AI_FINAL_SUBCATEGORY']
+    return df
+
+def clean_mapping_df(mapping_df, key_col, value_col):
+    mapping_df.columns = mapping_df.columns.str.strip()
+    mapping_df[key_col] = mapping_df[key_col].astype(str).str.upper().str.strip()
+    mapping_df[value_col] = mapping_df[value_col].astype(str).str.strip()
+    df_map = mapping_df[[key_col, value_col]].drop_duplicates()
+    return df_map[df_map[value_col].notna() & df_map[value_col].ne("")]
+
+def map_values(df, map_df1, map_df2, join_col1, join_col2, key1, key2, value_col, output_col):
+    df[join_col1] = df[join_col1].astype(str).str.upper().str.strip()
+    df[join_col2] = df[join_col2].astype(str).str.upper().str.strip()
+    map_dict1 = dict(zip(map_df1[key1], map_df1[value_col]))
+    map_dict2 = dict(zip(map_df2[key2], map_df2[value_col]))
+    df[output_col] = df[join_col1].map(map_dict1)
+    missing = df[output_col].isna() | df[output_col].astype(str).str.strip().eq("")
+    df.loc[missing, output_col] = df.loc[missing, join_col2].map(map_dict2)
+    df[output_col] = df[output_col].replace(["nan", "NaN"], pd.NA)
+    return df
+
+def add_flags(df):
+    df['Mapped_File_Category Filled'] = df['Mapped_File_Category'].notna() & df['Mapped_File_Category'].astype(str).str.strip().ne("")
+    df['Mapped_File_Subcategory Filled'] = df['Mapped_File_Subcategory'].notna() & df['Mapped_File_Subcategory'].astype(str).str.strip().ne("")
+
+    df['category_matching_reason'] = df['AI_MATCHING_REASON_FINAL_CATEGORY'].where(
+        df['AI_MATCHING_REASON_FINAL_CATEGORY'].notna(),
+        df['Mapped_File_Category Filled'].map({True: 'direct_mapping', False: 'unmapped'}))
+
+    df['subcategory_matching_reason'] = df['AI_MATCHING_REASON_FINAL_SUBCATEGORY'].where(
+        df['AI_MATCHING_REASON_FINAL_SUBCATEGORY'].notna(),
+        df['Mapped_File_Subcategory Filled'].map({True: 'direct_mapping', False: 'unmapped'}))
+
+    df['Final Category Confidence Score'] = df['AI_FINAL_CATEGORY_CONFIDENCE'].where(
+        df['AI_FINAL_CATEGORY_CONFIDENCE'].notna(),
+        df['Mapped_File_Category Filled'].map({True: 1.0, False: None}))
+
+    df['Final Subcategory Confidence Score'] = df['AI_FINAL_SUBCATEGORY_CONFIDENCE'].where(
+        df['AI_FINAL_SUBCATEGORY_CONFIDENCE'].notna(),
+        df['Mapped_File_Subcategory Filled'].map({True: 1.0, False: None}))
+
+    df['needs_model'] = ~(df['Mapped_File_Category Filled'] & df['Mapped_File_Subcategory Filled'])
+    df['needs_category_model'] = ~df['Mapped_File_Category Filled']
+    df['needs_subcategory_model'] = ~df['Mapped_File_Subcategory Filled']
+    return df
+
+def finalize_output(df, output_path):
+    df['AI_FINAL_CATEGORY'] = df['Mapped_File_Category']
+    df['AI_FINAL_CATEGORY_CONFIDENCE'] = df['Final Category Confidence Score']
+    df['AI_MATCHING_REASON_FINAL_CATEGORY'] = df['category_matching_reason']
+    df['AI_FINAL_SUBCATEGORY'] = df['Mapped_File_Subcategory']
+    df['AI_FINAL_SUBCATEGORY_CONFIDENCE'] = df['Final Subcategory Confidence Score']
+    df['AI_MATCHING_REASON_FINAL_SUBCATEGORY'] = df['subcategory_matching_reason']
+
+    for col in ['AI_FINAL_CATEGORY', 'AI_FINAL_SUBCATEGORY']:
+        invalid_mask = df[col].isna() | df[col].astype(str).str.strip().isin(["", "nan", "NaN"])
+        if 'CATEGORY' in col:
+            df.loc[invalid_mask, 'AI_FINAL_CATEGORY_CONFIDENCE'] = None
+            df.loc[invalid_mask, 'AI_MATCHING_REASON_FINAL_CATEGORY'] = None
+            df.loc[invalid_mask, 'needs_category_model'] = True
+        else:
+            df.loc[invalid_mask, 'AI_FINAL_SUBCATEGORY_CONFIDENCE'] = None
+            df.loc[invalid_mask, 'AI_MATCHING_REASON_FINAL_SUBCATEGORY'] = None
+            df.loc[invalid_mask, 'needs_subcategory_model'] = True
+        df.loc[invalid_mask, 'needs_model'] = True
+
+    df.drop(columns=[
+        'Mapped_File_Category', 'Final Category Confidence Score', 'category_matching_reason',
+        'Mapped_File_Subcategory', 'Final Subcategory Confidence Score', 'subcategory_matching_reason'
+    ], inplace=True, errors='ignore')
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    df.to_parquet(output_path, index=False)
+    print(f"[✅] Final output saved to: {output_path}")
+
+def process_single_file(args):
+    file_path, mapping_df, final_output_dir, key_output_dir, seen_components, lock = args
+    start_time = time.time()
+    try:
+        df = pd.read_parquet(file_path)
+        basename = os.path.basename(file_path)
+
+        mapping_cols = ["CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD", "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD"]
+        key_cols = mapping_cols + ["LOGL_KEY_COMB_COL_VAL"]
+
+        df_key = df[key_cols].dropna(subset=["LOGL_KEY_COMB_COL_VAL"]).drop_duplicates(subset=["LOGL_KEY_COMB_COL_VAL"])
+        keys = df_key["LOGL_KEY_COMB_COL_VAL"].dropna().drop_duplicates().tolist()
+        new_key_rows = insert_keys_batch(keys, lock)
+        df_key = df_key[df_key["LOGL_KEY_COMB_COL_VAL"].isin(new_key_rows)]
+        if not df_key.empty:
+            key_output_file = os.path.join(key_output_dir, f"key_{basename}")
+            df_key.to_parquet(key_output_file, index=False)
+
+        df_mapping = df[mapping_cols].dropna(subset=["CMPNT_MATL_DESC"]).drop_duplicates(subset=["CMPNT_MATL_NUM"])
+        new_ids = []
+        with lock:
+            for comp_id in df_mapping["CMPNT_MATL_NUM"]:
+                if comp_id not in seen_components:
+                    seen_components[comp_id] = True
+                    new_ids.append(comp_id)
+        df_mapping = df_mapping[df_mapping["CMPNT_MATL_NUM"].isin(new_ids)]
+
+        if not df_mapping.empty:
+            df_mapping = ensure_ai_columns(df_mapping)
+            df_mapping = apply_existing_ai_overrides(df_mapping)
+
+            cat_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Category')
+            cat_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Category')
+            df_mapping = map_values(df_mapping, cat_map_1, cat_map_2, JOIN_COL_1, JOIN_COL_2,
+                                    DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Category', 'Mapped_File_Category')
+
+            sub_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Subcategory')
+            sub_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory')
+            df_mapping = map_values(df_mapping, sub_map_1, sub_map_2, JOIN_COL_1, JOIN_COL_2,
+                                    DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory', 'Mapped_File_Subcategory')
+
+            df_mapping = add_flags(df_mapping)
+            mapped_output_file = os.path.join(final_output_dir, f"mapped_{basename}")
+            finalize_output(df_mapping, mapped_output_file)
+
+        duration = time.time() - start_time
+        print(f"[✅] Finished: {basename} in {duration:.2f}s ➤ Keys added: {len(new_key_rows)}, Components added: {len(new_ids)}")
+
+    except Exception as e:
+        print(f"[❌ ERROR] File: {file_path}\n{e}")
+        traceback.print_exc()
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_path", type=str, required=True)
+    parser.add_argument("--mapping_csv", type=str, required=True)
+    parser.add_argument("--key_output", type=str, required=True)
+    parser.add_argument("--final_output", type=str, required=True)
+    args = parser.parse_args()
+
+    parquet_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
+    if not parquet_files:
+        raise FileNotFoundError(f"No parquet files found in {args.input_path}")
+
+    csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
+    if not csv_files:
+        raise FileNotFoundError(f"No CSV mapping file found in {args.mapping_csv}")
+    mapping_df = pd.read_csv(csv_files[0])
+
+    os.makedirs(args.final_output, exist_ok=True)
+    os.makedirs(args.key_output, exist_ok=True)
+
+    init_sqlite_db()
+
+    with Manager() as manager:
+        seen_components = manager.dict()
+        lock = manager.Lock()
+
+        args_list = [
+            (f, mapping_df, args.final_output, args.key_output, seen_components, lock)
+            for f in parquet_files
+        ]
+
+        with Pool(cpu_count() - 2) as pool:
+            for _ in pool.imap_unordered(process_single_file, args_list):
+                pass
+
+    print("\n✅ All files processed with optimized SQLite-based deduplication.")
+
+if __name__ == "__main__":
+    main()
+
+#preporoce
+
+
+import argparse
+import os
+import glob
+import re
+import pandas as pd
+from multiprocessing import Pool, cpu_count
+from functools import partial
+
+# === UNIT_GROUP and CMPNT_MATL_TYPE_CATEGORY mappings ===
+unit_group_map = {
+    'KG': 'CHM', 'KGS': 'CHM', 'KGA': 'CHM', 'KGW': 'CHM', 'G': 'CHM', 'GR': 'CHM', 'GM': 'CHM', 'MG': 'CHM',
+    'LB': 'CHM', 'LBS': 'CHM', 'OZ': 'CHM', 'OZA': 'CHM', 'GW': 'CHM', 'TON': 'CHM', 'DR': 'CHM',
+    'L': 'Liquid', 'LT': 'Liquid', 'ML': 'Liquid', 'CC': 'Liquid', 'CL': 'Liquid', 'CCM': 'Liquid', 'GLL': 'Liquid',
+    'EA': 'Discrete', 'PC': 'Discrete', 'PCS': 'Discrete', 'Pcs': 'Discrete', 'PKT': 'Discrete', 'PK': 'Discrete',
+    'PAK': 'Discrete', 'PCK': 'Discrete', 'CS': 'Discrete', 'CSE': 'Discrete', 'CT': 'Discrete', 'CA': 'Discrete',
+    'ST': 'Discrete', 'GRO': 'Discrete', 'BX': 'Discrete',
+    'BOT': 'Containers', 'BOTTLE': 'Containers', 'ROLL': 'Containers', 'ROL': 'Containers', 'REEL': 'Containers', 'KAR': 'Containers',
+    'FT': 'Dimensional', 'YD': 'Dimensional', 'KM': 'Dimensional', 'DM': 'Dimensional', 'M': 'Dimensional',
+    'M1': 'Dimensional', 'M2': 'Dimensional', 'KM2': 'Dimensional', 'YD2': 'Dimensional', 'FT3': 'Dimensional',
+    'SQM': 'Dimensional', 'sqm': 'Dimensional', 'MYD': 'Dimensional', 'MI': 'Dimensional', 'SM': 'Dimensional',
+    'LM': 'Dimensional', 'LF': 'Dimensional', 'MH': 'Dimensional', 'KN': 'Dimensional', 'CH': 'Dimensional',
+    'TH': 'Unclassified', 'THU': 'Unclassified', 'IM': 'Unclassified', 'NOS': 'Unclassified', 'NO': 'Unclassified',
+    'TS': 'Unclassified', 'KA': 'Unclassified', 'ZPC': 'Unclassified', 'ZCT': 'Unclassified', '0%': 'Unclassified',
+    'KP': 'Unclassified', 'GP': 'Unclassified', 'KAI': 'Unclassified', 'SY': 'Unclassified', 'UN': 'Unclassified',
+    'MU': 'Unclassified', 'UM': 'Unclassified', 'HU': 'Unclassified'
+}
+
+def map_cmpnt_type_category(val):
+    if pd.isna(val): return 'OTHER'
+    val_clean = str(val).strip().upper()
+    erp_type_map = {
+        'FERT': 'FINISHED_PRODUCT', 'HALB': 'SEMI_FINISHED', 'ROH': 'RAW_MATERIAL',
+        'VERP': 'PACKAGING_MATERIAL', 'TRAD': 'TRADED_GOOD', 'ERSA': 'SUBCONTRACT_COMPONENT',
+        'API': 'API', 'TPF': 'TRADE_PRODUCT', 'PACK': 'PACKAGING', 'ZHBG': 'INTERMEDIATE',
+        'EPC': 'EXCIPIENT', 'EPF': 'FINISHED_PRODUCT', 'HAWA': 'TRADING_GOOD', 'ZEXI': 'EXCIPIENT',
+        'ZROH': 'RAW_MATERIAL', 'SAPR': 'PACKAGING', 'IM': 'INTERMEDIATE', 'UNBW': 'NON_VALUATED',
+        'IG': 'INTERMEDIATE_GOOD'
     }
+    return erp_type_map.get(val_clean, 'OTHER')
 
-    payload = {
-        "displayName": job_id,
-        "description": "Gradio video translation",
-        "input": {
-            "sourceLocale": source_lang,
-            "targetLocale": target_lang,
-            "voiceKind": "PlatformVoice",
-            "speakerCount": 1,
-            "subtitleMaxCharCountPerSegment": 50,
-            "exportSubtitleInVideo": True,
-            "enableLipSync": False,
-            "videoFileUrl": blob_url
-        },
-        "targets": [
-            {
-                "language": target_lang,
-                "outputFormat": "video"
-            }
-        ],
-        "properties": {
-            "diarizationEnabled": "true",
-            "ttsVoice": f"{target_lang}-DeniseNeural"
+# --- Clean function ---
+def clean_text(text):
+    text = str(text).lower()
+    text = re.sub(r'[-/]', ' ', text)
+    text = re.sub(r'[^A-Za-z0-9&% ]+', '', text)
+    text = re.sub(r'\s*%\s*', '% ', text)
+    text = re.sub(r'canada\s*\d*|can\s*\d*|ca\s*\d*|ca$|can$|ca\s', '', text)
+    text = re.sub(r'(\D)(\d+)(\s*)(ml|l|gr|gm|g|ct)', r'\1 \2\3\4 ', text)
+    text = re.sub(r'(\s)(spf)\s*([\d+])', r'\1\2\3', text)
+    text = re.sub(r'(\d+)\s*(ml|l|gr|gm|g|ct)(?: |$)', lambda z: z.group().replace(" ", ""), text)
+    text = re.sub(r'(\D)(spf\d+)', r'\1 \2 ', text)
+    text = re.sub(r'\b\d{5,}\b$', '', text)
+    text = re.sub(r'\b\d+\b', '', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return ' '.join(dict.fromkeys(text.split()))  # remove duplicate words
+
+# --- Abbreviation Replacer ---
+def expand_abbreviations(text, abbrev_map, pattern=None):
+    def repl(m): return abbrev_map.get(m.group(0).lower(), m.group(0))
+    if pattern is None:
+        pattern = re.compile(r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b', flags=re.IGNORECASE)
+    return pattern.sub(repl, text)
+
+def process_file(file_path, abbrev_map, pattern, output_path):
+    try:
+        df = pd.read_parquet(file_path)
+
+        # Identify rows to process (confidence <= 0 or missing)
+        mask_process = (
+            df.get('AI_FINAL_SUBCATEGORY_CONFIDENCE', 0).fillna(0) <= 0
+        ) & (
+            df.get('AI_FINAL_CATEGORY_CONFIDENCE', 0).fillna(0) <= 0
+        )
+
+        df_to_process = df[mask_process].copy()
+        df_to_skip = df[~mask_process].copy()
+
+        if not df_to_process.empty:
+            df_to_process['CMPNT_MATL_DESC_CLEAN'] = df_to_process['CMPNT_MATL_DESC'].astype(str).map(
+                lambda x: expand_abbreviations(x, abbrev_map, pattern)
+            )
+            df_to_process['CMPNT_MATL_DESC_CLEAN'] = df_to_process['CMPNT_MATL_DESC_CLEAN'].map(clean_text)
+            df_to_process['CMPNT_MATL_DESC_LEN'] = df_to_process['CMPNT_MATL_DESC'].astype(str).str.len()
+            df_to_process['UNIT_GROUP'] = df_to_process['CMPNT_UOM_CD'].fillna('').str.upper().map(unit_group_map).fillna('Unclassified')
+            df_to_process['CMPNT_MATL_TYPE_CATEGORY'] = df_to_process['CMPNT_MATL_TYPE_CD'].map(map_cmpnt_type_category)
+
+        # Merge processed and skipped rows
+        df_final = pd.concat([df_to_process, df_to_skip], ignore_index=True)
+
+        out_file = os.path.join(output_path, os.path.basename(file_path))
+        df_final.to_parquet(out_file, index=False)
+        print(f"✅ Processed: {os.path.basename(file_path)}")
+    except Exception as e:
+        print(f"❌ Failed: {os.path.basename(file_path)} -> {e}")
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input_path', required=True)
+    parser.add_argument('--abbrev_map', required=True)
+    parser.add_argument('--output_path', required=True)
+    parser.add_argument('--n_jobs', type=int, default=cpu_count())
+    args = parser.parse_args()
+
+    # Load abbreviation map
+    abbrev_csv = glob.glob(os.path.join(args.abbrev_map, '*.csv'))
+    if not abbrev_csv:
+        raise FileNotFoundError("No abbreviation map CSV found.")
+    abbrev_df = pd.read_csv(abbrev_csv[0])
+    abbrev_map = dict(zip(abbrev_df['Abbreviation_list'].str.lower(), abbrev_df['Abbreviation_Expension']))
+    pattern = re.compile(r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b', flags=re.IGNORECASE)
+
+    os.makedirs(args.output_path, exist_ok=True)
+    parquet_files = glob.glob(os.path.join(args.input_path, '*.parquet'))
+
+    func = partial(process_file, abbrev_map=abbrev_map, pattern=pattern, output_path=args.output_path)
+    with Pool(processes=args.n_jobs) as pool:
+        pool.map(func, parquet_files)
+
+if __name__ == '__main__':
+    main()
+#infarance
+#step3_inference_run.py
+import subprocess
+import os
+import argparse
+import pandas as pd
+import numpy as np
+import torch
+import joblib
+import gc
+from datetime import datetime
+from sentence_transformers import SentenceTransformer
+from azureml.core import Run, Model
+
+subprocess.run(["pip", "install", "lightgbm"], check=True)
+
+def log(msg):
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+
+def encode_descriptions(encoder, texts, batch_size=64):
+    return encoder.encode(texts, batch_size=batch_size, show_progress_bar=True, convert_to_numpy=True)
+
+def round_datetime_columns(df):
+    for col in df.select_dtypes(include=["datetime64[ns]"]).columns:
+        df[col] = df[col].dt.round("us")
+    return df
+
+def main(input_path, final_output_dir):
+    run = Run.get_context()
+    ws = run.experiment.workspace
+
+    os.makedirs(final_output_dir, exist_ok=True)
+    log_dir = os.path.join(final_output_dir, "log")
+    os.makedirs(log_dir, exist_ok=True)
+
+    log("🔁 Loading category model and encoders...")
+    model_dir = Model.get_model_path("RPM_Category_model_full_cat", _workspace=ws)
+    model = joblib.load(os.path.join(model_dir, "final_model.joblib"))
+    ordinal = joblib.load(os.path.join(model_dir, "ordinal_encoder.pkl"))
+    scaler = joblib.load(os.path.join(model_dir, "scaler.pkl"))
+
+    encoder = SentenceTransformer(
+        'pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb',
+        device='cuda' if torch.cuda.is_available() else 'cpu'
+    )
+    encoder.max_seq_length = 128
+
+    log("📦 Loading subcategory models...")
+    subcategory_models = {}
+    for cat in ['CHM', 'PKG', 'FNW']:
+        model_path = Model.get_model_path(f"RPM_Category_model_full_{cat}_V1", _workspace=ws)
+        subcategory_models[cat] = {
+            "model": joblib.load(os.path.join(model_path, "final_model.joblib")),
+            "encoder": joblib.load(os.path.join(model_path, "ordinal_encoder.pkl")),
+            "scaler": joblib.load(os.path.join(model_path, "scaler.pkl")),
         }
-    }
 
-    response = requests.put(url, headers=headers, json=payload, verify=certifi.where())
-    if response.status_code >= 400:
-        return None, f"[ERROR] Failed to submit translation job: {response.status_code}\n{response.text}"
-    return job_id, None
+    for f in os.listdir(input_path):
+        if not f.endswith(".parquet"):
+            continue
 
-def poll_job_and_get_output(job_id):
-    url = f"{ENDPOINT}/videotranslation/translations/{job_id}?api-version={API_VERSION}"
-    headers = {"Ocp-Apim-Subscription-Key": AZURE_SPEECH_KEY}
-    for _ in range(30):
-        resp = requests.get(url, headers=headers, verify=certifi.where())
-        result = resp.json()
-        status = result.get("status")
-        if status == "Succeeded":
-            return result.get("results", {}).get("urls", {})
-        elif status == "Failed":
-            return {"error": "Translation failed."}
-        time.sleep(10)
-    return {"error": "Timeout waiting for translation to finish."}
+        log(f"🔎 Processing file: {f}")
+        df = pd.read_parquet(os.path.join(input_path, f))
+        df = round_datetime_columns(df)
 
-def translate_video(video_file, source_lang, target_lang):
-    import logging
+        # --- Predict Category ---
+        category_idx = df['needs_category_model'] == True
+        df_needs_category = df[category_idx].copy()
 
-    logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s")
-    logger = logging.getLogger("video-translator")
+        if not df_needs_category.empty:
+            descs = df_needs_category['CMPNT_MATL_DESC_CLEAN'].astype(str).tolist()
+            embeddings = encode_descriptions(encoder, descs)
 
-    logger.info("Uploading video to Azure Blob Storage...")
-    if hasattr(video_file, "name"):
-        video_path = video_file.name
-    else:
-        video_path = video_file
+            X = np.hstack([
+                embeddings,
+                scaler.transform(df_needs_category[['CMPNT_MATL_DESC_LEN']]),
+                ordinal.transform(df_needs_category[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+            ])
 
-    blob_url = upload_to_blob_storage(video_path)
-    logger.info(f"Upload complete: {blob_url}")
+            probs = model.predict_proba(X)
+            preds = model.predict(X)
+            scores = np.max(probs, axis=1)
 
-    logger.info("Submitting video translation job to Azure...")
-    job_id, error = create_video_translation_job(blob_url, source_lang, target_lang)
-    if error:
-        logger.error(error)
-        return blob_url, "Translation job submission failed.", ""
+            df.loc[category_idx, 'AI_FINAL_CATEGORY'] = np.where(scores < 0.6, 'Other', preds)
+            df.loc[category_idx, 'AI_FINAL_CATEGORY_CONFIDENCE'] = scores
+            df.loc[category_idx, 'AI_MATCHING_REASON_FINAL_CATEGORY'] = np.where(
+                scores < 0.6, 'Low Confidence', 'lightgbm_Bert_RPM_Category_model'
+            )
 
-    logger.info(f"Job submitted: {job_id}")
-    logger.info("Polling job status...")
-    result = poll_job_and_get_output(job_id)
+            del descs, embeddings, probs, preds, X
+            gc.collect()
 
-    translated_url = result.get("video")
-    if not translated_url:
-        logger.error("Translation failed or no result video.")
-        return blob_url, "Translation failed or timed out.", ""
+        # --- Predict Subcategory ---
+        for cat in ['CHM', 'PKG', 'FNW']:
+            subcat_idx = (df['AI_FINAL_CATEGORY'] == cat) & (df['needs_subcategory_model'] == True)
+            subcat_df = df[subcat_idx].copy()
 
-    logger.info(f"Translation completed. Output URL: {translated_url}")
-    return blob_url, "Translation succeeded.", translated_url
+            if subcat_df.empty:
+                continue
 
-def gradio_interface(video, source_lang, target_lang):
-    return translate_video(video, source_lang, target_lang)
+            sub_model = subcategory_models[cat]["model"]
+            sub_encoder = subcategory_models[cat]["encoder"]
+            sub_scaler = subcategory_models[cat]["scaler"]
 
-iface = gr.Interface(
-    fn=gradio_interface,
-    inputs=[
-        gr.Video(label="Upload Video (.mp4)"),
-        gr.Textbox(label="Source Language (e.g., en-US)", value="en-US"),
-        gr.Textbox(label="Target Language (e.g., es-ES)", value="es-ES")
-    ],
-    outputs=[
-        gr.Textbox(label="Original Video Blob URL"),
-        gr.Textbox(label="Status"),
-        gr.Textbox(label="Translated Video URL")
-    ],
-    title="Azure Video Translator using AML Blob Datastore"
-)
+            descs = subcat_df['CMPNT_MATL_DESC_CLEAN'].astype(str).tolist()
+            embeddings = encode_descriptions(encoder, descs)
 
-iface.launch()
+            X_sub = np.hstack([
+                embeddings,
+                sub_scaler.transform(subcat_df[['CMPNT_MATL_DESC_LEN']]),
+                sub_encoder.transform(subcat_df[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+            ])
+
+            probs = sub_model.predict_proba(X_sub)
+            preds = sub_model.predict(X_sub)
+            scores = np.max(probs, axis=1)
+
+            df.loc[subcat_idx, 'AI_FINAL_SUBCATEGORY'] = np.where(scores < 0.6, 'Other', preds)
+            df.loc[subcat_idx, 'AI_FINAL_SUBCATEGORY_CONFIDENCE'] = scores
+            df.loc[subcat_idx, 'AI_MATCHING_REASON_FINAL_SUBCATEGORY'] = np.where(
+                scores < 0.6, 'Low Confidence', f"RPM_Category_model_full_{cat}_V1"
+            )
+
+            del descs, embeddings, probs, preds, X_sub
+            gc.collect()
+
+        # --- Fallback for other categories ---
+        fallback_idx = (df['needs_subcategory_model'] == True) & (~df['AI_FINAL_CATEGORY'].isin(['CHM', 'PKG', 'FNW']))
+        df.loc[fallback_idx, 'AI_FINAL_SUBCATEGORY'] = df.loc[fallback_idx, 'AI_FINAL_CATEGORY']
+        df.loc[fallback_idx, 'AI_FINAL_SUBCATEGORY_CONFIDENCE'] = 0
+        df.loc[fallback_idx, 'AI_MATCHING_REASON_FINAL_SUBCATEGORY'] = 'Fallback'
+
+        output_path = os.path.join(final_output_dir, f"predicted_{f}")
+        df.to_parquet(output_path, index=False)
+        
+        # Save CSV in working directory -> shows up in 'user_logs' in Azure ML
+        #user_log_dir = "user_logs"
+        #os.makedirs(user_log_dir, exist_ok=True)
+
+        # Save CSV there
+        #csv_output_path = os.path.join(user_log_dir, f"predicted_{f.replace('.parquet', '.csv')}")
+        #df.to_csv(csv_output_path, index=False)
+        # # Save summary CSV log
+        # csv_log_path = os.path.join(log_dir, f"summary_{f.replace('.parquet', '.csv')}")
+        # df.to_csv(csv_log_path, index=False)
+        # # Step 5: Save logs
+        # os.makedirs("logs/qc_nlp_list", exist_ok=True)
+        # df.to_csv("log/qc_nlp_list/test.csv", index=False)
+
+        # log(f"💾 Saved prediction: {output_path} (total rows: {len(df)})")
+        # log(f"📝 Saved CSV summary: {csv_log_path}")
+
+        del df
+        gc.collect()
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_path", required=True)
+    parser.add_argument("--final_output_dir", required=True)
+    args = parser.parse_args()
+
+    main(args.input_path, args.final_output_dir)
