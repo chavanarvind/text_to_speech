@@ -1,18 +1,1 @@
-File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 536, in send        
-    raise RuntimeError("Response content shorter than Content-Length")
-RuntimeError: Response content shorter than Content-Length
-[2025-06-23 14:42:11,054] Uploading video to Azure Blob Storage...
-[2025-06-23 14:42:14,045] <azureml.core.authentication.InteractiveLoginAuthentication object at 0x000001D395B01C40>
-[2025-06-23 14:42:23,334] Upload complete: https://blobdtoamlmarmot.blob.core.windows.net/azureml-blobstore-975b0280-8ce5-42df-bdeb-51637f5ddbc7/video-uploads%2FOverview_OCC.mp4?st=2025-06-23T09%3A07%3A22Z&se=2025-06-23T15%3A12%3A22Z&sp=r&sv=2024-11-04&sr=b&sig=lw3PrRL/e8iKd7Bjc%2BPBvikeD3ehxmMeo94HUw74yXo%3D
-[2025-06-23 14:42:23,335] Submitting video translation job to Azure...
-[2025-06-23 14:42:24,584] [ERROR] Failed to submit translation job: 400
-{
-  "error": {
-    "code": "BadRequest",
-    "message": "Request is invalid.",
-    "innererror": {
-      "code": "InvalidPayload",
-      "message": "Please provide VideoFileUrl"
-    }
-  }
-}
+adlsdtodsdev storage account and conatiner name video
