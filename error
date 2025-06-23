@@ -38,7 +38,6 @@ def get_workspace(use_sp_auth=False, args=None):
         )
 
 ws = get_workspace(use_sp_auth=(len(sys.argv) > 3), args=sys.argv)
-#compute_target = ws.compute_targets["llm-gpu-cluster-2"]
 env = Environment.get(workspace=ws, name="Bom_X_Evaluator")
 compute_target = ws.compute_targets["rpmdataprocess"]
 default_ds = Datastore.get(ws, "xbomrefadlsg2")
@@ -48,22 +47,16 @@ run_config.environment = env
 
 today = datetime.today().strftime("%d%m%Y")
 
-# === Datastore and Uploads ===
+# === Upload mapping and abbreviation CSVs ===
 datastore = ws.get_default_datastore()
-
-# Upload mapping and abbreviation CSVs
-mapping_local = './local_data/high_conf_direct_mapping.csv'
-abbrev_local = './local_data/abbreviation_expension_updated.csv'
-
 datastore.upload_files(
-    files=[mapping_local],
+    files=['./local_data/high_conf_direct_mapping.csv'],
     target_path='high_conf_map',
     overwrite=True,
     show_progress=True
 )
-
 datastore.upload_files(
-    files=[abbrev_local],
+    files=['./local_data/abbreviation_expension_updated.csv'],
     target_path='abbrev_map',
     overwrite=True,
     show_progress=True
@@ -76,17 +69,15 @@ abbr_dataset = Dataset.File.from_files((datastore, "abbrev_map"))
 mapping_csv_mount = high_conf_dataset.as_named_input("high_conf_map").as_mount()
 abbrev_csv_mount = abbr_dataset.as_named_input("abbrev_map").as_mount()
 
-# === PipelineData for Intermediate Outputs ===
+# === Intermediate Outputs ===
 step1_out = PipelineData(name="step1_output", is_directory=True)
 step1a_final_output = PipelineData(name="step1a_final_output", is_directory=True)
-step1a_key_output_temp = PipelineData(name="step1a_key_output_temp", is_directory=True)
 step2_final_output = PipelineData(name="step2_final_output", is_directory=True)
-step3_final_output = PipelineData(name="step3_final_output", is_directory=True)
 
-# === Step 4 Output (Final Merged Output) ===
-final_merged_output = OutputFileDatasetConfig(
-    name="final_merged_predictions",
-    destination=(default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/")
+# === FINAL Output: directly from inference step ===
+step3_final_output = OutputFileDatasetConfig(
+    name="final_inference_outputs",
+    destination=(default_ds, f"hbom_category_prediction/hbom_inference_only_{today}/")
 )
 
 # === Step 1: Pull Dataset ===
@@ -109,11 +100,10 @@ step1a_merge = PythonScriptStep(
     arguments=[
         "--input_path", step1_out,
         "--mapping_csv", mapping_csv_mount,
-        "--key_output", step1a_key_output_temp,
         "--final_output", step1a_final_output
     ],
     inputs=[step1_out, mapping_csv_mount],
-    outputs=[step1a_final_output, step1a_key_output_temp],
+    outputs=[step1a_final_output],
     compute_target=compute_target,
     runconfig=run_config,
     allow_reuse=False
@@ -152,33 +142,15 @@ step3_inference = PythonScriptStep(
     allow_reuse=False
 )
 
-# === Step 4: Merge Inference Results with Key Files (Final Output) ===
-step4_merge = PythonScriptStep(
-    name="Step 4 - Merge Inference Results with Key Files",
-    script_name="step_4_merge_with_key_files.py",
-    source_directory="scripts",
-    arguments=[
-        "--inference_output_dir", step3_final_output,
-        "--key_output_dir", step1a_key_output_temp,
-        "--final_output_dir", final_merged_output
-    ],
-    inputs=[step3_final_output, step1a_key_output_temp],
-    outputs=[final_merged_output],
-    compute_target=compute_target,
-    runconfig=run_config,
-    allow_reuse=False
-)
-
 # === Build and Run Pipeline ===
 pipeline = Pipeline(workspace=ws, steps=[
     step1_pull,
     step1a_merge,
     step2_preprocess,
-    step3_inference,
-    step4_merge
+    step3_inference
 ])
 pipeline.validate()
 
-experiment = Experiment(ws, name="bom_pipeline_pull_merge_preprocess")
+experiment = Experiment(ws, name="bom_pipeline_final_inference_only")
 run = experiment.submit(pipeline)
 run.wait_for_completion(show_output=True)
