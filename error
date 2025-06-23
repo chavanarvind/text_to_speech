@@ -1,212 +1,127 @@
 import argparse
 import os
 import glob
-import traceback
+import re
 import pandas as pd
-import time
-from multiprocessing import Pool, Lock, cpu_count
-import sqlite3
+from multiprocessing import Pool, cpu_count
+from functools import partial
 
-# === Constants ===
-DIRECT_MAP_KEY_1 = "Direct Mapping"
-DIRECT_MAP_KEY_2 = "Direct Mapping"
-JOIN_COL_1 = "CMPNT_CAT_CD_DESC"
-JOIN_COL_2 = "CMPNT_MATL_TYPE_CD"
-SQLITE_DB_PATH = "component_cache.sqlite"
-TABLE_NAME = "processed_components"
+# === UNIT_GROUP and CMPNT_MATL_TYPE_CATEGORY mappings ===
+unit_group_map = {
+    'KG': 'CHM', 'KGS': 'CHM', 'KGA': 'CHM', 'KGW': 'CHM', 'G': 'CHM', 'GR': 'CHM', 'GM': 'CHM', 'MG': 'CHM',
+    'LB': 'CHM', 'LBS': 'CHM', 'OZ': 'CHM', 'OZA': 'CHM', 'GW': 'CHM', 'TON': 'CHM', 'DR': 'CHM',
+    'L': 'Liquid', 'LT': 'Liquid', 'ML': 'Liquid', 'CC': 'Liquid', 'CL': 'Liquid', 'CCM': 'Liquid', 'GLL': 'Liquid',
+    'EA': 'Discrete', 'PC': 'Discrete', 'PCS': 'Discrete', 'Pcs': 'Discrete', 'PKT': 'Discrete', 'PK': 'Discrete',
+    'PAK': 'Discrete', 'PCK': 'Discrete', 'CS': 'Discrete', 'CSE': 'Discrete', 'CT': 'Discrete', 'CA': 'Discrete',
+    'ST': 'Discrete', 'GRO': 'Discrete', 'BX': 'Discrete',
+    'BOT': 'Containers', 'BOTTLE': 'Containers', 'ROLL': 'Containers', 'ROL': 'Containers', 'REEL': 'Containers', 'KAR': 'Containers',
+    'FT': 'Dimensional', 'YD': 'Dimensional', 'KM': 'Dimensional', 'DM': 'Dimensional', 'M': 'Dimensional',
+    'M1': 'Dimensional', 'M2': 'Dimensional', 'KM2': 'Dimensional', 'YD2': 'Dimensional', 'FT3': 'Dimensional',
+    'SQM': 'Dimensional', 'sqm': 'Dimensional', 'MYD': 'Dimensional', 'MI': 'Dimensional', 'SM': 'Dimensional',
+    'LM': 'Dimensional', 'LF': 'Dimensional', 'MH': 'Dimensional', 'KN': 'Dimensional', 'CH': 'Dimensional',
+    'TH': 'Unclassified', 'THU': 'Unclassified', 'IM': 'Unclassified', 'NOS': 'Unclassified', 'NO': 'Unclassified',
+    'TS': 'Unclassified', 'KA': 'Unclassified', 'ZPC': 'Unclassified', 'ZCT': 'Unclassified', '0%': 'Unclassified',
+    'KP': 'Unclassified', 'GP': 'Unclassified', 'KAI': 'Unclassified', 'SY': 'Unclassified', 'UN': 'Unclassified',
+    'MU': 'Unclassified', 'UM': 'Unclassified', 'HU': 'Unclassified'
+}
 
-# === SQLite setup ===
-def init_sqlite_db():
-    conn = sqlite3.connect(SQLITE_DB_PATH)
-    conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA synchronous=NORMAL;")
-    cursor = conn.cursor()
-    cursor.execute(f"""
-        CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
-            comp_id TEXT PRIMARY KEY
-        )
-    """)
-    conn.commit()
-    conn.close()
+erp_type_map = {
+    'FERT': 'FINISHED_PRODUCT', 'HALB': 'SEMI_FINISHED', 'ROH': 'RAW_MATERIAL',
+    'VERP': 'PACKAGING_MATERIAL', 'TRAD': 'TRADED_GOOD', 'ERSA': 'SUBCONTRACT_COMPONENT',
+    'API': 'API', 'TPF': 'TRADE_PRODUCT', 'PACK': 'PACKAGING', 'ZHBG': 'INTERMEDIATE',
+    'EPC': 'EXCIPIENT', 'EPF': 'FINISHED_PRODUCT', 'HAWA': 'TRADING_GOOD', 'ZEXI': 'EXCIPIENT',
+    'ZROH': 'RAW_MATERIAL', 'SAPR': 'PACKAGING', 'IM': 'INTERMEDIATE', 'UNBW': 'NON_VALUATED',
+    'IG': 'INTERMEDIATE_GOOD'
+}
 
-def insert_and_filter_new_components(component_ids, lock):
-    unique_ids = list(set(component_ids))
-    values = [(cid,) for cid in unique_ids]
-    new_ids = []
-    with lock:
-        conn = sqlite3.connect(SQLITE_DB_PATH)
-        conn.execute("PRAGMA journal_mode=WAL;")
-        conn.execute("PRAGMA synchronous=NORMAL;")
-        cursor = conn.cursor()
-        cursor.executemany(f"INSERT OR IGNORE INTO {TABLE_NAME} (comp_id) VALUES (?)", values)
-        conn.commit()
+def clean_text(text):
+    text = str(text).lower()
+    text = re.sub(r'[-/]', ' ', text)
+    text = re.sub(r'[^A-Za-z0-9&% ]+', '', text)
+    text = re.sub(r'\s*%\s*', '% ', text)
+    text = re.sub(r'canada\s*\d*|can\s*\d*|ca\s*\d*|ca$|can$|ca\s', '', text)
+    text = re.sub(r'(\D)(\d+)(\s*)(ml|l|gr|gm|g|ct)', r'\1 \2\3\4 ', text)
+    text = re.sub(r'(\s)(spf)\s*([\d+])', r'\1\2\3', text)
+    text = re.sub(r'(\d+)\s*(ml|l|gr|gm|g|ct)(?: |$)', lambda z: z.group().replace(" ", ""), text)
+    text = re.sub(r'(\D)(spf\d+)', r'\1 \2 ', text)
+    text = re.sub(r'\b\d{5,}\b$', '', text)
+    text = re.sub(r'\b\d+\b', '', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return ' '.join(dict.fromkeys(text.split()))
 
-        # Get actually inserted ones (new ones)
-        cursor.execute(f"SELECT comp_id FROM {TABLE_NAME} WHERE comp_id IN ({','.join(['?']*len(unique_ids))})", unique_ids)
-        new_ids = [row[0] for row in cursor.fetchall()]
-        conn.close()
-    return new_ids
+def expand_abbreviations(text, abbrev_map, pattern):
+    return pattern.sub(lambda m: abbrev_map.get(m.group(0).lower(), m.group(0)), text)
 
-# === Core logic ===
-def ensure_ai_columns(df):
-    for col in [
-        'AI_FINAL_CATEGORY', 'AI_FINAL_CATEGORY_CONFIDENCE', 'AI_MATCHING_REASON_FINAL_CATEGORY',
-        'AI_FINAL_SUBCATEGORY', 'AI_FINAL_SUBCATEGORY_CONFIDENCE', 'AI_MATCHING_REASON_FINAL_SUBCATEGORY']:
-        if col not in df.columns:
-            df[col] = None
+def prepare_preprocessing_columns(df, abbrev_map, pattern):
+    df['CMPNT_MATL_DESC_CLEAN'] = df['CMPNT_MATL_DESC'].astype(str).map(
+        lambda x: expand_abbreviations(x, abbrev_map, pattern)
+    ).map(clean_text)
+    df['CMPNT_MATL_DESC_LEN'] = df['CMPNT_MATL_DESC'].astype(str).str.len()
+    df['UNIT_GROUP'] = df['CMPNT_UOM_CD'].fillna('').str.upper().map(unit_group_map).fillna('Unclassified')
+    df['CMPNT_MATL_TYPE_CATEGORY'] = df['CMPNT_MATL_TYPE_CD'].map(
+        lambda val: erp_type_map.get(str(val).strip().upper(), 'OTHER')
+    )
     return df
 
-def apply_existing_ai_overrides(df):
-    df['skip_category_mapping'] = (
-        df['AI_FINAL_CATEGORY'].notna() & df['AI_FINAL_CATEGORY'].astype(str).str.strip().ne('') &
-        df['AI_FINAL_CATEGORY_CONFIDENCE'].notna() & df['AI_MATCHING_REASON_FINAL_CATEGORY'].notna())
-
-    df['skip_subcategory_mapping'] = (
-        df['AI_FINAL_SUBCATEGORY'].notna() & df['AI_FINAL_SUBCATEGORY'].astype(str).str.strip().ne('') &
-        df['AI_FINAL_SUBCATEGORY_CONFIDENCE'].notna() & df['AI_MATCHING_REASON_FINAL_SUBCATEGORY'].notna())
-
-    df.loc[df['skip_category_mapping'], 'Mapped_File_Category'] = df['AI_FINAL_CATEGORY']
-    df.loc[df['skip_subcategory_mapping'], 'Mapped_File_Subcategory'] = df['AI_FINAL_SUBCATEGORY']
-    return df
-
-def clean_mapping_df(mapping_df, key_col, value_col):
-    mapping_df.columns = mapping_df.columns.str.strip()
-    mapping_df[key_col] = mapping_df[key_col].astype(str).str.upper().str.strip()
-    mapping_df[value_col] = mapping_df[value_col].astype(str).str.strip()
-    df_map = mapping_df[[key_col, value_col]].drop_duplicates()
-    return df_map[df_map[value_col].notna() & df_map[value_col].ne("")]
-
-def map_values(df, map_df1, map_df2, join_col1, join_col2, key1, key2, value_col, output_col):
-    df[join_col1] = df[join_col1].astype(str).str.upper().str.strip()
-    df[join_col2] = df[join_col2].astype(str).str.upper().str.strip()
-    map_dict1 = dict(zip(map_df1[key1], map_df1[value_col]))
-    map_dict2 = dict(zip(map_df2[key2], map_df2[value_col]))
-    df[output_col] = df[join_col1].map(map_dict1)
-    missing = df[output_col].isna() | df[output_col].astype(str).str.strip().eq("")
-    df.loc[missing, output_col] = df.loc[missing, join_col2].map(map_dict2)
-    df[output_col] = df[output_col].replace(["nan", "NaN"], pd.NA)
-    return df
-
-def add_flags(df):
-    df['Mapped_File_Category Filled'] = df['Mapped_File_Category'].notna() & df['Mapped_File_Category'].astype(str).str.strip().ne("")
-    df['Mapped_File_Subcategory Filled'] = df['Mapped_File_Subcategory'].notna() & df['Mapped_File_Subcategory'].astype(str).str.strip().ne("")
-
-    df['category_matching_reason'] = df['AI_MATCHING_REASON_FINAL_CATEGORY'].where(
-        df['AI_MATCHING_REASON_FINAL_CATEGORY'].notna(),
-        df['Mapped_File_Category Filled'].map({True: 'direct_mapping', False: 'unmapped'}))
-
-    df['subcategory_matching_reason'] = df['AI_MATCHING_REASON_FINAL_SUBCATEGORY'].where(
-        df['AI_MATCHING_REASON_FINAL_SUBCATEGORY'].notna(),
-        df['Mapped_File_Subcategory Filled'].map({True: 'direct_mapping', False: 'unmapped'}))
-
-    df['Final Category Confidence Score'] = df['AI_FINAL_CATEGORY_CONFIDENCE'].where(
-        df['AI_FINAL_CATEGORY_CONFIDENCE'].notna(),
-        df['Mapped_File_Category Filled'].map({True: 1.0, False: None}))
-
-    df['Final Subcategory Confidence Score'] = df['AI_FINAL_SUBCATEGORY_CONFIDENCE'].where(
-        df['AI_FINAL_SUBCATEGORY_CONFIDENCE'].notna(),
-        df['Mapped_File_Subcategory Filled'].map({True: 1.0, False: None}))
-
-    df['needs_model'] = ~(df['Mapped_File_Category Filled'] & df['Mapped_File_Subcategory Filled'])
-    df['needs_category_model'] = ~df['Mapped_File_Category Filled']
-    df['needs_subcategory_model'] = ~df['Mapped_File_Subcategory Filled']
-    return df
-
-def finalize_output(df, output_path):
-    df['AI_FINAL_CATEGORY'] = df['Mapped_File_Category']
-    df['AI_FINAL_CATEGORY_CONFIDENCE'] = df['Final Category Confidence Score']
-    df['AI_MATCHING_REASON_FINAL_CATEGORY'] = df['category_matching_reason']
-    df['AI_FINAL_SUBCATEGORY'] = df['Mapped_File_Subcategory']
-    df['AI_FINAL_SUBCATEGORY_CONFIDENCE'] = df['Final Subcategory Confidence Score']
-    df['AI_MATCHING_REASON_FINAL_SUBCATEGORY'] = df['subcategory_matching_reason']
-
-    for col in ['AI_FINAL_CATEGORY', 'AI_FINAL_SUBCATEGORY']:
-        invalid_mask = df[col].isna() | df[col].astype(str).str.strip().isin(["", "nan", "NaN"])
-        if 'CATEGORY' in col:
-            df.loc[invalid_mask, 'AI_FINAL_CATEGORY_CONFIDENCE'] = None
-            df.loc[invalid_mask, 'AI_MATCHING_REASON_FINAL_CATEGORY'] = None
-            df.loc[invalid_mask, 'needs_category_model'] = True
-        else:
-            df.loc[invalid_mask, 'AI_FINAL_SUBCATEGORY_CONFIDENCE'] = None
-            df.loc[invalid_mask, 'AI_MATCHING_REASON_FINAL_SUBCATEGORY'] = None
-            df.loc[invalid_mask, 'needs_subcategory_model'] = True
-        df.loc[invalid_mask, 'needs_model'] = True
-
-    df.drop(columns=[
-        'Mapped_File_Category', 'Final Category Confidence Score', 'category_matching_reason',
-        'Mapped_File_Subcategory', 'Final Subcategory Confidence Score', 'subcategory_matching_reason'
-    ], inplace=True, errors='ignore')
-
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    df.to_parquet(output_path, index=False)
-    print(f"[✅] Final output saved to: {output_path}")
-
-def process_single_file(args):
-    file_path, mapping_df, final_output_dir, lock = args
-    start_time = time.time()
+def process_file(file_path, abbrev_map, pattern, output_path, skip_if_exists=False):
     try:
+        out_file = os.path.join(output_path, os.path.basename(file_path))
+        if skip_if_exists and os.path.exists(out_file):
+            print(f"⏩ Skipped (already exists): {os.path.basename(file_path)}")
+            return
+
         df = pd.read_parquet(file_path)
-        basename = os.path.basename(file_path)
 
-        mapping_cols = ["CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD", "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD"]
-        df_mapping = df[mapping_cols].dropna(subset=["CMPNT_MATL_DESC"]).drop_duplicates(subset=["CMPNT_MATL_NUM"])
+        # Determine rows to process
+        mask_process = (
+            df.get('AI_FINAL_SUBCATEGORY_CONFIDENCE', 0).fillna(0) <= 0
+        ) & (
+            df.get('AI_FINAL_CATEGORY_CONFIDENCE', 0).fillna(0) <= 0
+        )
 
-        comp_ids = df_mapping["CMPNT_MATL_NUM"].dropna().astype(str).tolist()
-        new_ids = insert_and_filter_new_components(comp_ids, lock)
-        df_mapping = df_mapping[df_mapping["CMPNT_MATL_NUM"].astype(str).isin(new_ids)]
+        df_to_process = df[mask_process].copy()
+        df_to_skip = df[~mask_process].copy()
 
-        if not df_mapping.empty:
-            df_mapping = ensure_ai_columns(df_mapping)
-            df_mapping = apply_existing_ai_overrides(df_mapping)
+        if not df_to_process.empty:
+            df_to_process = prepare_preprocessing_columns(df_to_process, abbrev_map, pattern)
 
-            cat_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Category')
-            cat_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Category')
-            df_mapping = map_values(df_mapping, cat_map_1, cat_map_2, JOIN_COL_1, JOIN_COL_2,
-                                    DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Category', 'Mapped_File_Category')
-
-            sub_map_1 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_1, 'Mapped_File_Subcategory')
-            sub_map_2 = clean_mapping_df(mapping_df, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory')
-            df_mapping = map_values(df_mapping, sub_map_1, sub_map_2, JOIN_COL_1, JOIN_COL_2,
-                                    DIRECT_MAP_KEY_1, DIRECT_MAP_KEY_2, 'Mapped_File_Subcategory', 'Mapped_File_Subcategory')
-
-            df_mapping = add_flags(df_mapping)
-            mapped_output_file = os.path.join(final_output_dir, f"mapped_{basename}")
-            finalize_output(df_mapping, mapped_output_file)
-
-        duration = time.time() - start_time
-        print(f"[✅] Finished: {basename} in {duration:.2f}s ➤ Components added: {len(new_ids)}")
+        df_final = pd.concat([df_to_process, df_to_skip], ignore_index=True)
+        df_final.to_parquet(out_file, index=False)
+        print(f"✅ Processed: {os.path.basename(file_path)} ➤ Updated: {len(df_to_process)} rows")
 
     except Exception as e:
-        print(f"[❌ ERROR] File: {file_path}\n{e}")
-        traceback.print_exc()
+        print(f"❌ Error in {os.path.basename(file_path)} → {e}")
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input_path", type=str, required=True)
-    parser.add_argument("--mapping_csv", type=str, required=True)
-    parser.add_argument("--final_output", type=str, required=True)
+    parser.add_argument('--input_path', required=True)
+    parser.add_argument('--abbrev_map', required=True)
+    parser.add_argument('--output_path', required=True)
+    parser.add_argument('--n_jobs', type=int, default=cpu_count())
+    parser.add_argument('--skip_if_exists', action='store_true')
     args = parser.parse_args()
 
-    parquet_files = glob.glob(os.path.join(args.input_path, "*.parquet"))
-    if not parquet_files:
-        raise FileNotFoundError(f"No parquet files found in {args.input_path}")
+    # Load abbreviation CSV
+    abbrev_csv = glob.glob(os.path.join(args.abbrev_map, '*.csv'))
+    if not abbrev_csv:
+        raise FileNotFoundError("No abbreviation map CSV found in path.")
+    abbrev_df = pd.read_csv(abbrev_csv[0])
+    abbrev_map = dict(zip(abbrev_df['Abbreviation_list'].str.lower(), abbrev_df['Abbreviation_Expension']))
+    pattern = re.compile(r'\b(' + '|'.join(re.escape(k) for k in abbrev_map.keys()) + r')\b', flags=re.IGNORECASE)
 
-    csv_files = glob.glob(os.path.join(args.mapping_csv, "*.csv"))
-    if not csv_files:
-        raise FileNotFoundError(f"No CSV mapping file found in {args.mapping_csv}")
-    mapping_df = pd.read_csv(csv_files[0])
+    os.makedirs(args.output_path, exist_ok=True)
+    parquet_files = glob.glob(os.path.join(args.input_path, '*.parquet'))
 
-    os.makedirs(args.final_output, exist_ok=True)
-    init_sqlite_db()
+    func = partial(
+        process_file,
+        abbrev_map=abbrev_map,
+        pattern=pattern,
+        output_path=args.output_path,
+        skip_if_exists=args.skip_if_exists
+    )
 
-    lock = Lock()
-    args_list = [(f, mapping_df, args.final_output, lock) for f in parquet_files]
+    with Pool(processes=args.n_jobs) as pool:
+        pool.map(func, parquet_files)
 
-    with Pool(cpu_count() - 2) as pool:
-        for _ in pool.imap_unordered(process_single_file, args_list):
-            pass
-
-    print("\n✅ All files processed using SQLite deduplication on component ID.")
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
