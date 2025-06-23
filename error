@@ -1,9 +1,19 @@
-import gradio as gr
-import os
-import uuid
-import time
-import requests
-import certifi
-from datetime import datetime, timedelta
-from azureml.core import Workspace
-from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
+  await send(message)
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 528, in send        
+    raise RuntimeError("Response content longer than Content-Length")
+RuntimeError: Response content longer than Content-Length
+[2025-06-23 12:50:57,827] Uploading video to Azure Blob Storage...
+[2025-06-23 12:51:01,183] <azureml.core.authentication.InteractiveLoginAuthentication object at 0x00000201FD09C760>
+[2025-06-23 12:51:09,661] Upload complete: https://blobdtoamlmarmot.blob.core.windows.net/azureml-blobstore-975b0280-8ce5-42df-bdeb-51637f5ddbc7/video-uploads/Overview OCC.mp4?st=2025-06-23T07%3A16%3A09Z&se=2025-06-23T13%3A21%3A09Z&sp=r&sv=2024-11-04&sr=b&sig=7VvZ/bc8t2NemHK8pAby06gj8ZW78Qcsj9TSawjYn0I%3D
+[2025-06-23 12:51:09,661] Submitting video translation job to Azure...
+[2025-06-23 12:51:10,451] [ERROR] Failed to submit translation job: 400
+{
+  "error": {
+    "code": "BadRequest",
+    "message": "Request is invalid.",
+    "innererror": {
+      "code": "InvalidPayload",
+      "message": "mediaFileUri is not accessible."
+    }
+  }
+}
