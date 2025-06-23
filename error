@@ -1,1 +1,11 @@
-adlsdtodsdev storage account and conatiner name video
+from azureml.core import Workspace, Datastore
+
+ws = Workspace.from_config()
+
+Datastore.register_azure_blob_container(
+    workspace=ws,
+    datastore_name="video_container_ds",
+    container_name="video",
+    account_name="adlsdtodsdev",
+    overwrite=True
+)
