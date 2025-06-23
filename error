@@ -45,8 +45,6 @@ def predict_category(df, encoder, model, scaler, ordinal):
     df.loc[category_idx, 'AI_MATCHING_REASON_FINAL_CATEGORY'] = np.where(
         scores < 0.6, 'Low Confidence', 'lightgbm_Bert_RPM_Category_model'
     )
-    log(f"📊 Category predictions done: {len(df_cat)}")
-
     return df
 
 def predict_subcategory(df, encoder, subcategory_models):
@@ -75,7 +73,6 @@ def predict_subcategory(df, encoder, subcategory_models):
         df.loc[subcat_idx, 'AI_MATCHING_REASON_FINAL_SUBCATEGORY'] = np.where(
             scores < 0.6, 'Low Confidence', f"RPM_Category_model_full_{cat}_V1"
         )
-        log(f"📊 Subcategory predictions for {cat}: {len(df_sub)}")
 
     return df
 
@@ -84,16 +81,13 @@ def apply_fallback(df):
     df.loc[fallback_idx, 'AI_FINAL_SUBCATEGORY'] = df.loc[fallback_idx, 'AI_FINAL_CATEGORY']
     df.loc[fallback_idx, 'AI_FINAL_SUBCATEGORY_CONFIDENCE'] = 0
     df.loc[fallback_idx, 'AI_MATCHING_REASON_FINAL_SUBCATEGORY'] = 'Fallback'
-    log(f"🛑 Fallbacks applied to {fallback_idx.sum()} rows")
     return df
 
-def main(input_path, final_output_dir, skip_if_exists=False, save_csv_summary=False):
+def main(input_path, final_output_dir, skip_if_exists=False):
     run = Run.get_context()
     ws = run.experiment.workspace
 
     os.makedirs(final_output_dir, exist_ok=True)
-    log_dir = os.path.join(final_output_dir, "log")
-    os.makedirs(log_dir, exist_ok=True)
 
     log("🔁 Loading category model and encoders...")
     model_dir = Model.get_model_path("RPM_Category_model_full_cat", _workspace=ws)
@@ -136,15 +130,10 @@ def main(input_path, final_output_dir, skip_if_exists=False, save_csv_summary=Fa
             df = apply_fallback(df)
 
             df.to_parquet(output_path, index=False)
-            log(f"💾 Saved: {output_path} (rows: {len(df)})")
-
-            if save_csv_summary:
-                csv_path = os.path.join(log_dir, f"summary_{fname.replace('.parquet', '.csv')}")
-                df.to_csv(csv_path, index=False)
-                log(f"📝 Summary CSV saved: {csv_path}")
+            log(f"✅ Saved: {output_path} ({len(df)} rows)")
 
         except Exception as e:
-            log(f"❌ Failed on {fname}: {e}")
+            log(f"❌ Error processing {fname}: {e}")
         finally:
             del df
             gc.collect()
@@ -153,13 +142,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_path", required=True)
     parser.add_argument("--final_output_dir", required=True)
-    parser.add_argument("--skip_if_exists", action="store_true", help="Skip files already predicted")
-    parser.add_argument("--save_csv_summary", action="store_true", help="Also write CSV logs per file")
+    parser.add_argument("--skip_if_exists", action="store_true", help="Skip already processed .parquet files")
     args = parser.parse_args()
 
     main(
         input_path=args.input_path,
         final_output_dir=args.final_output_dir,
-        skip_if_exists=args.skip_if_exists,
-        save_csv_summary=args.save_csv_summary
+        skip_if_exists=args.skip_if_exists
     )
