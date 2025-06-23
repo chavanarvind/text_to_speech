@@ -1,3 +1,4 @@
+import subprocess
 import os
 import argparse
 import pandas as pd
@@ -9,8 +10,9 @@ from datetime import datetime
 from sentence_transformers import SentenceTransformer
 from azureml.core import Run, Model
 
-AI_OUTPUT_COLUMNS = [
-    "CMPNT_MATL_NUM",
+subprocess.run(["pip", "install", "lightgbm"], check=True)
+
+AI_COLUMNS = [
     "AI_FINAL_CATEGORY",
     "AI_FINAL_CATEGORY_CONFIDENCE",
     "AI_MATCHING_REASON_FINAL_CATEGORY",
@@ -30,71 +32,11 @@ def round_datetime_columns(df):
         df[col] = df[col].dt.round("us")
     return df
 
-def predict_category(df, encoder, model, scaler, ordinal):
-    category_idx = df['needs_category_model'] == True
-    df_cat = df[category_idx].copy()
-
-    if df_cat.empty:
-        return df
-
-    descs = df_cat['CMPNT_MATL_DESC_CLEAN'].astype(str).tolist()
-    embeddings = encode_descriptions(encoder, descs)
-
-    X = np.hstack([
-        embeddings,
-        scaler.transform(df_cat[['CMPNT_MATL_DESC_LEN']]),
-        ordinal.transform(df_cat[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
-    ])
-
-    probs = model.predict_proba(X)
-    preds = model.predict(X)
-    scores = np.max(probs, axis=1)
-
-    df.loc[category_idx, 'AI_FINAL_CATEGORY'] = np.where(scores < 0.6, 'Other', preds)
-    df.loc[category_idx, 'AI_FINAL_CATEGORY_CONFIDENCE'] = scores
-    df.loc[category_idx, 'AI_MATCHING_REASON_FINAL_CATEGORY'] = np.where(
-        scores < 0.6, 'Low Confidence', 'lightgbm_Bert_RPM_Category_model'
-    )
-    return df
-
-def predict_subcategory(df, encoder, subcategory_models):
-    for cat, model_bundle in subcategory_models.items():
-        subcat_idx = (df['AI_FINAL_CATEGORY'] == cat) & (df['needs_subcategory_model'] == True)
-        df_sub = df[subcat_idx].copy()
-
-        if df_sub.empty:
-            continue
-
-        descs = df_sub['CMPNT_MATL_DESC_CLEAN'].astype(str).tolist()
-        embeddings = encode_descriptions(encoder, descs)
-
-        X = np.hstack([
-            embeddings,
-            model_bundle['scaler'].transform(df_sub[['CMPNT_MATL_DESC_LEN']]),
-            model_bundle['encoder'].transform(df_sub[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
-        ])
-
-        probs = model_bundle['model'].predict_proba(X)
-        preds = model_bundle['model'].predict(X)
-        scores = np.max(probs, axis=1)
-
-        df.loc[subcat_idx, 'AI_FINAL_SUBCATEGORY'] = np.where(scores < 0.6, 'Other', preds)
-        df.loc[subcat_idx, 'AI_FINAL_SUBCATEGORY_CONFIDENCE'] = scores
-        df.loc[subcat_idx, 'AI_MATCHING_REASON_FINAL_SUBCATEGORY'] = np.where(
-            scores < 0.6, 'Low Confidence', f"RPM_Category_model_full_{cat}_V1"
-        )
-    return df
-
-def apply_fallback(df):
-    fallback_idx = (df['needs_subcategory_model'] == True) & (~df['AI_FINAL_CATEGORY'].isin(['CHM', 'PKG', 'FNW']))
-    df.loc[fallback_idx, 'AI_FINAL_SUBCATEGORY'] = df.loc[fallback_idx, 'AI_FINAL_CATEGORY']
-    df.loc[fallback_idx, 'AI_FINAL_SUBCATEGORY_CONFIDENCE'] = 0
-    df.loc[fallback_idx, 'AI_MATCHING_REASON_FINAL_SUBCATEGORY'] = 'Fallback'
-    return df
-
 def main(input_path, final_output_dir):
     run = Run.get_context()
     ws = run.experiment.workspace
+
+    os.makedirs(final_output_dir, exist_ok=True)
 
     log("🔁 Loading category model and encoders...")
     model_dir = Model.get_model_path("RPM_Category_model_full_cat", _workspace=ws)
@@ -118,34 +60,93 @@ def main(input_path, final_output_dir):
             "scaler": joblib.load(os.path.join(model_path, "scaler.pkl")),
         }
 
-    os.makedirs(final_output_dir, exist_ok=True)
-
-    for fname in os.listdir(input_path):
-        if not fname.endswith(".parquet"):
+    for f in os.listdir(input_path):
+        if not f.endswith(".parquet"):
             continue
 
-        try:
-            log(f"🔎 Predicting: {fname}")
-            df = pd.read_parquet(os.path.join(input_path, fname))
-            df = round_datetime_columns(df)
+        log(f"🔎 Processing file: {f}")
+        df = pd.read_parquet(os.path.join(input_path, f))
+        df = round_datetime_columns(df)
 
-            df = predict_category(df, encoder, model, scaler, ordinal)
-            df = predict_subcategory(df, encoder, subcategory_models)
-            df = apply_fallback(df)
+        df["File_Name"] = f
 
-            df = df[df["CMPNT_MATL_NUM"].notnull()]
-            df = df[AI_OUTPUT_COLUMNS]
+        # --- Predict Category ---
+        category_idx = df['needs_category_model'] == True
+        df_needs_category = df[category_idx].copy()
 
-            output_path = os.path.join(final_output_dir, fname)
-            df.to_parquet(output_path, index=False)
+        if not df_needs_category.empty:
+            descs = df_needs_category['CMPNT_MATL_DESC_CLEAN'].astype(str).tolist()
+            embeddings = encode_descriptions(encoder, descs)
 
-            log(f"✅ Saved: {output_path} ({len(df)} rows)")
+            X = np.hstack([
+                embeddings,
+                scaler.transform(df_needs_category[['CMPNT_MATL_DESC_LEN']]),
+                ordinal.transform(df_needs_category[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+            ])
 
-        except Exception as e:
-            log(f"❌ Error on {fname}: {e}")
-        finally:
-            del df
+            probs = model.predict_proba(X)
+            preds = model.predict(X)
+            scores = np.max(probs, axis=1)
+
+            df.loc[category_idx, 'AI_FINAL_CATEGORY'] = np.where(scores < 0.6, 'Other', preds)
+            df.loc[category_idx, 'AI_FINAL_CATEGORY_CONFIDENCE'] = scores
+            df.loc[category_idx, 'AI_MATCHING_REASON_FINAL_CATEGORY'] = np.where(
+                scores < 0.6, 'Low Confidence', 'lightgbm_Bert_RPM_Category_model'
+            )
+
+            del descs, embeddings, probs, preds, X
             gc.collect()
+
+        # --- Predict Subcategory ---
+        for cat in ['CHM', 'PKG', 'FNW']:
+            subcat_idx = (df['AI_FINAL_CATEGORY'] == cat) & (df['needs_subcategory_model'] == True)
+            subcat_df = df[subcat_idx].copy()
+
+            if subcat_df.empty:
+                continue
+
+            sub_model = subcategory_models[cat]["model"]
+            sub_encoder = subcategory_models[cat]["encoder"]
+            sub_scaler = subcategory_models[cat]["scaler"]
+
+            descs = subcat_df['CMPNT_MATL_DESC_CLEAN'].astype(str).tolist()
+            embeddings = encode_descriptions(encoder, descs)
+
+            X_sub = np.hstack([
+                embeddings,
+                sub_scaler.transform(subcat_df[['CMPNT_MATL_DESC_LEN']]),
+                sub_encoder.transform(subcat_df[['UNIT_GROUP', 'CMPNT_MATL_TYPE_CATEGORY']])
+            ])
+
+            probs = sub_model.predict_proba(X_sub)
+            preds = sub_model.predict(X_sub)
+            scores = np.max(probs, axis=1)
+
+            df.loc[subcat_idx, 'AI_FINAL_SUBCATEGORY'] = np.where(scores < 0.6, 'Other', preds)
+            df.loc[subcat_idx, 'AI_FINAL_SUBCATEGORY_CONFIDENCE'] = scores
+            df.loc[subcat_idx, 'AI_MATCHING_REASON_FINAL_SUBCATEGORY'] = np.where(
+                scores < 0.6, 'Low Confidence', f"RPM_Category_model_full_{cat}_V1"
+            )
+
+            del descs, embeddings, probs, preds, X_sub
+            gc.collect()
+
+        # --- Fallback for other categories ---
+        fallback_idx = (df['needs_subcategory_model'] == True) & (~df['AI_FINAL_CATEGORY'].isin(['CHM', 'PKG', 'FNW']))
+        df.loc[fallback_idx, 'AI_FINAL_SUBCATEGORY'] = df.loc[fallback_idx, 'AI_FINAL_CATEGORY']
+        df.loc[fallback_idx, 'AI_FINAL_SUBCATEGORY_CONFIDENCE'] = 0
+        df.loc[fallback_idx, 'AI_MATCHING_REASON_FINAL_SUBCATEGORY'] = 'Fallback'
+
+        # --- Final Output ---
+        required_cols = ["CMPNT_MATL_NUM"] + AI_COLUMNS + ["File_Name"]
+        df_out = df[required_cols].copy()
+        output_path = os.path.join(final_output_dir, f"predicted_{f}")
+        df_out.to_parquet(output_path, index=False)
+
+        log(f"💾 Saved: {output_path} ({len(df_out)} rows)")
+
+        del df, df_out
+        gc.collect()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -153,7 +154,4 @@ if __name__ == "__main__":
     parser.add_argument("--final_output_dir", required=True)
     args = parser.parse_args()
 
-    main(
-        input_path=args.input_path,
-        final_output_dir=args.final_output_dir
-    )
+    main(args.input_path, args.final_output_dir)
