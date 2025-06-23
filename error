@@ -1,11 +1,19 @@
 from azureml.core import Workspace, Datastore
 
-ws = Workspace.from_config()
-
-Datastore.register_azure_blob_container(
-    workspace=ws,
-    datastore_name="video_container_ds",
-    container_name="video",
-    account_name="adlsdtodsdev",
-    overwrite=True
+# Load AzureML workspace (will use config from config.json or interactive auth)
+ws = Workspace(
+    subscription_id="a8d518a9-4587-4ba2-9a60-68b980c2f000",
+    resource_group="AZR-WDZ-DTO-AML-Development",
+    workspace_name="AML-DTO-Marmot-dev"
 )
+
+# Register the custom blob container as a datastore
+datastore = Datastore.register_azure_blob_container(
+    workspace=ws,
+    datastore_name="video_container_ds",         # You can change this name as needed
+    container_name="video",                      # This is your existing container name
+    account_name="adlsdtodsdev",                 # Your storage account name
+    overwrite=True                               # Overwrite if datastore already exists
+)
+
+print(f"Datastore '{datastore.name}' registered successfully.")
