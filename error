@@ -1,55 +1,13 @@
-from azure.identity import DefaultAzureCredential
-from azure.storage.blob import BlobServiceClient, BlobSasPermissions, generate_blob_sas
-from datetime import datetime, timedelta
-from azureml.core import Workspace
-from urllib.parse import quote_plus
-import os, requests, certifi
-
-def sanitize_filename(filename):
-    return filename.replace(" ", "_")
-
-def upload_to_blob_storage(local_path):
-    # AzureML workspace context
-    ws = Workspace(
-        subscription_id="a8d518a9-4587-4ba2-9a60-68b980c2f000",
-        resource_group="AZR-WDZ-DTO-AML-Development",
-        workspace_name="AML-DTO-Marmot-dev"
-    )
-
-    # Your container and storage account
-    container_name = "video"
-    storage_account_name = "adlsdtodsdev"
-    blob_path = f"video-uploads/{sanitize_filename(os.path.basename(local_path))}"
-
-    # Authenticate using your logged-in identity
-    credential = DefaultAzureCredential()
-
-    # Create client
-    blob_service_client = BlobServiceClient(
-        account_url=f"https://{storage_account_name}.blob.core.windows.net",
-        credential=credential
-    )
-    container_client = blob_service_client.get_container_client(container_name)
-
-    # Upload
-    with open(local_path, "rb") as data:
-        try:
-            container_client.upload_blob(name=blob_path, data=data, overwrite=True)
-        except Exception as e:
-            print(f"[ERROR] Upload failed: {e}")
-            raise
-
-    # ❗You cannot generate a SAS token without the storage key
-    # So we return the public blob URL — ensure container allows access by identity
-
-    blob_url = f"https://{storage_account_name}.blob.core.windows.net/{container_name}/{quote_plus(blob_path)}"
-
-    # Optional: Check if URL is accessible
-    try:
-        r = requests.head(blob_url, verify=certifi.where())
-        if r.status_code != 200:
-            print(f"[WARNING] Blob may not be publicly accessible (status {r.status_code})")
-    except Exception as e:
-        print(f"[ERROR] Blob access check failed: {e}")
-
-    return blob_url
+[2025-06-23 15:12:04,134] Upload complete: https://adlsdtodsdev.blob.core.windows.net/video/video-uploads%2FOverview_OCC_1.mp4
+[2025-06-23 15:12:04,134] Submitting video translation job to Azure...
+[2025-06-23 15:12:04,907] [ERROR] Failed to submit translation job: 400
+{
+  "error": {
+    "code": "BadRequest",
+    "message": "Request is invalid.",
+    "innererror": {
+      "code": "InvalidPayload",
+      "message": "Please provide VideoFileUrl"
+    }
+  }
+}
