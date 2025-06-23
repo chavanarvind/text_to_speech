@@ -1,29 +1,138 @@
- File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 528, in send        
-    raise RuntimeError("Response content longer than Content-Length")
-RuntimeError: Response content longer than Content-Length
-[2025-06-23 12:26:42,210] Uploading video to Azure Blob Storage...
-[2025-06-23 12:26:42,211] <azureml.core.authentication.InteractiveLoginAuthentication object at 0x000002A552844850>
-[2025-06-23 12:26:44,088] "datastore.upload_files" is deprecated after version 1.0.69. Please use "FileDatasetFactory.upload_directory" instead. See Dataset API change notice at https://aka.ms/dataset-deprecation.
-[2025-06-23 12:26:44,088] Called AzureBlobDatastore.upload_files
-Uploading an estimated of 1 files
-[2025-06-23 12:26:44,089] Uploading an estimated of 1 files
-Uploading C:\Users\AChava05\AppData\Local\Temp\gradio\8da72d5fcf139c2608c8159adb9d0447201b0464be470a7bcaefa0757babc7cb\Overview OCC.mp4
-[2025-06-23 12:26:51,096] Uploading C:\Users\AChava05\AppData\Local\Temp\gradio\8da72d5fcf139c2608c8159adb9d0447201b0464be470a7bcaefa0757babc7cb\Overview OCC.mp4
-Uploaded C:\Users\AChava05\AppData\Local\Temp\gradio\8da72d5fcf139c2608c8159adb9d0447201b0464be470a7bcaefa0757babc7cb\Overview OCC.mp4, 1 files out of an estimated total of 1  
-[2025-06-23 12:26:51,096] Uploaded C:\Users\AChava05\AppData\Local\Temp\gradio\8da72d5fcf139c2608c8159adb9d0447201b0464be470a7bcaefa0757babc7cb\Overview OCC.mp4, 1 files out of an estimated total of 1
-Uploaded 1 files
-[2025-06-23 12:26:51,097] Uploaded 1 files
-[2025-06-23 12:26:51,097] Finished AzureBlobDatastore.upload with count=1.
-[2025-06-23 12:26:51,097] Upload complete: https://blobdtoamlmarmot.blob.core.windows.net/azureml-blobstore-975b0280-8ce5-42df-bdeb-51637f5ddbc7/video-uploads/Overview OCC.mp4?se=2025-06-23T12%3A56%3A51Z&sp=r&sv=2024-11-04&sr=b&sig=VTTjRnOFVRtm9E9hO7/aIe46e1oASBc0NFbCXXKXsnM%3D
-[2025-06-23 12:26:51,098] Submitting video translation job to Azure...
-[2025-06-23 12:26:52,092] [ERROR] Failed to submit translation job: 400
-{
-  "error": {
-    "code": "BadRequest",
-    "message": "Request is invalid.",
-    "innererror": {
-      "code": "InvalidPayload",
-      "message": "mediaFileUri is not accessible."
+# === Initialize AML Workspace ===
+ws = Workspace(
+    subscription_id=SUBSCRIPTION_ID,
+    resource_group=RESOURCE_GROUP,
+    workspace_name=WORKSPACE_NAME
+)
+
+def upload_to_default_blobstore(ws, local_path):
+    default_ds = ws.get_default_datastore()
+    target_path = f"video-uploads/{os.path.basename(local_path)}"
+
+    default_ds.upload_files(
+        files=[local_path],
+        target_path=target_path,
+        overwrite=True,
+        show_progress=True
+    )
+
+    # Generate SAS token with read access and a 5-minute backdated start time
+    start_time = datetime.utcnow() - timedelta(minutes=5)
+    expiry_time = datetime.utcnow() + timedelta(hours=6)
+    sas_token = generate_blob_sas(
+        account_name=default_ds.account_name,
+        container_name=default_ds.container_name,
+        blob_name=target_path,
+        account_key=default_ds.account_key,
+        permission=BlobSasPermissions(read=True),
+        expiry=expiry_time,
+        start=start_time
+    )
+    blob_url = f"https://{default_ds.account_name}.blob.core.windows.net/{default_ds.container_name}/{target_path}?{sas_token}"
+    return blob_url
+
+def create_video_translation_job(blob_url, source_lang, target_lang):
+    job_id = f"gradio-job-{uuid.uuid4()}"
+    url = f"{ENDPOINT}/videotranslation/translations/{job_id}?api-version={API_VERSION}"
+    headers = {
+        "Ocp-Apim-Subscription-Key": AZURE_SPEECH_KEY,
+        "Content-Type": "application/json",
+        "Operation-Id": job_id
     }
-  }
-}
+
+    payload = {
+        "displayName": job_id,
+        "description": "Gradio video translation",
+        "input": {
+            "sourceLocale": source_lang,
+            "targetLocale": target_lang,
+            "voiceKind": "PlatformVoice",
+            "speakerCount": 1,
+            "subtitleMaxCharCountPerSegment": 50,
+            "exportSubtitleInVideo": True,
+            "enableLipSync": False,
+            "videoFileUrl": blob_url
+        },
+        "targets": [
+            {
+                "language": target_lang,
+                "outputFormat": "video"
+            }
+        ],
+        "properties": {
+            "diarizationEnabled": "true",
+            "ttsVoice": f"{target_lang}-DeniseNeural"
+        }
+    }
+
+    response = requests.put(url, headers=headers, json=payload, verify=certifi.where())
+    if response.status_code >= 400:
+        return None, f"[ERROR] Failed to submit translation job: {response.status_code}\n{response.text}"
+    return job_id, None
+
+def poll_job_and_get_output(job_id):
+    url = f"{ENDPOINT}/videotranslation/translations/{job_id}?api-version={API_VERSION}"
+    headers = {"Ocp-Apim-Subscription-Key": AZURE_SPEECH_KEY}
+    for _ in range(30):
+        resp = requests.get(url, headers=headers, verify=certifi.where())
+        result = resp.json()
+        status = result.get("status")
+        if status == "Succeeded":
+            return result.get("results", {}).get("urls", {})
+        elif status == "Failed":
+            return {"error": "Translation failed."}
+        time.sleep(10)
+    return {"error": "Timeout waiting for translation to finish."}
+
+def translate_video(video_file, source_lang, target_lang):
+    import logging
+
+    logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s")
+    logger = logging.getLogger("video-translator")
+
+    logger.info("Uploading video to Azure Blob Storage...")
+    if hasattr(video_file, "name"):
+        video_path = video_file.name
+    else:
+        video_path = video_file
+
+    blob_url = upload_to_default_blobstore(ws, video_path)
+    logger.info(f"Upload complete: {blob_url}")
+
+    logger.info("Submitting video translation job to Azure...")
+    job_id, error = create_video_translation_job(blob_url, source_lang, target_lang)
+    if error:
+        logger.error(error)
+        return blob_url, "Translation job submission failed.", ""
+
+    logger.info(f"Job submitted: {job_id}")
+    logger.info("Polling job status...")
+    result = poll_job_and_get_output(job_id)
+
+    translated_url = result.get("video")
+    if not translated_url:
+        logger.error("Translation failed or no result video.")
+        return blob_url, "Translation failed or timed out.", ""
+
+    logger.info(f"Translation completed. Output URL: {translated_url}")
+    return blob_url, "Translation succeeded.", translated_url
+
+def gradio_interface(video, source_lang, target_lang):
+    return translate_video(video, source_lang, target_lang)
+
+iface = gr.Interface(
+    fn=gradio_interface,
+    inputs=[
+        gr.Video(label="Upload Video (.mp4)"),
+        gr.Textbox(label="Source Language (e.g., en-US)", value="en-US"),
+        gr.Textbox(label="Target Language (e.g., es-ES)", value="es-ES")
+    ],
+    outputs=[
+        gr.Textbox(label="Original Video Blob URL"),
+        gr.Textbox(label="Status"),
+        gr.Textbox(label="Translated Video URL")
+    ],
+    title="Azure Video Translator with Auto Upload (AML Blob)"
+)
+
+iface.launch()
