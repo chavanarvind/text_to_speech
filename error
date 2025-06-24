@@ -4,53 +4,28 @@ import glob
 import traceback
 import pandas as pd
 import time
-from multiprocessing import Pool, Manager, cpu_count
+from multiprocessing import Pool, cpu_count, Lock
 from azureml.core import Dataset
-try:
-    import sqlite3
-except ImportError:
-    import subprocess
-    subprocess.check_call(["pip", "install", "pysqlite3-binary"])
-    import sqlite3
 
 # === Constants ===
 DIRECT_MAP_KEY_1 = "Direct Mapping"
 DIRECT_MAP_KEY_2 = "Direct Mapping"
 JOIN_COL_1 = "CMPNT_CAT_CD_DESC"
 JOIN_COL_2 = "CMPNT_MATL_TYPE_CD"
-SQLITE_DB_PATH = "key_cache.sqlite"
-KEY_TABLE = "keys"
+SEEN_COMPONENTS_FILE = "seen_components.txt"
 
-# === SQLite logic ===
-def init_sqlite_db():
-    conn = sqlite3.connect(SQLITE_DB_PATH)
-    conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA synchronous=NORMAL;")
-    cursor = conn.cursor()
-    cursor.execute(f"""
-        CREATE TABLE IF NOT EXISTS {KEY_TABLE} (
-            key TEXT PRIMARY KEY
-        )
-    """)
-    conn.commit()
-    conn.close()
+# === File-based component tracker ===
+def load_seen_components():
+    if not os.path.exists(SEEN_COMPONENTS_FILE):
+        return set()
+    with open(SEEN_COMPONENTS_FILE, "r") as f:
+        return set(line.strip() for line in f if line.strip())
 
-def insert_keys_batch(keys, lock):
-    unique_keys = list(set(keys))
-    values = [(k,) for k in unique_keys]
-    with lock:
-        conn = sqlite3.connect(SQLITE_DB_PATH)
-        conn.execute("PRAGMA journal_mode=WAL;")
-        conn.execute("PRAGMA synchronous=NORMAL;")
-        cursor = conn.cursor()
+def append_seen_components(new_ids):
+    with open(SEEN_COMPONENTS_FILE, "a") as f:
+        for comp_id in new_ids:
+            f.write(f"{comp_id}\n")
 
-        # ✅ Wrap inserts in a single transaction
-        cursor.execute("BEGIN TRANSACTION;")
-        cursor.executemany(f"INSERT OR IGNORE INTO {KEY_TABLE} (key) VALUES (?)", values)
-        conn.commit()
-
-        conn.close()
-    return unique_keys
 # === Core logic ===
 def ensure_ai_columns(df):
     for col in [
@@ -146,37 +121,29 @@ def finalize_output(df, output_path):
     print(f"[✅] Final output saved to: {output_path}")
 
 def process_single_file(args):
-    file_path, mapping_df, final_output_dir, key_output_dir, seen_components, lock = args
+    file_path, mapping_df, final_output_dir, key_output_dir, lock = args
     start_time = time.time()
     try:
         df = pd.read_parquet(file_path)
         basename = os.path.basename(file_path)
 
         mapping_cols = ["CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD", "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD"]
-        key_cols =  ["SRC_SYS_CD","CMPNT_MATL_NUM"]
+        key_cols = ["SRC_SYS_CD", "CMPNT_MATL_NUM"]
 
         df_key = df[key_cols].dropna().drop_duplicates()
-        
-        # Generate composite key
-        df_key["SRC_SYS_CD"]=df_key["SRC_SYS_CD"].astype(str).str.strip()
-        df_key["composite_key"] = (df_key["SRC_SYS_CD"] + "_" +
-        df_key["CMPNT_MATL_NUM"].astype(str).str.strip())
-        #keys = df_key["composite_key"].dropna().drop_duplicates().tolist()
-        #new_key_rows = insert_keys_batch(keys, lock)
-        #df_key = df_key[df_key["composite_key"].isin(new_key_rows)]
+        df_key["SRC_SYS_CD"] = df_key["SRC_SYS_CD"].astype(str).str.strip()
+        df_key["composite_key"] = df_key["SRC_SYS_CD"] + "_" + df_key["CMPNT_MATL_NUM"].astype(str).str.strip()
+
         if not df_key.empty:
             key_output_file = os.path.join(key_output_dir, f"key_{basename}")
-            df_key=df_key.drop_duplicates(subset=["composite_key"])
-            #df_key=df_key.drop("composite_key",axis=1)
+            df_key = df_key.drop_duplicates(subset=["composite_key"])
+            df_key = df_key.drop("composite_key", axis=1)
             df_key.to_parquet(key_output_file, index=False)
 
         df_mapping = df[mapping_cols].dropna(subset=["CMPNT_MATL_DESC"]).drop_duplicates(subset=["CMPNT_MATL_NUM"])
-        new_ids = []
-        with lock:
-            for comp_id in df_mapping["CMPNT_MATL_NUM"]:
-                if comp_id not in seen_components:
-                    seen_components[comp_id] = True
-                    new_ids.append(comp_id)
+
+        seen_set = load_seen_components()
+        new_ids = [cid for cid in df_mapping["CMPNT_MATL_NUM"] if str(cid) not in seen_set]
         df_mapping = df_mapping[df_mapping["CMPNT_MATL_NUM"].isin(new_ids)]
 
         if not df_mapping.empty:
@@ -197,9 +164,11 @@ def process_single_file(args):
             mapped_output_file = os.path.join(final_output_dir, f"mapped_{basename}")
             finalize_output(df_mapping, mapped_output_file)
 
+            with lock:
+                append_seen_components(new_ids)
+
         duration = time.time() - start_time
         print(f"[✅] Finished: {basename} in {duration:.2f}s ➤ Components added: {len(new_ids)}")
-        #print(f"[✅] Finished: {basename} in {duration:.2f}s ➤ Keys added: {len(new_key_rows)}, Components added: {len(new_ids)}")
 
     except Exception as e:
         print(f"[❌ ERROR] File: {file_path}\n{e}")
@@ -225,22 +194,17 @@ def main():
     os.makedirs(args.final_output, exist_ok=True)
     os.makedirs(args.key_output, exist_ok=True)
 
-    init_sqlite_db()
+    lock = Lock()
+    args_list = [
+        (f, mapping_df, args.final_output, args.key_output, lock)
+        for f in parquet_files
+    ]
 
-    with Manager() as manager:
-        seen_components = manager.dict()
-        lock = manager.Lock()
+    with Pool(cpu_count() - 2) as pool:
+        for _ in pool.imap_unordered(process_single_file, args_list):
+            pass
 
-        args_list = [
-            (f, mapping_df, args.final_output, args.key_output, seen_components, lock)
-            for f in parquet_files
-        ]
-
-        with Pool(cpu_count() - 2) as pool:
-            for _ in pool.imap_unordered(process_single_file, args_list):
-                pass
-
-    print("\n✅ All files processed with optimized SQLite-based deduplication.")
+    print("\n✅ All files processed with disk-based deduplication.")
 
 if __name__ == "__main__":
     main()
