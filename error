@@ -1,9 +1,16 @@
-Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.scriptrun = azureml.core.script_run:ScriptRun._from_run_dto with exception (packaging 23.2 (/opt/conda/envs/ptca/lib/python3.8/site-packages), Requirement.parse('packaging<=23.0,>=20.0')).
-[✅] Final output saved to: /mnt/azureml/cr/j/036c1571247b42279fc1b5e11c59e60f/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/dd630e12-4ef9-4946-9a2f-ea242fdc2d7e/step1a_final_output/mapped_part-00000-1b980a61-c80f-498d-9edd-e275f7831374-c000.snappy.parquet
-[✅] Finished: part-00000-1b980a61-c80f-498d-9edd-e275f7831374-c000.snappy.parquet in 142.81s ➤ Keys added: 289872, Components added: 287326
-[✅] Finished: part-00000-2ab1f2ce-0a48-4c1b-bc97-c69c0c96bd33-c000.snappy.parquet in 95.13s ➤ Keys added: 289872, Components added: 0
-[✅] Finished: part-00000-3767e165-9bad-4cc7-8764-8bd884b247f8-c000.snappy.parquet in 92.33s ➤ Keys added: 289872, Components added: 0
-[✅] Finished: part-00000-5495ceb4-a957-4ae0-bd45-6820571de6ef-c000.snappy.parquet in 95.46s ➤ Keys added: 289872, Components added: 0
-[✅] Finished: part-00000-568f09cd-cf57-4d8b-b5bd-ed1739579593-c000.snappy.parquet in 124.71s ➤ Keys added: 289872, Components added: 0
-[✅] Finished: part-00000-5c7945e0-1120-4490-ae57-e0a0a8f7d76c-c000.snappy.parquet in 136.76s ➤ Keys added: 289872, Components added: 0
-[✅] Finished: part-00000-7902a6a9-1b7e-4a7f-9a4e-0ce72beae8d0-c000.snappy.parquet in 88.40s ➤ Keys added: 289872, Components added: 0
+def insert_keys_batch(keys, lock):
+    unique_keys = list(set(keys))
+    values = [(k,) for k in unique_keys]
+    with lock:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+        cursor = conn.cursor()
+
+        # ✅ Wrap inserts in a single transaction
+        cursor.execute("BEGIN TRANSACTION;")
+        cursor.executemany(f"INSERT OR IGNORE INTO {KEY_TABLE} (key) VALUES (?)", values)
+        conn.commit()
+
+        conn.close()
+    return unique_keys
