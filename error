@@ -1,2 +1,1 @@
-print(f"[✅] Finished: {basename} in {duration:.2f}s ➤ Keys added: {len(new_key_rows)}, Components added: {len(new_ids)}")
-print(f"[✅] Finished: {basename} in {duration:.2f}s ➤ Components added: {len(new_ids)}")
+merged_df = merged_df.drop("composite_key", axis=1, errors="ignore")
