@@ -1,21 +1,4 @@
-Finished: part-00001-f6e5275c-95b3-42ad-baae-afb4c8d0fbe1-c000.snappy.parquet in 16.05s ➤ Keys added: 20308, Components added: 0
-[✅] Finished: part-00001-f755da59-abd0-46c5-adea-42cc4369d5b4-c000.snappy.parquet in 16.09s ➤ Keys added: 20620, Components added: 0
-[✅] Finished: part-00001-f8700bf0-3486-464c-80ac-4d6ba39b7f25-c000.snappy.parquet in 16.22s ➤ Keys added: 20335, Components added: 0
-[✅] Finished: part-00001-f910ede1-09f5-4d65-bc02-0f91e1a14b5e-c000.snappy.parquet in 16.20s ➤ Keys added: 20777, Components added: 0
-[✅] Finished: part-00001-fa061554-617a-423d-b284-29bfa31220d1-c000.snappy.parquet in 16.05s ➤ Keys added: 20308, Components added: 0
-[✅] Finished: part-00001-fa671aa0-31dc-4386-82f0-ba571deb4caf-c000.snappy.parquet in 16.50s ➤ Keys added: 20291, Components added: 0
-[✅] Finished: part-00001-fa692097-1e9b-404b-8402-ff5dfa366ca7-c000.snappy.parquet in 17.76s ➤ Keys added: 20776, Components added: 0
-[✅] Finished: part-00001-fa8a3083-1e23-411a-be5c-d21ad591e809-c000.snappy.parquet in 18.82s ➤ Keys added: 20300, Components added: 0
-[✅] Finished: part-00001-fa8c6600-0215-429d-a447-89d648ef8db7-c000.snappy.parquet in 18.86s ➤ Keys added: 20244, Components added: 0
-[✅] Finished: part-00001-fabd3e48-7f55-4d88-9fbd-0333ce7cfa8a-c000.snappy.parquet in 18.80s ➤ Keys added: 20311, Components added: 0
-[✅] Finished: part-00001-fb61eca9-5d38-4088-b4ed-01f44c924c22-c000.snappy.parquet in 19.84s ➤ Keys added: 20286, Components added: 0
-[✅] Finished: part-00001-fb6e64d7-fa7c-442a-9c90-73fdde0937b0-c000.snappy.parquet in 20.89s ➤ Keys added: 20206, Components added: 0
-[✅] Finished: part-00001-fb700a36-c11c-45bb-9389-396836b6d30f-c000.snappy.parquet in 22.05s ➤ Keys added: 20290, Components added: 0
-[✅] Finished: part-00001-fc1028b9-c66e-46bd-b15d-607a26f93a5b-c000.snappy.parquet in 23.23s ➤ Keys added: 20772, Components added: 0
-[✅] Finished: part-00001-fd027c0c-d462-4932-b987-67081a9bda2e-c000.snappy.parquet in 24.81s ➤ Keys added: 20620, Components added: 0
-[✅] Finished: part-00001-fd0f1ab9-8c4a-4866-992f-a6beeec4a2fb-c000.snappy.parquet in 25.96s ➤ Keys added: 20786, Components added: 0
-[✅] Finished: part-00001-fd82a866-a4f8-4944-aca3-ba2096c61c4c-c000.snappy.parquet in 27.03s ➤ Keys added: 20337, Components added: 0
-[✅] Finished: part-00001-fe0d4657-ef09-4c35-83c4-57d8338db5b6-c000.snappy.parquet in 28.38s ➤ Keys added: 21468, Components added: 0
-[✅] Finished: part-00001-fe50ff8d-42d6-4b10-a908-981216f9713c-c000.snappy.parquet in 29.56s ➤ Keys added: 20311, Components added: 0
-[✅] Finished: part-00001-fedde1ec-c75d-4279-9e38-a399df2a8437-c000.snappy.parquet in 29.47s ➤ Keys added: 20295, Components added: 0
-[✅] Finished: part-00001-ff2d549c-b5d3-4a25-8dcc-54991dc7c081-c000.snappy.parquet in 28.19s ➤ Keys added: 20190, Components added: 0
+OutputFileDatasetConfig(
+    name="final_merged_predictions",
+    destination=(default_ds, f"hbom_category_prediction/hbom_category_prediction_{today}/")
+)
