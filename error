@@ -1,2 +1,124 @@
- df_key["composite_key"] = (df_key["SRC_SYS_CD"] + "_" +
-        df_key["CMPNT_MATL_NUM"].astype(str).str.strip())
+import os
+import argparse
+import pandas as pd
+import psutil
+from datetime import datetime
+from azureml.core import Run
+
+def log(msg):
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+
+AI_OUTPUT_COLUMNS = [
+    "AI_FINAL_CATEGORY",
+    "AI_FINAL_CATEGORY_CONFIDENCE",
+    "AI_MATCHING_REASON_FINAL_CATEGORY",
+    "AI_FINAL_SUBCATEGORY",
+    "AI_FINAL_SUBCATEGORY_CONFIDENCE",
+    "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
+]
+
+TRACKER_FILE = "processed_keys.txt"
+
+def load_processed_keys():
+    if not os.path.exists(TRACKER_FILE):
+        return set()
+    with open(TRACKER_FILE, "r") as f:
+        return set(line.strip() for line in f if line.strip())
+
+def append_processed_keys(new_keys):
+    with open(TRACKER_FILE, "a") as f:
+        for key in new_keys:
+            f.write(f"{key}\n")
+
+def main(inference_output_dir, key_output_dir, final_output_dir):
+    run = Run.get_context()
+    os.makedirs(final_output_dir, exist_ok=True)
+
+    processed_keys = load_processed_keys()
+    log(f"🔑 Loaded {len(processed_keys)} already processed composite keys.")
+
+    # Load and prepare global AI predictions
+    log("📁 Scanning inference output directory...")
+    all_predictions = []
+
+    for file in os.listdir(inference_output_dir):
+        if file.endswith(".parquet"):
+            try:
+                file_path = os.path.join(inference_output_dir, file)
+                df = pd.read_parquet(file_path)
+
+                selected_cols = ["CMPNT_MATL_NUM"] + AI_OUTPUT_COLUMNS
+                if not all(col in df.columns for col in selected_cols):
+                    log(f"⚠️ Skipping inference file {file} due to missing columns.")
+                    continue
+
+                df = df[selected_cols]
+                df = df[df["CMPNT_MATL_NUM"].notnull()]
+                all_predictions.append(df)
+
+                log(f"✅ Loaded inference file: {file} (rows: {len(df)})")
+
+            except Exception as e:
+                log(f"❌ Failed to load inference file {file}: {e}")
+
+    if not all_predictions:
+        log("❌ No valid inference files found. Exiting.")
+        return
+
+    global_pred_df = pd.concat(all_predictions, ignore_index=True)
+    global_pred_df = global_pred_df.sort_values(
+        by=["CMPNT_MATL_NUM", "AI_FINAL_CATEGORY_CONFIDENCE", "AI_FINAL_SUBCATEGORY_CONFIDENCE"],
+        ascending=[True, False, False]
+    )
+    global_pred_df = global_pred_df.drop_duplicates(subset="CMPNT_MATL_NUM", keep="first")
+
+    # Process each key file one by one
+    seen_keys = set(processed_keys)
+
+    log("🔍 Processing key files sequentially...")
+    for file in os.listdir(key_output_dir):
+        if not file.endswith(".parquet"):
+            continue
+
+        try:
+            key_path = os.path.join(key_output_dir, file)
+            key_df = pd.read_parquet(key_path)
+
+            if "composite_key" not in key_df.columns or "CMPNT_MATL_NUM" not in key_df.columns:
+                log(f"⚠️ Skipping key file {file} due to missing 'composite_key' or 'CMPNT_MATL_NUM'")
+                continue
+
+            # Remove already processed composite_keys
+            key_df = key_df[~key_df["composite_key"].isin(seen_keys)]
+            if key_df.empty:
+                log(f"⏭️ All rows in {file} already processed. Skipping.")
+                continue
+
+            # Merge with predictions
+            merged_df = key_df.merge(global_pred_df, how="left", on="CMPNT_MATL_NUM")
+
+            # Write merged output per file
+            output_path = os.path.join(final_output_dir, file)
+            merged_df.to_parquet(output_path, index=False)
+
+            # Update tracker file
+            new_keys = set(merged_df["composite_key"].dropna().unique())
+            seen_keys.update(new_keys)
+            append_processed_keys(new_keys)
+
+            log(f"✅ Wrote {len(merged_df)} merged rows to {output_path}")
+            log(f"💾 Memory usage: {psutil.virtual_memory().percent}%")
+
+        except Exception as e:
+            log(f"❌ Failed to process key file {file}: {e}")
+
+    log("🎉 All key files processed with global deduplication.")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--inference_output_dir", required=True)
+    parser.add_argument("--key_output_dir", required=True)
+    parser.add_argument("--final_output_dir", required=True)
+    args = parser.parse_args()
+
+    main(args.inference_output_dir, args.key_output_dir, args.final_output_dir)
