@@ -1,11 +1,1 @@
- File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azure\storage\blob\_shared\response_handlers.py", line 186, in process_storage_error
-    exec("raise error from None")   # pylint: disable=exec-used # nosec
-  File "<string>", line 1, in <module>
-azure.core.exceptions.ClientAuthenticationError: Server failed to authenticate the request. Make sure the value of Authorization header is formed correctly including the signature.   
-RequestId:575c7094-001e-0041-4df0-e5f4d9000000
-Time:2025-06-25T16:41:49.2319251Z
-ErrorCode:AuthenticationFailed
-authenticationerrordetail:Signature not valid in the specified time frame: Start [Wed, 25 Jun 2025 08:32:27 GMT] - Expiry [Wed, 25 Jun 2025 16:32:27 GMT] - Current [Wed, 25 Jun 2025 16:41:49 GMT]
-Content: <?xml version="1.0" encoding="utf-8"?><Error><Code>AuthenticationFailed</Code><Message>Server failed to authenticate the request. Make sure the value of Authorization header is formed correctly including the signature.
-RequestId:575c7094-001e-0041-4df0-e5f4d9000000
-Time:2025-06-25T16:41:49.2319251Z</Message><AuthenticationErrorDetail>Signature not valid in the specified time frame: Start [Wed, 25 Jun 2025 08:32:27 GMT] - Expiry [Wed, 25 Jun 2025 16:32:27 GMT] - Current [Wed, 25 Jun 2025 16:41:49 GMT]</AuthenticationErrorDetail></Error>
+na
