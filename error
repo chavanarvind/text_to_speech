@@ -1,1 +1,14 @@
-=IFERROR(--A1, A1)
+🔹 630 small files → multiprocessing
+🔸 654 large files → sequential
+
+🔄 Processing: /mnt/azureml/cr/j/6a1ee02c547e448b8e3f41af6626fea0/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/c535eadf-f30e-4a0d-be6e-f92a7bbe8074/step1_output/part-00000-00185f20-d84d-4828-b7cb-f6f0a7f512fa-c000.snappy.parquet
+[✅] Final output saved to: /mnt/azureml/cr/j/6a1ee02c547e448b8e3f41af6626fea0/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/e66e279e-a6c1-4430-a206-4a168baa360d/step1a_final_output/mapped_part-00000-00185f20-d84d-4828-b7cb-f6f0a7f512fa-c000.snappy.parquet
+[✅] Done: part-00000-00185f20-d84d-4828-b7cb-f6f0a7f512fa-c000.snappy.parquet in 32.60s ➤ New components: 265681
+
+🔄 Processing: /mnt/azureml/cr/j/6a1ee02c547e448b8e3f41af6626fea0/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/c535eadf-f30e-4a0d-be6e-f92a7bbe8074/step1_output/part-00000-0042fc95-a813-4a78-a5ea-9d565974a2b5-c000.snappy.parquet
+[✅] Final output saved to: /mnt/azureml/cr/j/6a1ee02c547e448b8e3f41af6626fea0/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/e66e279e-a6c1-4430-a206-4a168baa360d/step1a_final_output/mapped_part-00000-0042fc95-a813-4a78-a5ea-9d565974a2b5-c000.snappy.parquet
+[✅] Done: part-00000-0042fc95-a813-4a78-a5ea-9d565974a2b5-c000.snappy.parquet in 27.43s ➤ New components: 10240
+
+🔄 Processing: /mnt/azureml/cr/j/6a1ee02c547e448b8e3f41af6626fea0/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/c535eadf-f30e-4a0d-be6e-f92a7bbe8074/step1_output/part-00000-00bb3abb-2599-4885-a2cf-085958187528-c000.snappy.parquet
+[✅] Final output saved to: /mnt/azureml/cr/j/6a1ee02c547e448b8e3f41af6626fea0/cap/data-capability/wd/INPUT_step1a_final_output_workspaceblobstore/azureml/e66e279e-a6c1-4430-a206-4a168baa360d/step1a_final_output/mapped_part-00000-00bb3abb-2599-4885-a2cf-085958187528-c000.snappy.parquet
+[✅] Done: part-00000-00bb3abb-2599-4885-a2cf-085958187528-c000.snappy.parquet in 26.20s ➤ New components: 726
