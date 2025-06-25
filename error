@@ -4,49 +4,32 @@ import uuid
 import time
 import requests
 import certifi
-from datetime import datetime, timedelta
-from azureml.core import Workspace
-from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
-from urllib.parse import quote_plus
-from azureml.core import Workspace, Datastore
-from azure.identity import DefaultAzureCredential
+from urllib.parse import quote_plus, urlparse
+from azure.storage.blob import BlobServiceClient
 
-# === AzureML Workspace and Datastore Config ===
-SUBSCRIPTION_ID = "a8d518a9-4587-4ba2-9a60-68b980c2f000"
-RESOURCE_GROUP = "AZR-WDZ-DTO-AML-Development"
-WORKSPACE_NAME = "AML-DTO-Marmot-dev"
-
+# === Azure Video Translation Configuration ===
 ENDPOINT = "https://cog-speech-dto-epil-dev.cognitiveservices.azure.com/"
 AZURE_SPEECH_KEY = "BBvpAQdmiBQWNukOTc5F2tIb5Ln7TuubMiQGbbkSSO2GJDR6ZK09JQQJ99AKACYeBjFXJ3w3AAAYACOG1LLR"
 API_VERSION = "2025-05-20"
 
+# === SAS container URL provided by your team ===
+SAS_CONTAINER_URL = "https://adlsdtodsdev.blob.core.windows.net/video?<YOUR_SAS_TOKEN>"  # 🔁 Replace with actual URL
+
+# === Helpers ===
 def sanitize_filename(filename):
     return filename.replace(" ", "_")
 
 def upload_to_blob_storage(local_path):
-    # AzureML workspace context
-    ws = Workspace(
-        subscription_id="a8d518a9-4587-4ba2-9a60-68b980c2f000",
-        resource_group="AZR-WDZ-DTO-AML-Development",
-        workspace_name="AML-DTO-Marmot-dev"
-    )
+    parsed_url = urlparse(SAS_CONTAINER_URL)
+    account_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
+    container_name = parsed_url.path.strip("/")
+    sas_token = parsed_url.query
 
-    # Your container and storage account
-    container_name = "video"
-    storage_account_name = "adlsdtodsdev"
     blob_path = f"video-uploads/{sanitize_filename(os.path.basename(local_path))}"
 
-    # Authenticate using your logged-in identity
-    credential = DefaultAzureCredential()
-
-    # Create client
-    blob_service_client = BlobServiceClient(
-        account_url=f"https://{storage_account_name}.blob.core.windows.net",
-        credential=credential
-    )
+    blob_service_client = BlobServiceClient(account_url=account_url, credential=sas_token)
     container_client = blob_service_client.get_container_client(container_name)
 
-    # Upload
     with open(local_path, "rb") as data:
         try:
             container_client.upload_blob(name=blob_path, data=data, overwrite=True)
@@ -54,19 +37,7 @@ def upload_to_blob_storage(local_path):
             print(f"[ERROR] Upload failed: {e}")
             raise
 
-    # ❗You cannot generate a SAS token without the storage key
-    # So we return the public blob URL — ensure container allows access by identity
-
-    blob_url = f"https://{storage_account_name}.blob.core.windows.net/{container_name}/{quote_plus(blob_path)}"
-
-    # Optional: Check if URL is accessible
-    try:
-        r = requests.head(blob_url, verify=certifi.where())
-        if r.status_code != 200:
-            print(f"[WARNING] Blob may not be publicly accessible (status {r.status_code})")
-    except Exception as e:
-        print(f"[ERROR] Blob access check failed: {e}")
-
+    blob_url = f"{account_url}/{container_name}/{quote_plus(blob_path)}?{sas_token}"
     return blob_url
 
 # === Create translation job ===
@@ -90,7 +61,7 @@ def create_video_translation_job(blob_url, source_lang, target_lang):
             "subtitleMaxCharCountPerSegment": 50,
             "exportSubtitleInVideo": True,
             "enableLipSync": False,
-            "mediaFileUri": blob_url  # FIXED
+            "mediaFileUri": blob_url
         },
         "targets": [
             {
@@ -113,7 +84,7 @@ def create_video_translation_job(blob_url, source_lang, target_lang):
 def poll_job_and_get_output(job_id):
     url = f"{ENDPOINT}/videotranslation/translations/{job_id}?api-version={API_VERSION}"
     headers = {"Ocp-Apim-Subscription-Key": AZURE_SPEECH_KEY}
-    for _ in range(30):
+    for _ in range(30):  # Retry for up to 5 minutes
         resp = requests.get(url, headers=headers, verify=certifi.where())
         result = resp.json()
         status = result.get("status")
@@ -124,7 +95,7 @@ def poll_job_and_get_output(job_id):
         time.sleep(10)
     return {"error": "Timeout waiting for translation to finish."}
 
-# === Translate video end-to-end ===
+# === End-to-end translation ===
 def translate_video(video_file, source_lang, target_lang):
     import logging
     logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s")
@@ -169,7 +140,7 @@ iface = gr.Interface(
         gr.Textbox(label="Status"),
         gr.Textbox(label="Translated Video URL")
     ],
-    title="Azure Video Translator using AML Blob Datastore"
+    title="Azure Video Translator using SAS Token"
 )
 
 iface.launch()
