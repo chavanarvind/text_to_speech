@@ -5,9 +5,7 @@ import psutil
 from datetime import datetime
 from azureml.core import Run
 
-def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
-
+# === Constants ===
 AI_OUTPUT_COLUMNS = [
     "AI_FINAL_CATEGORY",
     "AI_FINAL_CATEGORY_CONFIDENCE",
@@ -18,6 +16,9 @@ AI_OUTPUT_COLUMNS = [
 ]
 
 TRACKER_FILE = "processed_keys.txt"
+
+def log(msg):
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
 
 def load_processed_keys():
     if not os.path.exists(TRACKER_FILE):
@@ -66,16 +67,11 @@ def main(inference_output_dir, key_output_dir, final_output_dir):
         return
 
     global_pred_df = pd.concat(all_predictions, ignore_index=True)
-    # global_pred_df = global_pred_df.sort_values(
-    #     by=["CMPNT_MATL_NUM", "AI_FINAL_CATEGORY_CONFIDENCE", "AI_FINAL_SUBCATEGORY_CONFIDENCE"],
-    #     ascending=[True, False, False]
-    # )
-    # global_pred_df = global_pred_df.drop_duplicates(subset="CMPNT_MATL_NUM", keep="first")
 
     # Process each key file one by one
     seen_keys = set(processed_keys)
-
     log("🔍 Processing key files sequentially...")
+
     for file in os.listdir(key_output_dir):
         if not file.endswith(".parquet"):
             continue
@@ -88,24 +84,26 @@ def main(inference_output_dir, key_output_dir, final_output_dir):
                 log(f"⚠️ Skipping key file {file} due to missing 'composite_key' or 'CMPNT_MATL_NUM'")
                 continue
 
-            # Remove already processed composite_keys
+            # Filter out already processed composite keys
             key_df = key_df[~key_df["composite_key"].isin(seen_keys)]
             if key_df.empty:
                 log(f"⏭️ All rows in {file} already processed. Skipping.")
                 continue
-            # Update tracker file
-            new_keys = set(merged_df["composite_key"].dropna().unique())
-            seen_keys.update(new_keys)
-            append_processed_keys(new_keys)
-            merged_df = merged_df.drop("composite_key", axis=1, errors="ignore")
+
             # Merge with predictions
             merged_df = key_df.merge(global_pred_df, how="left", on="CMPNT_MATL_NUM")
 
-            # Write merged output per file
+            # Track new keys
+            new_keys = set(key_df["composite_key"].dropna().unique())
+            seen_keys.update(new_keys)
+            append_processed_keys(new_keys)
+
+            # Drop composite_key before saving
+            merged_df = merged_df.drop("composite_key", axis=1, errors="ignore")
+
+            # Save merged output
             output_path = os.path.join(final_output_dir, file)
             merged_df.to_parquet(output_path, index=False)
-
-            
 
             log(f"✅ Wrote {len(merged_df)} merged rows to {output_path}")
             log(f"💾 Memory usage: {psutil.virtual_memory().percent}%")
