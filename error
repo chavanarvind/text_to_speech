@@ -1,1 +1,3 @@
-20 cores, 160GB RAM, 750GB storage
+SIZE_THRESHOLD_MB = 120   # Let more files run in parallel, but avoid memory blow-up
+MAX_WORKERS = 14          # Safe parallelism with 20 cores
+BATCH_SIZE = 1000         # Reduces SQLite write contention and boosts performance
