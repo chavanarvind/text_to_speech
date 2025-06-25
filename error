@@ -1,19 +1,5 @@
-import pyarrow.parquet as pq  # Add at top if not already imported
+Hi Team,
+This is regarding the RPM Categorization project. Currently, we are pushing the data into a container. However, Jay and his team are expecting the data to be mounted so they can directly reference it as a table.
 
-# Define all required columns (mapping + AI-related)
-required_columns = [
-    "CMPNT_MATL_NUM", "CMPNT_MATL_DESC", "CMPNT_MATL_TYPE_CD",
-    "CMPNT_CAT_CD_DESC", "CMPNT_UOM_CD",
-    "AI_FINAL_CATEGORY", "AI_FINAL_CATEGORY_CONFIDENCE", "AI_MATCHING_REASON_FINAL_CATEGORY",
-    "AI_FINAL_SUBCATEGORY", "AI_FINAL_SUBCATEGORY_CONFIDENCE", "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
-]
-
-# Get available columns in file
-available_columns = pq.ParquetFile(file_path).schema.names
-selected_columns = [col for col in required_columns if col in available_columns]
-
-# Read only present columns
-df = pd.read_parquet(file_path, columns=selected_columns)
-
-# Add missing AI columns if any
-df = ensure_ai_columns(df)
+We would appreciate your support in helping us complete this task.
+Jay, please feel free to add anything I may have missed.
