@@ -1,1 +1,1 @@
-=IF(ISNUMBER(--A1), --A1, "")
+=IFERROR(--A1, A1)
