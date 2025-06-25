@@ -2,116 +2,122 @@ import os
 import argparse
 import pandas as pd
 import psutil
+import sqlite3
 from datetime import datetime
+from concurrent.futures import ProcessPoolExecutor
 from azureml.core import Run
 
-# === Constants ===
 AI_OUTPUT_COLUMNS = [
-    "AI_FINAL_CATEGORY",
-    "AI_FINAL_CATEGORY_CONFIDENCE",
-    "AI_MATCHING_REASON_FINAL_CATEGORY",
-    "AI_FINAL_SUBCATEGORY",
-    "AI_FINAL_SUBCATEGORY_CONFIDENCE",
-    "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
+    "AI_FINAL_CATEGORY", "AI_FINAL_CATEGORY_CONFIDENCE", "AI_MATCHING_REASON_FINAL_CATEGORY",
+    "AI_FINAL_SUBCATEGORY", "AI_FINAL_SUBCATEGORY_CONFIDENCE", "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
 ]
 
-TRACKER_FILE = "processed_keys.txt"
+DEDUP_DB = "dedup.db"
+BATCH_SIZE = 100
+SIZE_THRESHOLD_MB = 50
+MAX_WORKERS = 2
 
 def log(msg):
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
 
-def load_processed_keys():
-    if not os.path.exists(TRACKER_FILE):
-        return set()
-    with open(TRACKER_FILE, "r") as f:
-        return set(line.strip() for line in f if line.strip())
+def setup_db(db_path=DEDUP_DB):
+    conn = sqlite3.connect(db_path, timeout=30)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("CREATE TABLE IF NOT EXISTS processed_keys (composite_key TEXT PRIMARY KEY)")
+    return conn
 
-def append_processed_keys(new_keys):
-    with open(TRACKER_FILE, "a") as f:
-        for key in new_keys:
-            f.write(f"{key}\n")
+def is_key_seen(conn, key):
+    cur = conn.execute("SELECT 1 FROM processed_keys WHERE composite_key = ?", (key,))
+    return cur.fetchone() is not None
+
+def insert_new_keys(conn, keys):
+    keys = list(set(keys))
+    for i in range(0, len(keys), BATCH_SIZE):
+        batch = [(k,) for k in keys[i:i+BATCH_SIZE]]
+        with conn:
+            conn.executemany("INSERT OR IGNORE INTO processed_keys (composite_key) VALUES (?)", batch)
+
+def load_predictions(inference_output_dir):
+    all_predictions = []
+    for file in os.listdir(inference_output_dir):
+        if file.endswith(".parquet"):
+            try:
+                df = pd.read_parquet(os.path.join(inference_output_dir, file))
+                required_cols = ["CMPNT_MATL_NUM"] + AI_OUTPUT_COLUMNS
+                if all(col in df.columns for col in required_cols):
+                    df = df[required_cols].dropna(subset=["CMPNT_MATL_NUM"])
+                    all_predictions.append(df)
+            except Exception as e:
+                log(f"❌ Failed to load {file}: {e}")
+    return pd.concat(all_predictions, ignore_index=True) if all_predictions else None
+
+def process_key_file(file_path, pred_df, final_output_dir):
+    try:
+        conn = setup_db()
+        key_df = pd.read_parquet(file_path)
+
+        if "composite_key" not in key_df.columns or "CMPNT_MATL_NUM" not in key_df.columns:
+            log(f"⚠️ Skipping {file_path}, missing required columns")
+            return
+
+        key_df["already_seen"] = key_df["composite_key"].apply(lambda k: is_key_seen(conn, k))
+        key_df = key_df[~key_df["already_seen"]].drop(columns="already_seen")
+
+        if key_df.empty:
+            log(f"⏭️ All rows already processed: {os.path.basename(file_path)}")
+            return
+
+        merged_df = key_df.merge(pred_df, how="left", on="CMPNT_MATL_NUM")
+        new_keys = key_df["composite_key"].dropna().unique().tolist()
+        insert_new_keys(conn, new_keys)
+
+        merged_df = merged_df.drop("composite_key", axis=1, errors="ignore")
+        output_path = os.path.join(final_output_dir, os.path.basename(file_path))
+        merged_df.to_parquet(output_path, index=False)
+
+        log(f"✅ Processed {file_path} → {len(merged_df)} rows")
+        log(f"💾 RAM usage: {psutil.virtual_memory().percent}%")
+        conn.close()
+    except Exception as e:
+        log(f"❌ Error in file {file_path}: {e}")
+
+def classify_files_by_size(dir_path, threshold_mb=SIZE_THRESHOLD_MB):
+    small, large = [], []
+    for file in os.listdir(dir_path):
+        if file.endswith(".parquet"):
+            full_path = os.path.join(dir_path, file)
+            size_mb = os.path.getsize(full_path) / (1024 * 1024)
+            (small if size_mb <= threshold_mb else large).append(full_path)
+    return small, large
 
 def main(inference_output_dir, key_output_dir, final_output_dir):
     run = Run.get_context()
     os.makedirs(final_output_dir, exist_ok=True)
 
-    processed_keys = load_processed_keys()
-    log(f"🔑 Loaded {len(processed_keys)} already processed composite keys.")
-
-    # Load and prepare global AI predictions
-    log("📁 Scanning inference output directory...")
-    all_predictions = []
-
-    for file in os.listdir(inference_output_dir):
-        if file.endswith(".parquet"):
-            try:
-                file_path = os.path.join(inference_output_dir, file)
-                df = pd.read_parquet(file_path)
-
-                selected_cols = ["CMPNT_MATL_NUM"] + AI_OUTPUT_COLUMNS
-                if not all(col in df.columns for col in selected_cols):
-                    log(f"⚠️ Skipping inference file {file} due to missing columns.")
-                    continue
-
-                df = df[selected_cols]
-                df = df[df["CMPNT_MATL_NUM"].notnull()]
-                all_predictions.append(df)
-
-                log(f"✅ Loaded inference file: {file} (rows: {len(df)})")
-
-            except Exception as e:
-                log(f"❌ Failed to load inference file {file}: {e}")
-
-    if not all_predictions:
-        log("❌ No valid inference files found. Exiting.")
+    log("📥 Loading prediction files...")
+    pred_df = load_predictions(inference_output_dir)
+    if pred_df is None:
+        log("❌ No valid prediction files found.")
         return
 
-    global_pred_df = pd.concat(all_predictions, ignore_index=True)
+    log("📂 Classifying key files by size...")
+    small_files, large_files = classify_files_by_size(key_output_dir)
 
-    # Process each key file one by one
-    seen_keys = set(processed_keys)
-    log("🔍 Processing key files sequentially...")
+    log(f"🔄 {len(small_files)} small files → multiprocessing")
+    log(f"🐢 {len(large_files)} large files → sequential")
 
-    for file in os.listdir(key_output_dir):
-        if not file.endswith(".parquet"):
-            continue
+    # Sequential large files
+    for file_path in large_files:
+        process_key_file(file_path, pred_df, final_output_dir)
 
-        try:
-            key_path = os.path.join(key_output_dir, file)
-            key_df = pd.read_parquet(key_path)
+    # Parallel small files
+    if small_files:
+        with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            for path in small_files:
+                executor.submit(process_key_file, path, pred_df, final_output_dir)
 
-            if "composite_key" not in key_df.columns or "CMPNT_MATL_NUM" not in key_df.columns:
-                log(f"⚠️ Skipping key file {file} due to missing 'composite_key' or 'CMPNT_MATL_NUM'")
-                continue
-
-            # Filter out already processed composite keys
-            key_df = key_df[~key_df["composite_key"].isin(seen_keys)]
-            if key_df.empty:
-                log(f"⏭️ All rows in {file} already processed. Skipping.")
-                continue
-
-            # Merge with predictions
-            merged_df = key_df.merge(global_pred_df, how="left", on="CMPNT_MATL_NUM")
-
-            # Track new keys
-            new_keys = set(key_df["composite_key"].dropna().unique())
-            seen_keys.update(new_keys)
-            append_processed_keys(new_keys)
-
-            # Drop composite_key before saving
-            merged_df = merged_df.drop("composite_key", axis=1, errors="ignore")
-
-            # Save merged output
-            output_path = os.path.join(final_output_dir, file)
-            merged_df.to_parquet(output_path, index=False)
-
-            log(f"✅ Wrote {len(merged_df)} merged rows to {output_path}")
-            log(f"💾 Memory usage: {psutil.virtual_memory().percent}%")
-
-        except Exception as e:
-            log(f"❌ Failed to process key file {file}: {e}")
-
-    log("🎉 All key files processed with global deduplication.")
+    log("🎉 All files processed successfully.")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
