@@ -1,1 +1,14 @@
-"videoFileUrl": blob_url
+    'Date': 'Wed, 25 Jun 2025 16:09:53 GMT'
+[2025-06-25 21:39:53,985] Upload complete: https://adlsdtodsdev.blob.core.windows.net/video/video-uploads%2FOverview_OCC.mp4?sp=racwlme&st=2025-06-25T08:32:27Z&se=2025-06-25T16:32:27Z&spr=https&sv=2024-11-04&sr=c&sig=QlsRStVWbrrVV0ZADOasQ57dR70cyIFohSqecK%2FBq%2FU%3D
+[2025-06-25 21:39:53,985] Submitting video translation job to Azure...
+[2025-06-25 21:39:54,806] [ERROR] Failed to submit translation job: 400
+{
+  "error": {
+    "code": "BadRequest",
+    "message": "Request is invalid.",
+    "innererror": {
+      "code": "InvalidPayload",
+      "message": "mediaFileUri is not accessible."
+    }
+  }
+}
