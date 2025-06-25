@@ -4,15 +4,6 @@ import glob
 import traceback
 import pandas as pd
 import time
-from multiprocessing import Pool, cpu_count
-from azureml.core import Dataset
-
-try:
-    from filelock import FileLock
-except ImportError:
-    import subprocess
-    subprocess.check_call(["pip", "install", "filelock"])
-    from filelock import FileLock
 
 # === Constants ===
 DIRECT_MAP_KEY_1 = "Direct Mapping"
@@ -20,7 +11,6 @@ DIRECT_MAP_KEY_2 = "Direct Mapping"
 JOIN_COL_1 = "CMPNT_CAT_CD_DESC"
 JOIN_COL_2 = "CMPNT_MATL_TYPE_CD"
 SEEN_COMPONENTS_FILE = "seen_components.txt"
-SEEN_COMPONENTS_LOCK = "seen_components.txt.lock"
 
 # === File-based component tracker ===
 def load_seen_components():
@@ -30,10 +20,9 @@ def load_seen_components():
         return set(line.strip() for line in f if line.strip())
 
 def append_seen_components(new_ids):
-    with FileLock(SEEN_COMPONENTS_LOCK):
-        with open(SEEN_COMPONENTS_FILE, "a") as f:
-            for comp_id in new_ids:
-                f.write(f"{comp_id}\n")
+    with open(SEEN_COMPONENTS_FILE, "a") as f:
+        for comp_id in new_ids:
+            f.write(f"{comp_id}\n")
 
 # === Core logic ===
 def ensure_ai_columns(df):
@@ -129,10 +118,10 @@ def finalize_output(df, output_path):
     df.to_parquet(output_path, index=False)
     print(f"[✅] Final output saved to: {output_path}")
 
-def process_single_file(args):
-    file_path, mapping_df, final_output_dir, key_output_dir = args
+def process_single_file(file_path, mapping_df, final_output_dir, key_output_dir):
     start_time = time.time()
     try:
+        print(f"🔄 Processing: {file_path}")
         df = pd.read_parquet(file_path)
         basename = os.path.basename(file_path)
 
@@ -145,17 +134,15 @@ def process_single_file(args):
 
         if not df_key.empty:
             key_output_file = os.path.join(key_output_dir, f"key_{basename}")
-            df_key = df_key.drop_duplicates(subset=["composite_key"])
-            df_key = df_key.drop("composite_key", axis=1)
+            df_key = df_key.drop_duplicates(subset=["composite_key"]).drop("composite_key", axis=1)
             df_key.to_parquet(key_output_file, index=False)
 
         df_mapping = df[mapping_cols].dropna(subset=["CMPNT_MATL_DESC"]).drop_duplicates(subset=["CMPNT_MATL_NUM"])
 
-        with FileLock(SEEN_COMPONENTS_LOCK):
-            seen_set = load_seen_components()
-            new_ids = [cid for cid in df_mapping["CMPNT_MATL_NUM"] if str(cid) not in seen_set]
-            df_mapping = df_mapping[df_mapping["CMPNT_MATL_NUM"].isin(new_ids)]
-            append_seen_components(new_ids)
+        seen_set = load_seen_components()
+        new_ids = [cid for cid in df_mapping["CMPNT_MATL_NUM"] if str(cid) not in seen_set]
+        df_mapping = df_mapping[df_mapping["CMPNT_MATL_NUM"].isin(new_ids)]
+        append_seen_components(new_ids)
 
         if not df_mapping.empty:
             df_mapping = ensure_ai_columns(df_mapping)
@@ -176,7 +163,7 @@ def process_single_file(args):
             finalize_output(df_mapping, mapped_output_file)
 
         duration = time.time() - start_time
-        print(f"[✅] Finished: {basename} in {duration:.2f}s ➤ Components added: {len(new_ids)}")
+        print(f"[✅] Done: {basename} in {duration:.2f}s ➤ New components: {len(new_ids)}")
 
     except Exception as e:
         print(f"[❌ ERROR] File: {file_path}\n{e}")
@@ -202,16 +189,10 @@ def main():
     os.makedirs(args.final_output, exist_ok=True)
     os.makedirs(args.key_output, exist_ok=True)
 
-    args_list = [
-        (f, mapping_df, args.final_output, args.key_output)
-        for f in parquet_files
-    ]
+    for file_path in parquet_files:
+        process_single_file(file_path, mapping_df, args.final_output, args.key_output)
 
-    with Pool(cpu_count() - 2) as pool:
-        for _ in pool.imap_unordered(process_single_file, args_list):
-            pass
-
-    print("\n✅ All files processed with disk-based deduplication.")
+    print("\n✅ All files processed sequentially with disk-based deduplication.")
 
 if __name__ == "__main__":
     main()
