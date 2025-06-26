@@ -1,145 +1,48 @@
-# === Helpers ===
-def sanitize_filename(filename):
-    return filename.replace(" ", "_")
-
-def upload_to_blob_storage(local_path):
-    parsed_url = urlparse(SAS_CONTAINER_URL)
-    account_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
-    container_name = parsed_url.path.strip("/")
-    sas_token = parsed_url.query
-
-    blob_path = f"video-uploads/{sanitize_filename(os.path.basename(local_path))}"
-
-    blob_service_client = BlobServiceClient(account_url=account_url, credential=sas_token)
-    container_client = blob_service_client.get_container_client(container_name)
-
-    with open(local_path, "rb") as data:
-        try:
-            container_client.upload_blob(name=blob_path, data=data, overwrite=True)
-        except Exception as e:
-            print(f"[ERROR] Upload failed: {e}")
-            raise
-
-    blob_url = f"{account_url}/{container_name}/{quote_plus(blob_path)}?{sas_token}"
-    return blob_url
-
-# === Create translation job ===
-def create_video_translation_job(blob_url, source_lang, target_lang):
-    job_id = f"gradio-job-{uuid.uuid4()}"
-    url = f"{ENDPOINT}/videotranslation/translations/{job_id}?api-version={API_VERSION}"
-    headers = {
-        "Ocp-Apim-Subscription-Key": AZURE_SPEECH_KEY,
-        "Content-Type": "application/json",
-        "Operation-Id": job_id
+raise RuntimeError("Response content shorter than Content-Length")
+RuntimeError: Response content shorter than Content-Length
+[2025-06-26 13:32:00,820] Uploading video to Azure Blob Storage...
+[2025-06-26 13:32:00,978] Request URL: 'https://adlsdtodsdev.blob.core.windows.net/video/video-uploads/video-uploads_Overview_OCC.mp4?sp=REDACTED&st=REDACTED&se=REDACTED&spr=REDACTED&sv=REDACTED&sr=REDACTED&sig=REDACTED'
+Request method: 'PUT'
+Request headers:
+    'Content-Length': '50979272'
+    'x-ms-blob-type': 'REDACTED'
+    'x-ms-version': 'REDACTED'
+    'Content-Type': 'application/octet-stream'
+    'Accept': 'application/xml'
+    'User-Agent': 'azsdk-python-storage-blob/12.23.0 Python/3.8.10 (Windows-10-10.0.22631-SP0)'
+    'x-ms-date': 'REDACTED'
+    'x-ms-client-request-id': 'd6f00608-5263-11f0-bde0-6045bd1b6a79'
+A body is sent with the request
+[2025-06-26 13:32:07,853] Response status: 201
+Response headers:
+    'Content-Length': '0'
+    'Content-MD5': 'REDACTED'
+    'Last-Modified': 'Thu, 26 Jun 2025 08:02:07 GMT'
+    'ETag': '"0x8DDB487BF2A86D4"'
+    'Server': 'Windows-Azure-Blob/1.0 Microsoft-HTTPAPI/2.0'
+    'x-ms-request-id': 'dca3f277-c01e-0061-1b70-e68f7e000000'
+    'x-ms-client-request-id': 'd6f00608-5263-11f0-bde0-6045bd1b6a79'
+    'x-ms-version': 'REDACTED'
+    'x-ms-content-crc64': 'REDACTED'
+    'x-ms-request-server-encrypted': 'REDACTED'
+    'Date': 'Thu, 26 Jun 2025 08:02:06 GMT'
+[2025-06-26 13:32:07,856] Upload complete: https://adlsdtodsdev.blob.core.windows.net/video/video-uploads%2Fvideo-uploads_Overview_OCC.mp4?sp=racwlme&st=2025-06-26T07:42:50Z&se=2025-12-26T15:42:50Z&spr=https&sv=2024-11-04&sr=c&sig=uF0EVn5JkhT4IZ8qjHL7e7Kts0GDKLCJhvo7OGYpfYk%3D
+[2025-06-26 13:32:07,857] Submitting video translation job to Azure...
+[2025-06-26 13:32:08,682] [ERROR] Failed to submit translation job: 400
+{
+  "error": {
+    "code": "BadRequest",
+    "message": "Request is invalid.",
+    "innererror": {
+      "code": "InvalidPayload",
+      "message": "mediaFileUri is not accessible."
     }
-
-    payload = {
-        "displayName": job_id,
-        "description": "Gradio video translation",
-        "input": {
-            "sourceLocale": source_lang,
-            "targetLocale": target_lang,
-            "voiceKind": "PlatformVoice",
-            "speakerCount": 1,
-            "subtitleMaxCharCountPerSegment": 50,
-            "exportSubtitleInVideo": True,
-            "enableLipSync": False,
-            "videoFileUrl": blob_url  # ✅ Correct key
-        },
-        "targets": [
-            {
-                "language": target_lang,
-                "outputFormat": "video"
-            }
-        ],
-        "properties": {
-            "diarizationEnabled": "true",
-            "ttsVoice": f"{target_lang}-DeniseNeural"
-        }
-    }
-
-    response = requests.put(url, headers=headers, json=payload, verify=certifi.where())
-    if response.status_code >= 400:
-        return None, f"[ERROR] Failed to submit translation job: {response.status_code}\n{response.text}"
-    return job_id, None
-
-# === Poll for status ===
-def poll_job_and_get_output(job_id):
-    url = f"{ENDPOINT}/videotranslation/translations/{job_id}?api-version={API_VERSION}"
-    headers = {"Ocp-Apim-Subscription-Key": AZURE_SPEECH_KEY}
-    for _ in range(30):  # Retry ~5 mins
-        resp = requests.get(url, headers=headers, verify=certifi.where())
-        result = resp.json()
-        status = result.get("status")
-        if status == "Succeeded":
-            return result.get("results", {}).get("urls", {})
-        elif status == "Failed":
-            return {"error": "Translation failed."}
-        time.sleep(10)
-    return {"error": "Timeout waiting for translation to finish."}
-
-# === End-to-end handler ===
-def translate_video(video_file, source_lang, target_lang):
-    import logging
-    logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s")
-    logger = logging.getLogger("video-translator")
-
-    logger.info("Uploading video to Azure Blob Storage...")
-    video_path = video_file.name if hasattr(video_file, "name") else video_file
-    blob_url = upload_to_blob_storage(video_path)
-    logger.info(f"Upload complete: {blob_url}")
-
-    logger.info("Submitting video translation job to Azure...")
-    job_id, error = create_video_translation_job(blob_url, source_lang, target_lang)
-    if error:
-        logger.error(error)
-        return blob_url, "Translation job submission failed.", ""
-
-    logger.info(f"Job submitted: {job_id}")
-    logger.info("Polling job status...")
-    result = poll_job_and_get_output(job_id)
-
-    translated_url = result.get("video")
-    if not translated_url:
-        logger.error("Translation failed or no result video.")
-        return blob_url, "Translation failed or timed out.", ""
-
-    logger.info(f"Translation completed. Output URL: {translated_url}")
-    return blob_url, "Translation succeeded.", translated_url
-
-# === Gradio Interface ===
-def gradio_interface(video, source_lang, target_lang):
-    return translate_video(video, source_lang, target_lang)
-
-iface = gr.Interface(
-    fn=gradio_interface,
-    inputs=[
-        gr.Video(label="Upload Video (.mp4)"),
-        gr.Textbox(label="Source Language (e.g., en-US)", value="en-US"),
-        gr.Textbox(label="Target Language (e.g., es-ES)", value="es-ES")
-    ],
-    outputs=[
-        gr.Textbox(label="Original Video Blob URL"),
-        gr.Textbox(label="Status"),
-        gr.Textbox(label="Translated Video URL")
-    ],
-    title="Azure Video Translator using SAS Token"
-)
-
-iface.launch()
-below bash code i found in doc i need to know its align to my code or not.
-curl -v -X PUT -H "Ocp-Apim-Subscription-Key: [YourResourceKey]" -H "Operation-Id: [operationId]" -H "Content-Type: application/json" -d "{
-  displayName: "[YourDisplayName]",
-  description: "[OptionalYourDescription]",
-  input: {
-    "sourceLocale": "[VideoSourceLocale]",
-    "targetLocale": "[TranslationTargetLocale]",
-    "voiceKind": "[PlatformVoice/PersonalVoice]",
-    "speakerCount": [OptionalVideoSpeakerCount],
-    "subtitleMaxCharCountPerSegment": [OptionalYourPreferredSubtitleMaxCharCountPerSegment],
-    "exportSubtitleInVideo": [Optional true/false],
-    "videoFileUrl": "[AzureBlobUrlWithSas]"
   }
-}"
-"
-https: //[YourSpeechRegion].api.cognitive.microsoft.com/videotranslation/translations/[translationId]?api-version=2024-05-20-preview"
+}
+
+
+
+
+
+
+
