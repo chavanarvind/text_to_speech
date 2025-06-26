@@ -1,13 +1,6 @@
-df_mapping = add_flags(df_mapping)
-finalize_output(df_mapping, os.path.join(final_output_dir, f"mapped_{basename}"))
-
-df_mapping = add_flags(df_mapping)
-
-# ✅ Add this filtering step here
-df_mapping = df_mapping[
-    (df_mapping['Mapped_File_Category Filled'] | df_mapping['Mapped_File_Subcategory Filled']) |
-    (df_mapping['CMPNT_MATL_DESC'].notna() & df_mapping['CMPNT_MATL_DESC'].astype(str).str.strip().ne(''))
-]
-
-# Now finalize output
-finalize_output(df_mapping, os.path.join(final_output_dir, f"mapped_{basename}"))
+Direct Mapping	Mapped_File_Category	Mapped_File_Subcategory
+Acetaminophen or par	CHM	
+Acetaminophen/aspiri	CHM	
+Acetaminophen/diphen	CHM	
+Acetylsalicylic Acid	CHM	CHM - Acids / Buffers / Salts
+Acids / Buffers / Sa	CHM	CHM - Acids / Buffers / Salts
