@@ -1,6 +1,18 @@
-Direct Mapping	Mapped_File_Category	Mapped_File_Subcategory
-Acetaminophen or par	CHM	
-Acetaminophen/aspiri	CHM	
-Acetaminophen/diphen	CHM	
-Acetylsalicylic Acid	CHM	CHM - Acids / Buffers / Salts
-Acids / Buffers / Sa	CHM	CHM - Acids / Buffers / Salts
+def ensure_ai_columns(df):
+    ai_columns = {
+        'AI_FINAL_CATEGORY': "string",
+        'AI_FINAL_CATEGORY_CONFIDENCE': "float",
+        'AI_MATCHING_REASON_FINAL_CATEGORY': "string",
+        'AI_FINAL_SUBCATEGORY': "string",
+        'AI_FINAL_SUBCATEGORY_CONFIDENCE': "float",
+        'AI_MATCHING_REASON_FINAL_SUBCATEGORY': "string"
+    }
+
+    for col, dtype in ai_columns.items():
+        if col not in df.columns:
+            df[col] = pd.Series([pd.NA] * len(df), dtype=dtype)
+        else:
+            # Coerce dtype to ensure safe behavior
+            df[col] = df[col].astype(dtype).replace(["None", "none", "nan", "NaN", ""], pd.NA)
+
+    return df
