@@ -1,31 +1,5 @@
-def process_file(file_path, abbrev_map, pattern, output_path):
-    try:
-        df = pd.read_parquet(file_path)
-
-        # Identify rows to process (confidence <= 0 or missing)
-        mask_process = (
-            df.get('AI_FINAL_SUBCATEGORY_CONFIDENCE', 0).fillna(0) <= 0
-        ) & (
-            df.get('AI_FINAL_CATEGORY_CONFIDENCE', 0).fillna(0) <= 0
-        )
-
-        df_to_process = df[mask_process].copy()
-        df_to_skip = df[~mask_process].copy()
-
-        if not df_to_process.empty:
-            df_to_process['CMPNT_MATL_DESC_CLEAN'] = df_to_process['CMPNT_MATL_DESC'].astype(str).map(
-                lambda x: expand_abbreviations(x, abbrev_map, pattern)
-            )
-            df_to_process['CMPNT_MATL_DESC_CLEAN'] = df_to_process['CMPNT_MATL_DESC_CLEAN'].map(clean_text)
-            df_to_process['CMPNT_MATL_DESC_LEN'] = df_to_process['CMPNT_MATL_DESC'].astype(str).str.len()
-            df_to_process['UNIT_GROUP'] = df_to_process['CMPNT_UOM_CD'].fillna('').str.upper().map(unit_group_map).fillna('Unclassified')
-            df_to_process['CMPNT_MATL_TYPE_CATEGORY'] = df_to_process['CMPNT_MATL_TYPE_CD'].map(map_cmpnt_type_category)
-
-        # Merge processed and skipped rows
-        df_final = pd.concat([df_to_process, df_to_skip], ignore_index=True)
-
-        out_file = os.path.join(output_path, os.path.basename(file_path))
-        df_final.to_parquet(out_file, index=False)
-        print(f"✅ Processed: {os.path.basename(file_path)}")
-    except Exception as e:
-        print(f"❌ Failed: {os.path.basename(file_path)} -> {e}")
+mask_process = (
+    (df.get('needs_category_model', False) | df.get('needs_subcategory_model', False)) &
+    (df['CMPNT_MATL_DESC'].notna()) &
+    (df['CMPNT_MATL_DESC'].astype(str).str.strip().ne(''))
+)
