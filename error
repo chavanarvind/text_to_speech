@@ -1,1 +1,83 @@
-=IF(SUMPRODUCT(--ISNUMBER(FIND(MID(A2,ROW(INDIRECT("1:"&LEN(A2))),1),"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")))>0, A2, VALUE(A2))
+import json
+import sys
+from azureml.core import Experiment, RunConfiguration, Environment, Workspace, Dataset
+from azureml.core.authentication import ServicePrincipalAuthentication
+
+from azureml.pipeline.core import Pipeline
+from azureml.pipeline.steps import PythonScriptStep
+from azureml.data import OutputFileDatasetConfig
+
+
+def set_aml_config_for_training(ws, compute_name):
+    compute_target = ws.compute_targets[compute_name]
+    aml_run_config = RunConfiguration()
+    aml_run_config.target = compute_target
+    env = Environment.get(workspace=ws,
+                          name="Bom_X_Evaluator")
+    aml_run_config.environment = env
+
+    return aml_run_config
+
+
+def workspace_from_cmd(args):
+    print('Reading workspace from command line arguments')
+    tenant_id = args[1]
+    client_id = args[2]
+    client_secret = args[3]
+    config_file = args[4]
+
+    # Needed when triggering from Jenkins
+    service_principal_auth = ServicePrincipalAuthentication(tenant_id=tenant_id,
+                                                            service_principal_id=client_id,
+                                                            service_principal_password=client_secret)
+    path = '../.azureml/' + config_file
+
+    with open(path) as json_file_obj:
+        config_json = json.load(json_file_obj)
+
+    return Workspace(subscription_id=config_json['subscription_id'],
+                     resource_group=config_json['resource_group'],
+                     workspace_name=config_json['workspace_name'],
+                     auth=service_principal_auth)
+
+
+def workspace_from_config(path):
+    print('Reading workspace from local config file')
+    with open(path) as json_file_obj:
+        config_json = json.load(json_file_obj)
+
+    return Workspace(subscription_id=config_json['subscription_id'],
+                     resource_group=config_json['resource_group'],
+                     workspace_name=config_json['workspace_name'])
+
+
+#ENV = 'dev'
+ENV = 'dev'
+
+if __name__ == '__main__':
+    if len(sys.argv) > 1:  # Command line args
+        workspace = workspace_from_cmd(sys.argv)
+        # Default to dev when running from jenkins
+        aml_config_file = 'dev_config.json'
+        datastore_name = 'xbomrefadlsg2'
+        compute_name = 'llm-gpu-cluster-2'
+    else:
+        if ENV == 'prod':
+            aml_config_file = 'prod_config.json'
+            datastore_name = 'xbom_prod_adlsgen2'
+            compute_name = 'bom-cluster-2'
+        else:
+            aml_config_file = 'dev_config.json'
+            datastore_name = 'xbomrefadlsg2'
+            compute_name = 'llm-gpu-cluster-2'
+
+        workspace = workspace_from_config(path='../.azureml/' + aml_config_file)
+
+    aml_config = set_aml_config_for_training(workspace, compute_name=compute_name)
+
+    
+
+    model_type = 'offline_transformer'
+    # model_type = 'open_ai'
+    transformer_model = 'all-roberta-large-kft'
+    db_style = 'pandas'
