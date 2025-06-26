@@ -1,21 +1,14 @@
-from azureml.core import Workspace, Model
-
-# Connect to dev workspace
-dev_ws = Workspace.from_config(path="dev_config.json")  # path to dev workspace config
-model = Model(dev_ws, name="your_model_name")
-
-# Download the model locally
-model.download(target_dir="./model_artifact", exist_ok=True)
-
-from azureml.core import Workspace, Model
-
-# Connect to prod workspace
-prod_ws = Workspace.from_config(path="prod_config.json")
-
-# Register model in prod
-model = Model.register(
-    workspace=prod_ws,
-    model_path="./model_artifact",  # directory or specific file
-    model_name="your_model_name",
-    description="Model promoted from dev to prod"
-)
+🔄 Processing: /mnt/azureml/cr/j/051617c73b60486a91508c7392064076/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/735b57aa-f9a4-45d3-86fd-1fa9ec0e9a11/step1_output/part-00000-782c1569-44f8-4c01-9662-3a72013d1c7e-c000.snappy.parquet
+[❌ ERROR] /mnt/azureml/cr/j/051617c73b60486a91508c7392064076/cap/data-capability/wd/INPUT_step1_output_workspaceblobstore/azureml/735b57aa-f9a4-45d3-86fd-1fa9ec0e9a11/step1_output/part-00000-782c1569-44f8-4c01-9662-3a72013d1c7e-c000.snappy.parquet: float() argument must be a string or a number, not 'NAType'
+Traceback (most recent call last):
+  File "step_1a_extract_and_merge.py", line 183, in process_single_file
+    df_mapping = ensure_ai_columns(df_mapping)
+  File "step_1a_extract_and_merge.py", line 56, in ensure_ai_columns
+    df[col] = pd.Series([pd.NA] * len(df), dtype=dtype)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/series.py", line 509, in __init__
+    data = sanitize_array(data, index, dtype, copy)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/construction.py", line 599, in sanitize_array
+    subarr = _try_cast(data, dtype, copy)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/construction.py", line 765, in _try_cast
+    subarr = np.array(arr, dtype=dtype, copy=copy)
+TypeError: float() argument must be a string or a number, not 'NAType'
