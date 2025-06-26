@@ -1,18 +1,20 @@
-def ensure_ai_columns(df):
-    ai_columns = {
-        'AI_FINAL_CATEGORY': "string",
-        'AI_FINAL_CATEGORY_CONFIDENCE': "float",
-        'AI_MATCHING_REASON_FINAL_CATEGORY': "string",
-        'AI_FINAL_SUBCATEGORY': "string",
-        'AI_FINAL_SUBCATEGORY_CONFIDENCE': "float",
-        'AI_MATCHING_REASON_FINAL_SUBCATEGORY': "string"
-    }
+# 👇 Add this after df_mapping = add_flags(df_mapping)
+no_mapping = ~(
+    df_mapping['Mapped_File_Category Filled'] |
+    df_mapping['Mapped_File_Subcategory Filled']
+)
 
-    for col, dtype in ai_columns.items():
-        if col not in df.columns:
-            df[col] = pd.Series([pd.NA] * len(df), dtype=dtype)
-        else:
-            # Coerce dtype to ensure safe behavior
-            df[col] = df[col].astype(dtype).replace(["None", "none", "nan", "NaN", ""], pd.NA)
+no_description = (
+    df_mapping['CMPNT_MATL_DESC'].isna() |
+    df_mapping['CMPNT_MATL_DESC'].astype(str).str.strip().eq('')
+)
 
-    return df
+# Find rows that have no mapping and no description
+needs_reason_update = no_mapping & no_description
+
+# ⬇️ Set reason and confidence accordingly
+df_mapping.loc[needs_reason_update, 'AI_MATCHING_REASON_FINAL_CATEGORY'] = 'no component description'
+df_mapping.loc[needs_reason_update, 'AI_MATCHING_REASON_FINAL_SUBCATEGORY'] = 'no component description'
+
+df_mapping.loc[needs_reason_update, 'AI_FINAL_CATEGORY_CONFIDENCE'] = 0
+df_mapping.loc[needs_reason_update, 'AI_FINAL_SUBCATEGORY_CONFIDENCE'] = 0
