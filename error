@@ -1,7 +1,8 @@
-raise RuntimeError("Response content shorter than Content-Length")
-RuntimeError: Response content shorter than Content-Length
-[2025-06-26 13:32:00,820] Uploading video to Azure Blob Storage...
-[2025-06-26 13:32:00,978] Request URL: 'https://adlsdtodsdev.blob.core.windows.net/video/video-uploads/video-uploads_Overview_OCC.mp4?sp=REDACTED&st=REDACTED&se=REDACTED&spr=REDACTED&sv=REDACTED&sr=REDACTED&sig=REDACTED'
+File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 528, in send
+    raise RuntimeError("Response content longer than Content-Length")
+RuntimeError: Response content longer than Content-Length
+[2025-06-26 13:44:56,835] Uploading video to Azure Blob Storage...
+[2025-06-26 13:44:57,045] Request URL: 'https://adlsdtodsdev.blob.core.windows.net/video/video-uploads/video-uploads_Overview_OCC.mp4?sp=REDACTED&st=REDACTED&se=REDACTED&spr=REDACTED&sv=REDACTED&sr=REDACTED&sig=REDACTED'
 Request method: 'PUT'
 Request headers:
     'Content-Length': '50979272'
@@ -11,24 +12,24 @@ Request headers:
     'Accept': 'application/xml'
     'User-Agent': 'azsdk-python-storage-blob/12.23.0 Python/3.8.10 (Windows-10-10.0.22631-SP0)'
     'x-ms-date': 'REDACTED'
-    'x-ms-client-request-id': 'd6f00608-5263-11f0-bde0-6045bd1b6a79'
+    'x-ms-client-request-id': 'a58290af-5265-11f0-94c2-6045bd1b6a79'
 A body is sent with the request
-[2025-06-26 13:32:07,853] Response status: 201
+[2025-06-26 13:45:03,917] Response status: 201
 Response headers:
     'Content-Length': '0'
     'Content-MD5': 'REDACTED'
-    'Last-Modified': 'Thu, 26 Jun 2025 08:02:07 GMT'
-    'ETag': '"0x8DDB487BF2A86D4"'
+    'Last-Modified': 'Thu, 26 Jun 2025 08:15:03 GMT'
+    'ETag': '"0x8DDB4898DBC3BDC"'
     'Server': 'Windows-Azure-Blob/1.0 Microsoft-HTTPAPI/2.0'
-    'x-ms-request-id': 'dca3f277-c01e-0061-1b70-e68f7e000000'
-    'x-ms-client-request-id': 'd6f00608-5263-11f0-bde0-6045bd1b6a79'
+    'x-ms-request-id': 'c634eea2-801e-005f-5772-e61801000000'
+    'x-ms-client-request-id': 'a58290af-5265-11f0-94c2-6045bd1b6a79'
     'x-ms-version': 'REDACTED'
     'x-ms-content-crc64': 'REDACTED'
     'x-ms-request-server-encrypted': 'REDACTED'
-    'Date': 'Thu, 26 Jun 2025 08:02:06 GMT'
-[2025-06-26 13:32:07,856] Upload complete: https://adlsdtodsdev.blob.core.windows.net/video/video-uploads%2Fvideo-uploads_Overview_OCC.mp4?sp=racwlme&st=2025-06-26T07:42:50Z&se=2025-12-26T15:42:50Z&spr=https&sv=2024-11-04&sr=c&sig=uF0EVn5JkhT4IZ8qjHL7e7Kts0GDKLCJhvo7OGYpfYk%3D
-[2025-06-26 13:32:07,857] Submitting video translation job to Azure...
-[2025-06-26 13:32:08,682] [ERROR] Failed to submit translation job: 400
+    'Date': 'Thu, 26 Jun 2025 08:15:03 GMT'
+[2025-06-26 13:45:03,920] Upload complete: https://adlsdtodsdev.blob.core.windows.net/video/video-uploads%2Fvideo-uploads_Overview_OCC.mp4?sp=racwlme&st=2025-06-26T07:42:50Z&se=2025-12-26T15:42:50Z&spr=https&sv=2024-11-04&sr=c&sig=uF0EVn5JkhT4IZ8qjHL7e7Kts0GDKLCJhvo7OGYpfYk%3D
+[2025-06-26 13:45:03,920] Submitting video translation job to Azure...
+[2025-06-26 13:45:04,752] [ERROR] Failed to submit translation job: 400
 {
   "error": {
     "code": "BadRequest",
@@ -39,10 +40,3 @@ Response headers:
     }
   }
 }
-
-
-
-
-
-
-
