@@ -1,6 +1,48 @@
-3e5-9619-fb73df4372cb/resourcegroups/azr-weh-dto-aml-production/workspaces/AML-DTO-Marmot-prod&tid=7ba64ac2-8a2b-417e-9b8f-fcf8238f2a56
-Traceback (most recent call last):
-  File ".\pipeline_RPM_Data_Prep copy.py", line 236, in <module>
-    pipeline_id=pipeline.id,  # ✅ Use pipeline.id here, not pipeline_run
-AttributeError: 'Pipeline' object has no attribute 'id'
-(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\RPM_Data_Prep_Pipeline> 
+from azureml.pipeline.core import Schedule, ScheduleRecurrence, TimeZone
+
+pipeline.validate()
+
+if ENV == 'prod':
+    experiment = Experiment(ws, name="bom_pipeline_pull_merge_preprocess")
+
+    # Submit the pipeline
+    pipeline_run = experiment.submit(pipeline)
+    print(f"Pipeline submitted. Run ID: {pipeline_run.id}")
+    print(f"Link to Azure ML portal: {pipeline_run.get_portal_url()}")
+
+    # Get the pipeline definition ID from the run
+    pipeline_id = pipeline_run._pipeline_id  # ✅ Works in older SDKs
+
+    # Define recurrence for Tuesday 6:30 PM UTC = Wednesday 12:00 AM IST
+    recurrence = ScheduleRecurrence(
+        frequency='Week',
+        interval=1,
+        week_days=['Tuesday'],
+        time_of_day='18:30',
+        time_zone=TimeZone.UTC
+    )
+
+    schedule_name = "RPM_Catagarization_Prod"
+
+    # Remove existing schedule if needed
+    for sched in Schedule.list(ws):
+        if sched.name == schedule_name:
+            print(f"Disabling and deleting existing schedule: {sched.name}")
+            sched.disable()
+            sched.delete()
+
+    # Create new schedule using the retrieved pipeline ID
+    new_schedule = Schedule.create(
+        workspace=ws,
+        name=schedule_name,
+        pipeline_id=pipeline_id,
+        experiment_name=experiment.name,
+        recurrence=recurrence,
+        description="Runs RPM Categorization pipeline every Wednesday 12:00 AM IST",
+        wait_for_provisioning=True
+    )
+
+    print(f"✅ New schedule created: {new_schedule.name}")
+
+else:
+    print("ℹ️ Dev environment detected — pipeline not scheduled.")
