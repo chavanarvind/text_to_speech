@@ -1,45 +1,5 @@
-#deploy_and_schedule_pipeline
-
-from azureml.core import Workspace
-from azureml.pipeline.core import ScheduleRecurrence, TimeZone, Schedule, Pipeline
-
-from deploy_pipeline_endpoint import deploy_end_point
-
-
-
-
-if __name__ == '__main__':
-    workspace = Workspace.from_config(path='../.azureml/prod_config.json')
-    workspace.set_default_datastore('workspaceblobstore')
-
-    pipeline_endpoint = deploy_end_point(workspace)
-
-    schedule = Schedule.list(workspace, pipeline_endpoint_id=pipeline_endpoint.id)
-    print('Schedules before update:')
-    for s in schedule:
-        print('-' * 40)
-        print(s)
-    print('#' * 60)
-
-    for sch in schedule:
-        Schedule.disable(sch)
-
-    # Comment these or the next lines to schedule accordingly.
-    recurrence = ScheduleRecurrence(frequency='Week',
-                                    interval=1,
-                                    time_of_day="22:00",
-                                    time_zone=TimeZone.CentralEuropeanStandardTime,
-                                    week_days=['Monday']
-                                    )
-
-    recurring_schedule = Schedule.create_for_pipeline_endpoint(workspace,
-                                                               name='X-Bom Ref',
-                                                               description='Every Monday, 22:00 CEST',
-                                                               pipeline_endpoint_id=pipeline_endpoint.id,
-                                                               experiment_name='X_Bom_Ref',
-                                                               recurrence=recurrence)
-    print('Schedules after the update:')
-    schedule = Schedule.list(workspace, pipeline_endpoint_id=pipeline_endpoint.id)
-    for s in schedule:
-        print('-' * 40)
-        print(s)
+Traceback (most recent call last):
+  File ".\pipeline_RPM_Data_Prep copy.py", line 11, in <module>
+    from azureml.pipeline.core.schedule import Recurrence, ScheduleTrigger
+ImportError: cannot import name 'Recurrence' from 'azureml.pipeline.core.schedule' (C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\pipeline\core\schedule.py)
+(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\RPM_Data_Prep_Pipeline> 
