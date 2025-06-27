@@ -1,5 +1,40 @@
-Traceback (most recent call last):
-  File ".\pipeline_RPM_Data_Prep copy.py", line 11, in <module>
-    from azureml.pipeline.core.schedule import Recurrence, ScheduleTrigger
-ImportError: cannot import name 'Recurrence' from 'azureml.pipeline.core.schedule' (C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\pipeline\core\schedule.py)
-(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\RPM_Data_Prep_Pipeline> 
+from azureml.pipeline.core import Schedule, ScheduleRecurrence, TimeZone
+
+if ENV == 'prod':
+    experiment = Experiment(ws, name="bom_pipeline_pull_merge_preprocess")
+    pipeline_run = experiment.submit(pipeline)
+
+    # Define recurrence (Every Tuesday 6:30 PM UTC == Wednesday 12 AM IST)
+    recurrence = ScheduleRecurrence(
+        frequency='Week',
+        interval=1,
+        week_days=['Tuesday'],
+        time_of_day='18:30',
+        time_zone=TimeZone.UTC
+    )
+
+    schedule_name = "RPM_Catagarization_Prod"
+
+    # Delete existing schedule if present
+    existing_schedules = Schedule.list(ws)
+    for sched in existing_schedules:
+        if sched.name == schedule_name:
+            print(f"Disabling and deleting existing schedule: {sched.name}")
+            sched.disable()
+            sched.delete()
+
+    # Create the new schedule
+    new_schedule = Schedule.create(
+        workspace=ws,
+        name=schedule_name,
+        pipeline_id=pipeline_run.pipeline_id,
+        experiment_name=experiment.name,
+        recurrence=recurrence,
+        description="Runs RPM Categorization pipeline every Wednesday 12:00 AM IST",
+        wait_for_provisioning=True
+    )
+
+    print(f"✅ New schedule created: {new_schedule.name}")
+
+else:
+    print("ℹ️ Dev environment detected — pipeline not scheduled.")
