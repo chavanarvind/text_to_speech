@@ -1,1 +1,12 @@
- df_mapping.loc[needs_reason_update, 'AI_FINAL_CATEGORY'] = 'no component description']
+Subject: Weekly Pipeline Results Availability (Production Environment)
+
+Hi Team,
+
+Please note that the pipeline is now running in the production environment and is scheduled to execute every Wednesday at 12:00 AM IST. As a result, the output will be available every Thursday.
+
+For processing purposes, I have already pushed the results for 28th June. All expected columns are present in the output.
+
+Feel free to reach out if you have any questions.
+
+Best regards,
+[Your Name]
