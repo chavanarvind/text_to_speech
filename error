@@ -3,17 +3,14 @@ from azureml.pipeline.core import Schedule, ScheduleRecurrence, TimeZone
 pipeline.validate()
 
 if ENV == 'prod':
-    experiment = Experiment(ws, name="bom_pipeline_pull_merge_preprocess")
+    experiment_name = "bom_pipeline_pull_merge_preprocess"
 
-    # Submit the pipeline
-    pipeline_run = experiment.submit(pipeline)
-    print(f"Pipeline submitted. Run ID: {pipeline_run.id}")
-    print(f"Link to Azure ML portal: {pipeline_run.get_portal_url()}")
+    # Publish the pipeline (required to get a stable ID for scheduling)
+    published_pipeline = pipeline.publish(name="RPM_Categorization_Pipeline_Prod")
+    print(f"✅ Published pipeline: {published_pipeline.name}")
+    print(f"📌 Pipeline ID: {published_pipeline.id}")
 
-    # Get the pipeline definition ID from the run
-    pipeline_id = pipeline_run._pipeline_id  # ✅ Works in older SDKs
-
-    # Define recurrence for Tuesday 6:30 PM UTC = Wednesday 12:00 AM IST
+    # Define recurrence — Every Tuesday 6:30 PM UTC = Wednesday 12:00 AM IST
     recurrence = ScheduleRecurrence(
         frequency='Week',
         interval=1,
@@ -24,25 +21,28 @@ if ENV == 'prod':
 
     schedule_name = "RPM_Catagarization_Prod"
 
-    # Remove existing schedule if needed
+    # Remove any existing schedule with the same name
     for sched in Schedule.list(ws):
         if sched.name == schedule_name:
-            print(f"Disabling and deleting existing schedule: {sched.name}")
+            print(f"🛑 Disabling and deleting existing schedule: {sched.name}")
             sched.disable()
             sched.delete()
 
-    # Create new schedule using the retrieved pipeline ID
+    # Create a new recurring schedule using the published pipeline
     new_schedule = Schedule.create(
         workspace=ws,
         name=schedule_name,
-        pipeline_id=pipeline_id,
-        experiment_name=experiment.name,
+        pipeline_id=published_pipeline.id,
+        experiment_name=experiment_name,
         recurrence=recurrence,
         description="Runs RPM Categorization pipeline every Wednesday 12:00 AM IST",
         wait_for_provisioning=True
     )
 
     print(f"✅ New schedule created: {new_schedule.name}")
+    print("📅 Schedule details:")
+    print(f"    - Runs every Tuesday 18:30 UTC (Wednesday 12:00 AM IST)")
+    print(f"    - Associated Pipeline: {published_pipeline.name}")
 
 else:
-    print("ℹ️ Dev environment detected — pipeline not scheduled.")
+    print("ℹ️ Dev environment detected — skipping pipeline submission and scheduling.")
