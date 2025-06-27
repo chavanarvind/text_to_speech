@@ -1,43 +1,45 @@
-from azureml.pipeline.core import Schedule
-from azureml.pipeline.core.schedule import Recurrence, ScheduleTrigger
+#deploy_and_schedule_pipeline
 
-if ENV == 'prod':
-    experiment = Experiment(ws, name="bom_pipeline_pull_merge_preprocess")
-    pipeline_run = experiment.submit(pipeline)
+from azureml.core import Workspace
+from azureml.pipeline.core import ScheduleRecurrence, TimeZone, Schedule, Pipeline
 
-    # New Recurrence format (UTC time = 18:30 Tuesday = 12:00 AM IST Wednesday)
-    recurrence = Recurrence(
-        frequency="Week",
-        interval=1,
-        schedule={
-            "week_days": ["Tuesday"],
-            "hours": [18],
-            "minutes": [30],
-            "time_zone": "UTC"
-        }
-    )
+from deploy_pipeline_endpoint import deploy_end_point
 
-    schedule_name = "RPM_Catagarization_Prod"
 
-    # Clean up old schedule
-    for sched in Schedule.list(ws):
-        if sched.name == schedule_name:
-            print(f"Disabling and deleting existing schedule: {sched.name}")
-            sched.disable()
-            sched.delete()
 
-    # Create new schedule
-    new_schedule = Schedule.create(
-        workspace=ws,
-        name=schedule_name,
-        pipeline_id=pipeline_run.pipeline_id,
-        experiment_name=experiment.name,
-        trigger=ScheduleTrigger(recurrence=recurrence),
-        description="Runs RPM Categorization pipeline every Wednesday 12:00 AM IST",
-        wait_for_provisioning=True
-    )
 
-    print(f"New schedule created: {new_schedule.name}")
+if __name__ == '__main__':
+    workspace = Workspace.from_config(path='../.azureml/prod_config.json')
+    workspace.set_default_datastore('workspaceblobstore')
 
-else:
-    print("Dev environment detected — skipping scheduling.")
+    pipeline_endpoint = deploy_end_point(workspace)
+
+    schedule = Schedule.list(workspace, pipeline_endpoint_id=pipeline_endpoint.id)
+    print('Schedules before update:')
+    for s in schedule:
+        print('-' * 40)
+        print(s)
+    print('#' * 60)
+
+    for sch in schedule:
+        Schedule.disable(sch)
+
+    # Comment these or the next lines to schedule accordingly.
+    recurrence = ScheduleRecurrence(frequency='Week',
+                                    interval=1,
+                                    time_of_day="22:00",
+                                    time_zone=TimeZone.CentralEuropeanStandardTime,
+                                    week_days=['Monday']
+                                    )
+
+    recurring_schedule = Schedule.create_for_pipeline_endpoint(workspace,
+                                                               name='X-Bom Ref',
+                                                               description='Every Monday, 22:00 CEST',
+                                                               pipeline_endpoint_id=pipeline_endpoint.id,
+                                                               experiment_name='X_Bom_Ref',
+                                                               recurrence=recurrence)
+    print('Schedules after the update:')
+    schedule = Schedule.list(workspace, pipeline_endpoint_id=pipeline_endpoint.id)
+    for s in schedule:
+        print('-' * 40)
+        print(s)
