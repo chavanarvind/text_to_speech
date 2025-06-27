@@ -1,13 +1,46 @@
-Created step Step 3 - Inference Prediction [dfc28815][73e67957-ac6a-4782-9c37-38bd0d9de31d], (This step will run and generate new outputs)
-Created step Step 4 - Merge Inference Results with Key Files [dc78a90d][5627e93b-90fb-4f31-ab38-5753375d27e8], (This step will run and generate new outputs)
-Submitted PipelineRun 9daa064e-fdee-4697-9c9d-73331a690651
-C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\numpy\_distributor_init.py:30: UserWarning: loaded more than 1 DLL from .libs:
-C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\numpy\.libs\libopenblas.FB5AE2TYXYH2IJRDKGDGQ3XBKLKTF43H.gfortran-win_amd64.dll
-C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\numpy\.libs\libopenblas64__v0.3.21-gcc_10_3_0.dll
-  warnings.warn("loaded more than 1 DLL from .libs:"
-Link to Azure Machine Learning Portal: https://ml.azure.com/runs/9daa064e-fdee-4697-9c9d-73331a690651?wsid=/subscriptions/06eaff3d-17f0-43e5-9619-fb73df4372cb/resourcegroups/azr-weh-dto-aml-production/workspaces/AML-DTO-Marmot-prod&tid=7ba64ac2-8a2b-417e-9b8f-fcf8238f2a56
-Traceback (most recent call last):
-  File ".\pipeline_RPM_Data_Prep copy.py", line 232, in <module>
-    pipeline_id=pipeline_run.pipeline_id,
-AttributeError: 'PipelineRun' object has no attribute 'pipeline_id'
-(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\RPM_Data_Prep_Pipeline> 
+from azureml.pipeline.core import Schedule, ScheduleRecurrence, TimeZone
+
+pipeline.validate()
+
+if ENV == 'prod':
+    experiment = Experiment(ws, name="bom_pipeline_pull_merge_preprocess")
+
+    # Submit the pipeline to get a version to schedule
+    pipeline_run = experiment.submit(pipeline)
+    print(f"Pipeline submitted. Run ID: {pipeline_run.id}")
+    print(f"Link to Azure ML portal: {pipeline_run.get_portal_url()}")
+
+    # Define recurrence: Every Tuesday 18:30 UTC = Wednesday 12:00 AM IST
+    recurrence = ScheduleRecurrence(
+        frequency='Week',
+        interval=1,
+        week_days=['Tuesday'],
+        time_of_day='18:30',
+        time_zone=TimeZone.UTC
+    )
+
+    schedule_name = "RPM_Catagarization_Prod"
+
+    # Clean up old schedule (if exists)
+    existing_schedules = Schedule.list(ws)
+    for sched in existing_schedules:
+        if sched.name == schedule_name:
+            print(f"Disabling and deleting existing schedule: {sched.name}")
+            sched.disable()
+            sched.delete()
+
+    # Create new schedule using the latest pipeline definition (not the run)
+    new_schedule = Schedule.create(
+        workspace=ws,
+        name=schedule_name,
+        pipeline_id=pipeline.id,  # ✅ Use pipeline.id here, not pipeline_run
+        experiment_name=experiment.name,
+        recurrence=recurrence,
+        description="Runs RPM Categorization pipeline every Wednesday 12:00 AM IST",
+        wait_for_provisioning=True
+    )
+
+    print(f"✅ New schedule created: {new_schedule.name}")
+
+else:
+    print("ℹ️ Dev environment detected — pipeline will not be scheduled or submitted.")
