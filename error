@@ -1,43 +1,7 @@
-from azureml.pipeline.core import Schedule, ScheduleRecurrence
-
-pipeline.validate()
-
-if ENV == 'prod':
-    # Submit pipeline to get the latest pipeline ID
-    experiment = Experiment(ws, name="bom_pipeline_pull_merge_preprocess")
-    pipeline_run = experiment.submit(pipeline)
-
-    # Recurrence: Every Tuesday 6:30 PM UTC (Wednesday 12:00 AM IST)
+C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\numpy\.libs\libopenblas64__v0.3.21-gcc_10_3_0.dll
+  warnings.warn("loaded more than 1 DLL from .libs:"
+Link to Azure Machine Learning Portal: https://ml.azure.com/runs/0a0ea762-fd67-4eaa-bd89-35d4b2ccc38a?wsid=/subscriptions/06eaff3d-17f0-43e5-9619-fb73df4372cb/resourcegroups/azr-weh-dto-aml-production/workspaces/AML-DTO-Marmot-prod&tid=7ba64ac2-8a2b-417e-9b8f-fcf8238f2a56
+Traceback (most recent call last):
+  File ".\pipeline_RPM_Data_Prep copy.py", line 210, in <module>
     recurrence = ScheduleRecurrence(
-        frequency="Week",
-        interval=1,
-        week_days=["Tuesday"],
-        time="18:30",  # 12:00 AM IST
-        time_zone="UTC"
-    )
-
-    schedule_name = "RPM_Catagarization_Prod"
-
-    # Disable and delete existing schedule if it exists
-    existing_schedules = Schedule.list(ws)
-    for sched in existing_schedules:
-        if sched.name == schedule_name:
-            print(f"Disabling and deleting existing schedule: {sched.name}")
-            sched.disable()
-            sched.delete()
-
-    # Create new schedule with latest pipeline ID
-    new_schedule = Schedule.create(
-        workspace=ws,
-        name=schedule_name,
-        pipeline_id=pipeline_run.pipeline_id,
-        experiment_name=experiment.name,
-        recurrence=recurrence,
-        description="Runs the RPM Categorization pipeline every Wednesday 12:00 AM IST",
-        wait_for_provisioning=True
-    )
-
-    print(f"New schedule created: {new_schedule.name}")
-
-else:
-    print("Dev environment detected — pipeline will not be submitted or scheduled.")
+TypeError: __init__() got an unexpected keyword argument 'time'
