@@ -1,2 +1,3 @@
-python -c "import site; print(site.getsitepackages())"
+(videotransenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> python -c "import site; print(site.getsitepackages())"
+['C:\\Users\\AChava05\\OneDrive - Kenvue\\AChava05\\video_analysis\\videotransenv', 'C:\\Users\\AChava05\\OneDrive - Kenvue\\AChava05\\video_analysis\\videotransenv\\lib\\site-packages']
 pip install --upgrade azure-cognitiveservices-speech
