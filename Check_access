@@ -1,10 +1,11 @@
 import requests
+TRANSLATOR_ENDPOINT = "https://cog-speech-dto-epil-dev.cognitiveservices.azure.com"
+TRANSLATOR_KEY = ""
+API_VERSION = "2024-04-01"
 
-# Replace these with your actual Azure Translator values
-TRANSLATOR_KEY = "<your-translator-subscription-key>"
-TRANSLATOR_REGION = "<your-region>"  # e.g., "eastus"
-TRANSLATOR_ENDPOINT = f"https://{TRANSLATOR_REGION}.api.cognitive.microsofttranslator.com"
-API_VERSION = "3.0"
+
+TRANSLATOR_REGION = "eastus"  # e.g., "eastus"
+
 
 def translate_text_azure(text, target_lang="hi"):
     url = f"{TRANSLATOR_ENDPOINT}/translate?api-version={API_VERSION}&to={target_lang}"
@@ -27,3 +28,13 @@ text_to_translate = "Hello, how are you?"
 translated = translate_text_azure(text_to_translate, target_lang="hi")
 print("Original:", text_to_translate)
 print("Translated:", translated)
+
+
+(videotransenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> PY .\test.py
+Traceback (most recent call last):
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\test.py", line 28, in <module>
+    translated = translate_text_azure(text_to_translate, target_lang="hi")
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\test.py", line 21, in translate_text_azure       
+    raise Exception(f"Azure Translation failed: {response.text}")
+Exception: Azure Translation failed: {"error":{"code":"404","message": "Resource not found"}}
+(videotransenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> 
