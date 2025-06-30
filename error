@@ -1,48 +1,110 @@
-from azureml.pipeline.core import Schedule, ScheduleRecurrence, TimeZone
+import json
+import logging
+import os
+import sys
+import time
+import uuid
+import zipfile
+import requests
 
-pipeline.validate()
+def process_tts_synthesis(file_path):
+    """
+    Submits an SSML file for text-to-speech synthesis, checks job status,
+    downloads the output, and processes it into SRT format.
+    
+    Args:
+        file_path (str): Path to the SSML file to be processed.
+    """
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO,
+                        format="[%(asctime)s] %(message)s", datefmt="%m/%d/%Y %I:%M:%S %p %Z")
+    logger = logging.getLogger(__name__)
 
-if ENV == 'prod':
-    experiment_name = "bom_pipeline_pull_merge_preprocess"
+    SPEECH_ENDPOINT = "https://cog-speech-dto-epil-dev.cognitiveservices.azure.com/"
+    SUBSCRIPTION_KEY = ""
+    API_VERSION = "2024-04-01"
 
-    # Publish the pipeline (required to get a stable ID for scheduling)
-    published_pipeline = pipeline.publish(name="RPM_Categorization_Pipeline_Prod")
-    print(f"✅ Published pipeline: {published_pipeline.name}")
-    print(f"📌 Pipeline ID: {published_pipeline.id}")
+    def _create_job_id():
+        return str(uuid.uuid4())
 
-    # Define recurrence — Every Tuesday 6:30 PM UTC = Wednesday 12:00 AM IST
-    recurrence = ScheduleRecurrence(
-        frequency='Week',
-        interval=1,
-        week_days=['Tuesday'],
-        time_of_day='18:30',
-        time_zone=TimeZone.UTC
-    )
+    def _authenticate():
+        return {'Ocp-Apim-Subscription-Key': SUBSCRIPTION_KEY}
 
-    schedule_name = "RPM_Catagarization_Prod"
+    def submit_synthesis(job_id):
+        url = f'{SPEECH_ENDPOINT}/texttospeech/batchsyntheses/{job_id}?api-version={API_VERSION}'
+        header = {'Content-Type': 'application/json; charset=utf-8'}
+        header.update(_authenticate())
 
-    # Remove any existing schedule with the same name
-    for sched in Schedule.list(ws):
-        if sched.name == schedule_name:
-            print(f"🛑 Disabling and deleting existing schedule: {sched.name}")
-            sched.disable()
-            sched.delete()
+        with open(file_path, 'r', encoding="utf-8-sig") as f:
+            text = f.read()
 
-    # Create a new recurring schedule using the published pipeline
-    new_schedule = Schedule.create(
-        workspace=ws,
-        name=schedule_name,
-        pipeline_id=published_pipeline.id,
-        experiment_name=experiment_name,
-        recurrence=recurrence,
-        description="Runs RPM Categorization pipeline every Wednesday 12:00 AM IST",
-        wait_for_provisioning=True
-    )
+        payload = {
+            "inputKind": "SSML",
+            'synthesisConfig': {"voice": "tr-TR-EmelNeural"},
+            "inputs": [{"content": text}],
+            "properties": {
+                "outputFormat": "audio-24khz-160kbitrate-mono-mp3",
+                "wordBoundaryEnabled": True,
+                "sentenceBoundaryEnabled": True,
+                "timeToLiveInHours": 168
+            }
+        }
+        response = requests.put(url, json.dumps(payload, ensure_ascii=False), headers=header)
+        return response.json()["id"] if response.status_code < 400 else None
 
-    print(f"✅ New schedule created: {new_schedule.name}")
-    print("📅 Schedule details:")
-    print(f"    - Runs every Tuesday 18:30 UTC (Wednesday 12:00 AM IST)")
-    print(f"    - Associated Pipeline: {published_pipeline.name}")
+    def get_synthesis_status(job_id):
+        url = f'{SPEECH_ENDPOINT}/texttospeech/batchsyntheses/{job_id}?api-version={API_VERSION}'
+        return requests.get(url, headers=_authenticate()).json()
 
-else:
-    print("ℹ️ Dev environment detected — skipping pipeline submission and scheduling.")
+    def download_file(url, file_name):
+        response = requests.get(url)
+        if response.status_code == 200:
+            with open(file_name, 'wb') as f:
+                f.write(response.content)
+            zipfile.ZipFile(file_name, 'r').extractall('extracted_files')
+        
+    def process_timestamps(extracted_folder):
+        sentence_file = os.path.join(extracted_folder, "0001.sentence.json")
+        if not os.path.exists(sentence_file):
+            logger.error("sentence.json file not found!")
+            return
+
+        with open(sentence_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        srt_lines, subtitle_counter = [], 1
+        for phrase in data:
+            start_time, duration = phrase["AudioOffset"] / 1000, phrase["Duration"] / 1000
+            end_time = start_time + duration
+            srt_lines.extend([f"{subtitle_counter}",
+                              f"{convert_to_srt_timestamp(start_time)} --> {convert_to_srt_timestamp(end_time)}",
+                              phrase["Text"], ""])
+            subtitle_counter += 1
+
+        with open(os.path.join(extracted_folder, "output.srt"), "w", encoding="utf-8") as f:
+            f.write("\n".join(srt_lines))
+
+    def convert_to_srt_timestamp(seconds):
+        millis = int((seconds - int(seconds)) * 1000)
+        hours, remainder = divmod(int(seconds), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{hours:02}:{minutes:02}:{seconds:02},{millis:03}"
+
+    job_id = _create_job_id()
+    if submit_synthesis(job_id):
+        while True:
+            job_response = get_synthesis_status(job_id)
+            status = job_response['status']
+            if status == 'Succeeded':
+                download_file(job_response['outputs']['result'], "results.zip")
+                process_timestamps("extracted_files")
+                logger.info("Batch synthesis job succeeded")
+                break
+            elif status == 'Failed':
+                logger.error("Batch synthesis job failed")
+                break
+            else:
+                logger.info(f"Batch synthesis job is still running, status [{status}]")
+                time.sleep(5)
+
+# Example usage
+#process_tts_synthesis("C:/Users/AChava05/OneDrive - Kenvue/AChava05/audio/audio-agents/text2speech/text_files/test.txt")
