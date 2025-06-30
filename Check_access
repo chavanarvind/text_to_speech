@@ -1,2 +1,17 @@
+pip install faster-whisper
+from faster_whisper import WhisperModel
 
-!huggingface-cli login
+from faster_whisper import WhisperModel
+
+# Download Whisper model (base) into a custom directory
+model = WhisperModel("base", compute_type="float32", download_root="./whisper_base")
+
+import shutil
+
+shutil.make_archive("whisper_base", 'zip', "whisper_base")
+
+import shutil
+
+shutil.move("whisper_base.zip", "/mnt/batch/tasks/shared/LS_root/mounts/clusters/azureml/data/whisper_base.zip")
+
+
