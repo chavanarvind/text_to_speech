@@ -1,1 +1,8 @@
+# Now reinstall cleanly
+pip uninstall moviepy -y
+pip install moviepy
+
+# test_import.py
 import moviepy.editor as mp
+
+print("moviepy.editor imported successfully!")
