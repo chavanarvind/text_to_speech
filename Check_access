@@ -1,1 +1,5 @@
-python -c "import sys; print(sys.executable)"
+from moviepy.editor import VideoFileClip
+
+print("moviepy.editor import successful!")
+
+python -c "import moviepy; print(moviepy.__file__)"
