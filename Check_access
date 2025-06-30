@@ -1,6 +1,9 @@
-def transcribe_and_diarize(audio_path):
-    segments, info = model.transcribe(audio_path, beam_size=5, word_timestamps=True)
-    diarized_text = []
-    for seg in segments:
-        diarized_text.append((seg.start, seg.end, seg.text))
-    return diarized_text, info.language
+ File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\videotransenv\lib\site-packages\requests\api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\videotransenv\lib\site-packages\requests\sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\videotransenv\lib\site-packages\requests\sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\videotransenv\lib\site-packages\requests\adapters.py", line 698, in send
+    raise SSLError(e, request=request)
+requests.exceptions.SSLError: HTTPSConnectionPool(host='translate.google.com', port=443): Max retries exceeded with url: /m?tl=en&sl=auto&q=With+a+robust+supply+chain%2C+comes+a+heap+of+data%2C (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1007)')))
