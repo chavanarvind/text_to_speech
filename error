@@ -1,110 +1,129 @@
-import json
-import logging
+pip install gradio moviepy langdetect faster-whisper pydub requests deep-translator
+
+
+import gradio as gr
+import moviepy.editor as mp
 import os
-import sys
-import time
 import uuid
-import zipfile
+import tempfile
+from langdetect import detect
+from faster_whisper import WhisperModel
+from pydub import AudioSegment
+import subprocess
+import json
 import requests
+import time
 
-def process_tts_synthesis(file_path):
-    """
-    Submits an SSML file for text-to-speech synthesis, checks job status,
-    downloads the output, and processes it into SRT format.
-    
-    Args:
-        file_path (str): Path to the SSML file to be processed.
-    """
-    logging.basicConfig(stream=sys.stdout, level=logging.INFO,
-                        format="[%(asctime)s] %(message)s", datefmt="%m/%d/%Y %I:%M:%S %p %Z")
-    logger = logging.getLogger(__name__)
+# Azure TTS Config
+SPEECH_ENDPOINT = "https://<your-region>.tts.speech.microsoft.com/"
+SUBSCRIPTION_KEY = "<your-subscription-key>"
+API_VERSION = "2024-04-01"
+VOICE = "en-US-AriaNeural"
 
-    SPEECH_ENDPOINT = "https://cog-speech-dto-epil-dev.cognitiveservices.azure.com/"
-    SUBSCRIPTION_KEY = ""
-    API_VERSION = "2024-04-01"
+# Whisper model
+model = WhisperModel("base", compute_type="float32")
 
-    def _create_job_id():
-        return str(uuid.uuid4())
+def extract_audio(video_path):
+    audio_path = tempfile.mktemp(suffix=".wav")
+    clip = mp.VideoFileClip(video_path)
+    clip.audio.write_audiofile(audio_path)
+    return audio_path
 
-    def _authenticate():
-        return {'Ocp-Apim-Subscription-Key': SUBSCRIPTION_KEY}
+def detect_language(audio_path):
+    segments, info = model.transcribe(audio_path, beam_size=5)
+    return info["language"]
 
-    def submit_synthesis(job_id):
-        url = f'{SPEECH_ENDPOINT}/texttospeech/batchsyntheses/{job_id}?api-version={API_VERSION}'
-        header = {'Content-Type': 'application/json; charset=utf-8'}
-        header.update(_authenticate())
+def transcribe_and_diarize(audio_path):
+    segments, info = model.transcribe(audio_path, beam_size=5, word_timestamps=True)
+    diarized_text = []
+    for seg in segments:
+        diarized_text.append((seg.start, seg.end, seg.text))
+    return diarized_text, info['language']
 
-        with open(file_path, 'r', encoding="utf-8-sig") as f:
-            text = f.read()
+def translate_text(text, target_lang):
+    from deep_translator import GoogleTranslator
+    return GoogleTranslator(source='auto', target=target_lang).translate(text)
 
-        payload = {
-            "inputKind": "SSML",
-            'synthesisConfig': {"voice": "tr-TR-EmelNeural"},
-            "inputs": [{"content": text}],
-            "properties": {
-                "outputFormat": "audio-24khz-160kbitrate-mono-mp3",
-                "wordBoundaryEnabled": True,
-                "sentenceBoundaryEnabled": True,
-                "timeToLiveInHours": 168
-            }
+def synthesize_with_azure(text, voice=VOICE):
+    job_id = str(uuid.uuid4())
+    url = f'{SPEECH_ENDPOINT}/texttospeech/batchsyntheses/{job_id}?api-version={API_VERSION}'
+    headers = {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Ocp-Apim-Subscription-Key': SUBSCRIPTION_KEY
+    }
+    payload = {
+        "displayName": "GradioBatchSynthesis",
+        "description": "Synth from Gradio app",
+        "inputKind": "PlainText",
+        "synthesisConfig": {
+            "voice": voice,
+        },
+        "inputs": [{"content": text}],
+        "properties": {
+            "outputFormat": "audio-24khz-160kbitrate-mono-mp3",
+            "wordBoundaryEnabled": False,
+            "sentenceBoundaryEnabled": False,
+            "timeToLiveInHours": 1
         }
-        response = requests.put(url, json.dumps(payload, ensure_ascii=False), headers=header)
-        return response.json()["id"] if response.status_code < 400 else None
+    }
+    response = requests.put(url, headers=headers, json=payload)
+    if response.status_code >= 400:
+        raise Exception(f"Azure TTS submission failed: {response.text}")
 
-    def get_synthesis_status(job_id):
-        url = f'{SPEECH_ENDPOINT}/texttospeech/batchsyntheses/{job_id}?api-version={API_VERSION}'
-        return requests.get(url, headers=_authenticate()).json()
+    while True:
+        check_url = f'{SPEECH_ENDPOINT}/texttospeech/batchsyntheses/{job_id}?api-version={API_VERSION}'
+        status_resp = requests.get(check_url, headers={'Ocp-Apim-Subscription-Key': SUBSCRIPTION_KEY})
+        status = status_resp.json().get("status")
+        if status == "Succeeded":
+            result_url = status_resp.json()['outputs']['result']
+            break
+        elif status == "Failed":
+            raise Exception("Azure TTS job failed")
+        time.sleep(2)
 
-    def download_file(url, file_name):
-        response = requests.get(url)
-        if response.status_code == 200:
-            with open(file_name, 'wb') as f:
-                f.write(response.content)
-            zipfile.ZipFile(file_name, 'r').extractall('extracted_files')
-        
-    def process_timestamps(extracted_folder):
-        sentence_file = os.path.join(extracted_folder, "0001.sentence.json")
-        if not os.path.exists(sentence_file):
-            logger.error("sentence.json file not found!")
-            return
+    audio_response = requests.get(result_url)
+    output_audio = tempfile.mktemp(suffix=".mp3")
+    with open(output_audio, 'wb') as f:
+        f.write(audio_response.content)
+    return output_audio
 
-        with open(sentence_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
+def synthesize_audio(translated_segments, target_lang):
+    combined = AudioSegment.silent(duration=0)
+    for start, end, text in translated_segments:
+        audio_path = synthesize_with_azure(text)
+        seg = AudioSegment.from_file(audio_path)
+        combined += seg
+    output_audio = tempfile.mktemp(suffix=".mp3")
+    combined.export(output_audio, format="mp3")
+    return output_audio
 
-        srt_lines, subtitle_counter = [], 1
-        for phrase in data:
-            start_time, duration = phrase["AudioOffset"] / 1000, phrase["Duration"] / 1000
-            end_time = start_time + duration
-            srt_lines.extend([f"{subtitle_counter}",
-                              f"{convert_to_srt_timestamp(start_time)} --> {convert_to_srt_timestamp(end_time)}",
-                              phrase["Text"], ""])
-            subtitle_counter += 1
+def combine_audio_video(original_video, new_audio):
+    output_path = tempfile.mktemp(suffix=".mp4")
+    command = [
+        'ffmpeg', '-y', '-i', original_video, '-i', new_audio,
+        '-c:v', 'copy', '-map', '0:v:0', '-map', '1:a:0', '-shortest', output_path
+    ]
+    subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    return output_path
 
-        with open(os.path.join(extracted_folder, "output.srt"), "w", encoding="utf-8") as f:
-            f.write("\n".join(srt_lines))
+def full_pipeline(video, target_language):
+    temp_video_path = video
+    audio_path = extract_audio(temp_video_path)
+    diarized_segments, source_lang = transcribe_and_diarize(audio_path)
+    translated_segments = [(s, e, translate_text(t, target_language)) for s, e, t in diarized_segments]
+    new_audio = synthesize_audio(translated_segments, target_language)
+    final_video = combine_audio_video(temp_video_path, new_audio)
+    return final_video
 
-    def convert_to_srt_timestamp(seconds):
-        millis = int((seconds - int(seconds)) * 1000)
-        hours, remainder = divmod(int(seconds), 3600)
-        minutes, seconds = divmod(remainder, 60)
-        return f"{hours:02}:{minutes:02}:{seconds:02},{millis:03}"
+iface = gr.Interface(
+    fn=full_pipeline,
+    inputs=[
+        gr.Video(label="Upload your video"),
+        gr.Dropdown(label="Select Target Language", choices=["en", "fr", "de", "es", "hi", "ar", "ja", "zh"])
+    ],
+    outputs=gr.Video(label="Translated Video Output"),
+    title="Multilingual Video Translator with Speaker Diarization using Azure TTS"
+)
 
-    job_id = _create_job_id()
-    if submit_synthesis(job_id):
-        while True:
-            job_response = get_synthesis_status(job_id)
-            status = job_response['status']
-            if status == 'Succeeded':
-                download_file(job_response['outputs']['result'], "results.zip")
-                process_timestamps("extracted_files")
-                logger.info("Batch synthesis job succeeded")
-                break
-            elif status == 'Failed':
-                logger.error("Batch synthesis job failed")
-                break
-            else:
-                logger.info(f"Batch synthesis job is still running, status [{status}]")
-                time.sleep(5)
-
-# Example usage
-#process_tts_synthesis("C:/Users/AChava05/OneDrive - Kenvue/AChava05/audio/audio-agents/text2speech/text_files/test.txt")
+if __name__ == '__main__':
+    iface.launch()
