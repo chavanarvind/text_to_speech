@@ -1,11 +1,21 @@
 import os
+import uuid
+import tempfile
+import subprocess
+import json
+import time
+import requests
 
-# Add your ffmpeg bin folder to PATH
+# ffmpeg path fix (Windows specific)
 os.environ["PATH"] = (
     r"C:\Users\AChava05\Downloads\ffmpeg-2025-06-28-git-cfd1f81e7d-essentials_build\ffmpeg-2025-06-28-git-cfd1f81e7d-essentials_build\bin"
     + os.pathsep
     + os.environ["PATH"]
 )
 
-import subprocess
-subprocess.run(["ffmpeg", "-version"])
+import gradio as gr
+import moviepy.editor as mp
+from langdetect import detect
+from faster_whisper import WhisperModel
+from pydub import AudioSegment
+from deep_translator import GoogleTranslator
