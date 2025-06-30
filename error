@@ -1,14 +1,4 @@
-pip freeze > requirements.txt
+import os
 
-
-gradio
-moviepy
-langdetect
-faster-whisper
-pydub
-deep-translator
-ffmpeg-python
-ctranslate2
-
-mkdir offline_packages
-pip download -r requirements.txt -d offline_packages
+output_dir = "offline_packages"
+os.makedirs(output_dir, exist_ok=True)
