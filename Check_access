@@ -1,1 +1,13 @@
-model = WhisperModel("./whisper_base", compute_type="float32")
+Traceback (most recent call last):
+  File "C:\Users\AChava05\test_audio.py", line 26, in <module>
+    model = WhisperModel("base", compute_type="float32")
+  File "C:\Users\AChava05\videotransenv\lib\site-packages\faster_whisper\transcribe.py", line 641, in __init__
+    model_path = download_model(
+  File "C:\Users\AChava05\videotransenv\lib\site-packages\faster_whisper\utils.py", line 123, in download_model
+    return huggingface_hub.snapshot_download(repo_id, **kwargs)
+  File "C:\Users\AChava05\videotransenv\lib\site-packages\huggingface_hub\utils\_validators.py", line 114, in _inner_fn
+    return fn(*args, **kwargs)
+  File "C:\Users\AChava05\videotransenv\lib\site-packages\huggingface_hub\_snapshot_download.py", line 230, in snapshot_download
+    raise LocalEntryNotFoundError(
+huggingface_hub.errors.LocalEntryNotFoundError: Cannot find an appropriate cached snapshot folder for the specified revision on the local disk and outgoing traffic has been disabled. To enable repo look-ups and downloads online, pass 'local_files_only=False' as input.
+(videotransenv) PS C:\Users\AChava05>                                                                                                                 
