@@ -1,5 +1,12 @@
-pip install --force-reinstall moviepy
-
-python
->>> import moviepy.editor as mp
->>> exit()
+(videotransenv) PS C:\Users\AChava05> pip show moviepy
+Name: moviepy
+Version: 2.2.1
+Summary: Video editing with Python
+Home-page:
+Author: Zulko 2024
+Author-email:
+License: MIT License
+Location: c:\users\achava05\videotransenv\lib\site-packages
+Requires: decorator, imageio, imageio_ffmpeg, numpy, pillow, proglog, python-dotenv
+Required-by:
+(videotransenv) PS C:\Users\AChava05> 
