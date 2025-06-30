@@ -1,1 +1,2 @@
-python -c "import azure.cognitiveservices.speech as speechsdk; print(speechsdk.__file__)"
+pip uninstall azure
+pip uninstall azure-cognitiveservices-speech
