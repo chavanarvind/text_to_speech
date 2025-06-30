@@ -1,39 +1,5 @@
-(videotransenv) PS C:\Users\AChava05> py .\video_app1.py
-Traceback (most recent call last):
-  File "C:\Users\AChava05\video_app1.py", line 4, in <module>
-    import moviepy.editor as mp
-ModuleNotFoundError: No module named 'moviepy.editor'
-(videotransenv) PS C:\Users\AChava05> py .\video_app1.py
-[2025-06-30 17:17:08.223] [ctranslate2] [thread 3760] [warning] The compute type inferred from the saved model is float16, but the target device or backend do not support efficient float16 computation. The model weights have been automatically converted to use the float32 compute type instead.      
-* Running on local URL:  http://127.0.0.1:7860
-* To create a public link, set `share=True` in `launch()`.
-Exception in callback _ProactorBasePipeTransport._call_connection_lost(None)
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost(None)>
-Traceback (most recent call last):
-  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\asyncio\events.py", line 80, in _run     
-    self._context.run(self._callback, *self._args)
-  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-ConnectionResetError: [WinError 10054] An existing connection was forcibly closed by the remote host
-Traceback (most recent call last):
-  File "C:\Users\AChava05\videotransenv\lib\site-packages\gradio\queueing.py", line 626, in process_events
-    response = await route_utils.call_process_api(
-  File "C:\Users\AChava05\videotransenv\lib\site-packages\gradio\route_utils.py", line 322, in call_process_api
-    output = await app.get_blocks().process_api(
-  File "C:\Users\AChava05\videotransenv\lib\site-packages\gradio\blocks.py", line 2220, in process_api
-    result = await self.call_function(
-  File "C:\Users\AChava05\videotransenv\lib\site-packages\gradio\blocks.py", line 1731, in call_function
-    prediction = await anyio.to_thread.run_sync(  # type: ignore
-  File "C:\Users\AChava05\videotransenv\lib\site-packages\anyio\to_thread.py", line 56, in run_sync
-    return await get_async_backend().run_sync_in_worker_thread(
-  File "C:\Users\AChava05\videotransenv\lib\site-packages\anyio\_backends\_asyncio.py", line 2470, in run_sync_in_worker_thread
-    return await future
-  File "C:\Users\AChava05\videotransenv\lib\site-packages\anyio\_backends\_asyncio.py", line 967, in run
-    result = context.run(func, *args)
-  File "C:\Users\AChava05\videotransenv\lib\site-packages\gradio\utils.py", line 940, in wrapper
-    response = f(*args, **kwargs)
-  File "C:\Users\AChava05\video_app1.py", line 114, in full_pipeline
-    audio_path = extract_audio(temp_video_path)
-  File "C:\Users\AChava05\video_app1.py", line 31, in extract_audio
-    clip = mp.VideoFileClip(video_path)
-NameError: name 'mp' is not defined
+pip install --force-reinstall moviepy
+
+python
+>>> import moviepy.editor as mp
+>>> exit()
