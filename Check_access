@@ -1,40 +1,50 @@
-import requests
-TRANSLATOR_ENDPOINT = "https://cog-speech-dto-epil-dev.cognitiveservices.azure.com"
-TRANSLATOR_KEY = ""
-API_VERSION = "2024-04-01"
+import azure.cognitiveservices.speech as speechsdk
+from moviepy.editor import VideoFileClip
 
+# 🔹 Your Azure Credentials
+AZURE_SPEECH_KEY = "<your-speech-key>"
+AZURE_REGION = "<your-region>"  # Example: "eastus"
 
-TRANSLATOR_REGION = "eastus"  # e.g., "eastus"
+# 🔹 Step 1: Extract audio from video
+def extract_audio_from_video(video_path, output_wav="output.wav"):
+    print("🔧 Extracting audio from video...")
+    clip = VideoFileClip(video_path)
+    clip.audio.write_audiofile(output_wav, codec='pcm_s16le')  # WAV with PCM codec
+    print("✅ Audio saved as:", output_wav)
+    return output_wav
 
+# 🔹 Step 2: Translate extracted audio using Azure
+def translate_audio_azure(audio_path, target_language="hi"):
+    print(f"🌐 Translating to '{target_language}' using Azure Speech Translation...")
 
-def translate_text_azure(text, target_lang="hi"):
-    url = f"{TRANSLATOR_ENDPOINT}/translate?api-version={API_VERSION}&to={target_lang}"
-    headers = {
-        'Ocp-Apim-Subscription-Key': TRANSLATOR_KEY,
-        'Ocp-Apim-Subscription-Region': TRANSLATOR_REGION,
-        'Content-type': 'application/json'
-    }
-    body = [{'Text': text}]
-    
-    response = requests.post(url, headers=headers, json=body)
-    if response.status_code != 200:
-        raise Exception(f"Azure Translation failed: {response.text}")
-    
-    result = response.json()
-    return result[0]['translations'][0]['text']
+    translation_config = speechsdk.translation.SpeechTranslationConfig(
+        subscription=AZURE_SPEECH_KEY,
+        region=AZURE_REGION
+    )
+    translation_config.speech_recognition_language = "en-US"  # source
+    translation_config.add_target_language(target_language)
 
-# 🔹 TEST INPUT
-text_to_translate = "Hello, how are you?"
-translated = translate_text_azure(text_to_translate, target_lang="hi")
-print("Original:", text_to_translate)
-print("Translated:", translated)
+    audio_config = speechsdk.AudioConfig(filename=audio_path)
 
+    recognizer = speechsdk.translation.TranslationRecognizer(
+        translation_config=translation_config,
+        audio_config=audio_config
+    )
 
-(videotransenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> PY .\test.py
-Traceback (most recent call last):
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\test.py", line 28, in <module>
-    translated = translate_text_azure(text_to_translate, target_lang="hi")
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\test.py", line 21, in translate_text_azure       
-    raise Exception(f"Azure Translation failed: {response.text}")
-Exception: Azure Translation failed: {"error":{"code":"404","message": "Resource not found"}}
-(videotransenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> 
+    result = recognizer.recognize_once()
+
+    if result.reason == speechsdk.ResultReason.TranslatedSpeech:
+        print("\n✅ Translation successful!")
+        print("🔹 Original (en):", result.text)
+        print(f"🔹 Translated ({target_language}):", result.translations[target_language])
+        return result.text, result.translations[target_language]
+    else:
+        print("❌ Translation failed.")
+        print("Reason:", result.reason)
+        return None, None
+
+# 🔹 Step 3: Run the whole pipeline
+if __name__ == "__main__":
+    video_file = "your_video.mp4"  # 🔁 Replace with your actual file
+    wav_file = extract_audio_from_video(video_file)
+    translate_audio_azure(wav_file, target_language="hi")
