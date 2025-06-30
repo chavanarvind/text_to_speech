@@ -1,3 +1,1 @@
-(videotransenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> python -c "import site; print(site.getsitepackages())"
-['C:\\Users\\AChava05\\OneDrive - Kenvue\\AChava05\\video_analysis\\videotransenv', 'C:\\Users\\AChava05\\OneDrive - Kenvue\\AChava05\\video_analysis\\videotransenv\\lib\\site-packages']
-pip install --upgrade azure-cognitiveservices-speech
+python -c "import azure.cognitiveservices.speech as speechsdk; print(speechsdk.__file__)"
