@@ -1,9 +1,29 @@
- File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\videotransenv\lib\site-packages\requests\api.py", line 59, in request
-    return session.request(method=method, url=url, **kwargs)
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\videotransenv\lib\site-packages\requests\sessions.py", line 589, in request
-    resp = self.send(prep, **send_kwargs)
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\videotransenv\lib\site-packages\requests\sessions.py", line 703, in send
-    r = adapter.send(request, **kwargs)
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\videotransenv\lib\site-packages\requests\adapters.py", line 698, in send
-    raise SSLError(e, request=request)
-requests.exceptions.SSLError: HTTPSConnectionPool(host='translate.google.com', port=443): Max retries exceeded with url: /m?tl=en&sl=auto&q=With+a+robust+supply+chain%2C+comes+a+heap+of+data%2C (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1007)')))
+import requests
+
+# Replace these with your actual Azure Translator values
+TRANSLATOR_KEY = "<your-translator-subscription-key>"
+TRANSLATOR_REGION = "<your-region>"  # e.g., "eastus"
+TRANSLATOR_ENDPOINT = f"https://{TRANSLATOR_REGION}.api.cognitive.microsofttranslator.com"
+API_VERSION = "3.0"
+
+def translate_text_azure(text, target_lang="hi"):
+    url = f"{TRANSLATOR_ENDPOINT}/translate?api-version={API_VERSION}&to={target_lang}"
+    headers = {
+        'Ocp-Apim-Subscription-Key': TRANSLATOR_KEY,
+        'Ocp-Apim-Subscription-Region': TRANSLATOR_REGION,
+        'Content-type': 'application/json'
+    }
+    body = [{'Text': text}]
+    
+    response = requests.post(url, headers=headers, json=body)
+    if response.status_code != 200:
+        raise Exception(f"Azure Translation failed: {response.text}")
+    
+    result = response.json()
+    return result[0]['translations'][0]['text']
+
+# 🔹 TEST INPUT
+text_to_translate = "Hello, how are you?"
+translated = translate_text_azure(text_to_translate, target_lang="hi")
+print("Original:", text_to_translate)
+print("Translated:", translated)
