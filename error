@@ -1,9 +1,1 @@
-import os
-os.makedirs("offline_packages", exist_ok=True)
-
-# Download required packages to folder
-!pip download -d offline_packages gradio moviepy faster-whisper langdetect pydub deep-translator ctranslate2 ffmpeg-python numpy==1.23.5
-
-
-import shutil
-shutil.make_archive("offline_packages", 'zip', "offline_packages")
+pip install --no-index --find-links="path_to_unzipped_folder" gradio moviepy faster-whisper langdetect pydub deep-translator ctranslate2 ffmpeg-python
