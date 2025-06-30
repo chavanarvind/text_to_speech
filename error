@@ -1,17 +1,1 @@
-from huggingface_hub import snapshot_download
-
-snapshot_download(
-    repo_id="guillaumekln/faster-whisper",
-    allow_patterns="base/*",
-    local_dir="whisper_base"
-)
-
-import shutil
-shutil.make_archive("whisper_base", 'zip', "whisper_base")
- Replace this line:
-python
-Copy
-Edit
-model = WhisperModel("base", compute_type="float32")
-
-model = WhisperModel("C:/Users/AChava05/models/whisper_base/base", compute_type="float32", local_files_only=True)
+SPEECH END POINT https://cog-speech-dto-epil-dev.cognitiveservices.azure.com/
