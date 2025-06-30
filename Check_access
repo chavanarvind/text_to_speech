@@ -1,2 +1,3 @@
-pip uninstall azure
-pip uninstall azure-cognitiveservices-speech
+pip uninstall azure azure-cognitiveservices-speech azure-common azure-core -y
+pip install --upgrade pip
+pip install azure-cognitiveservices-speech azure-core azure-common
