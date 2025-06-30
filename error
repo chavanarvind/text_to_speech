@@ -1,2 +1,2 @@
 import sys
-!{sys.executable} -m pip install gradio
+!{sys.executable} -m pip install gradio moviepy pydub faster-whisper deep-translator langdetect ffmpeg-python
