@@ -1,4 +1,2 @@
-import os
+pip install --no-index --find-links="offline_packages" *
 
-output_dir = "offline_packages"
-os.makedirs(output_dir, exist_ok=True)
