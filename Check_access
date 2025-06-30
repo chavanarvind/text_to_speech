@@ -1,1 +1,19 @@
-pip install azure-cognitiveservices-speech
+JX2+AChava05@CPC-AChav-O3V00 MINGW64 ~/OneDrive - Kenvue/AChava05/video_analysis
+$ where python
+C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\videotransenv\Scripts\python.exe
+
+JX2+AChava05@CPC-AChav-O3V00 MINGW64 ~/OneDrive - Kenvue/AChava05/video_analysis
+$ pip show azure-cognitiveservices-speech
+Name: azure-cognitiveservices-speech
+Version: 1.44.0
+Summary: Microsoft Cognitive Services Speech SDK for Python
+Home-page: 
+Author: Microsoft
+Author-email: 
+License: 
+Location: c:\users\achava05\videotransenv\lib\site-packages
+Requires: azure-core
+Required-by: 
+
+JX2+AChava05@CPC-AChav-O3V00 MINGW64 ~/OneDrive - Kenvue/AChava05/video_analysis
+$
