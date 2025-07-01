@@ -1,12 +1,1 @@
-(audioenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> Get-ChildItem -Path .\audioenv\Scripts\python.exe
-
-
-    Directory: C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\Scripts
-
-
-Mode                 LastWriteTime         Length Name
-----                 -------------         ------ ----
--a---l          7/1/2025   3:58 PM         268568 python.exe
-
-
-(audioenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> 
+$env:Path = ".\audioenv\Scripts;" + $env:Path
