@@ -1,1 +1,6 @@
+Problem Statement
+Situation: In BOM today, there is no way to identify Chemicals & Packaging easily although there is a category column​
 
+Complication: This creates issue for many capabilities especially sustainability where there is a need for packaging analysis for EPR fee calculation​
+
+Resolution: We need an AI / ML method to automatically populate a new field with binary information.
