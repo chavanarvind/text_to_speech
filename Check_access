@@ -1,6 +1,9 @@
-Problem Statement
-Situation: In BOM today, there is no way to identify Chemicals & Packaging easily although there is a category column​
+1. Problem Statement
+Situation
+In the current BOM (Bill of Materials), there is no reliable way to identify Chemicals and Packaging materials, even though a category column exists. The available data is inconsistent, incomplete, or not standardized.
 
-Complication: This creates issue for many capabilities especially sustainability where there is a need for packaging analysis for EPR fee calculation​
+Complication
+This lack of clarity causes challenges across various functions — especially in sustainability initiatives, where packaging material identification is critical for calculating Extended Producer Responsibility (EPR) fees and performing packaging impact assessments. The ambiguity also affects sourcing, compliance, and reporting efforts.
 
-Resolution: We need an AI / ML method to automatically populate a new field with binary information.
+Resolution
+To solve this, we developed an AI/ML-based approach to automatically enrich the data by predicting and populating a new binary classification field (e.g., Is_Chemical, Is_Packaging), enabling easy identification of relevant components for downstream analysis and reporting.
