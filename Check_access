@@ -1,17 +1,56 @@
+import gradio as gr
 import subprocess
+import os
+import azure.cognitiveservices.speech as speechsdk
 
-def extract_audio_ffmpeg(input_video, output_audio, ffmpeg_path):
+def extract_audio(input_video_path, output_audio_path="temp_audio.wav"):
     command = [
-        ffmpeg_path,
-        "-i", input_video,
-        "-vn",                  # no video
-        "-acodec", "pcm_s16le", # audio codec
-        "-ar", "44100",         # sample rate
-        "-ac", "2",             # channels
-        output_audio
+        "ffmpeg", "-y", "-i", input_video_path,
+        "-vn", "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2",
+        output_audio_path
     ]
     subprocess.run(command, check=True)
+    return output_audio_path
 
-# Example usage
-ffmpeg_path = r"C:\Tools\ffmpeg\bin\ffmpeg.exe"  # update this to your actual path
-extract_audio_ffmpeg("video.mp4", "audio.wav", ffmpeg_path)
+def translate_audio_with_azure(audio_path, from_lang, to_lang, azure_key, azure_region):
+    translation_config = speechsdk.translation.SpeechTranslationConfig(
+        subscription=azure_key,
+        region=azure_region,
+        speech_recognition_language=from_lang
+    )
+    translation_config.add_target_language(to_lang)
+
+    audio_config = speechsdk.audio.AudioConfig(filename=audio_path)
+    recognizer = speechsdk.translation.TranslationRecognizer(
+        translation_config=translation_config,
+        audio_config=audio_config
+    )
+
+    result = recognizer.recognize_once()
+    if result.reason == speechsdk.ResultReason.TranslatedSpeech:
+        return result.translations[to_lang]
+    else:
+        return f"Error: {result.reason}"
+
+def handle_video(video, from_lang, to_lang, azure_key, azure_region):
+    audio_path = extract_audio(video)
+    translated_text = translate_audio_with_azure(audio_path, from_lang, to_lang, azure_key, azure_region)
+    os.remove(audio_path)
+    return translated_text
+
+# Gradio interface
+iface = gr.Interface(
+    fn=handle_video,
+    inputs=[
+        gr.Video(label="Upload Video"),
+        gr.Textbox(label="From Language (e.g., en-US)"),
+        gr.Textbox(label="To Language (e.g., hi)"),
+        gr.Textbox(label="Azure Speech Key", type="password"),
+        gr.Textbox(label="Azure Region (e.g., eastus)"),
+    ],
+    outputs="text",
+    title="🎙 Video Speech Translator",
+    description="Upload a video and get translated speech text using Azure Speech Translation."
+)
+
+iface.launch()
