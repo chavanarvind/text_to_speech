@@ -1,6 +1,41 @@
-(audioenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> py .\test.py
-🎙️ Translating speech from English to French...
-❌ Speech Recognition canceled.
-  Reason: CancellationReason.Error
-  Details: WebSocket upgrade failed: Authentication error (401). Please check subscription information and region name. SessionId: 7ec0541960744973bb35c22f000aec9e
-(audioenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> 
+import os
+import azure.cognitiveservices.speech as speechsdk
+
+# Use your custom endpoint here
+custom_endpoint = "https://<your-custom-subdomain>.cognitiveservices.azure.com/"
+speech_key = os.environ.get("SPEECH__SERVICE__KEY")
+
+from_language = "en-US"
+to_language = "fr"
+
+def translate_speech_to_french():
+    if not speech_key or not custom_endpoint:
+        print("❌ Missing key or endpoint.")
+        return
+
+    # ✅ Use endpoint-based config
+    translation_config = speechsdk.translation.SpeechTranslationConfig(
+        endpoint=custom_endpoint, subscription=speech_key
+    )
+    translation_config.speech_recognition_language = from_language
+    translation_config.add_target_language(to_language)
+
+    audio_config = speechsdk.audio.AudioConfig(filename="input.wav")
+    recognizer = speechsdk.translation.TranslationRecognizer(
+        translation_config=translation_config,
+        audio_config=audio_config
+    )
+
+    print("🎙️ Translating speech from English to French...")
+    result = recognizer.recognize_once()
+
+    if result.reason == speechsdk.ResultReason.TranslatedSpeech:
+        print(f"✅ English: {result.text}")
+        print(f"✅ French: {result.translations[to_language]}")
+    elif result.reason == speechsdk.ResultReason.Canceled:
+        cancellation = result.cancellation_details
+        print("❌ Canceled.")
+        print(f"  Reason: {cancellation.reason}")
+        print(f"  Details: {cancellation.error_details}")
+
+translate_speech_to_french()
