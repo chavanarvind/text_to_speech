@@ -3,8 +3,12 @@ import subprocess
 import os
 import azure.cognitiveservices.speech as speechsdk
 
-# Update this path to where your ffmpeg.exe is
+# 🛠 Replace with the path to your ffmpeg.exe
 ffmpeg_path = r"C:\Path\To\ffmpeg\bin\ffmpeg.exe"
+
+# 🛠 Replace with your Azure Speech credentials
+AZURE_SPEECH_KEY = "YOUR_AZURE_SPEECH_KEY"
+AZURE_REGION = "YOUR_AZURE_REGION"  # e.g., "eastus", "centralindia"
 
 def extract_audio(input_video_path, output_audio_path="temp_audio.wav"):
     command = [
@@ -20,10 +24,10 @@ def extract_audio(input_video_path, output_audio_path="temp_audio.wav"):
     subprocess.run(command, check=True)
     return output_audio_path
 
-def translate_audio_with_azure(audio_path, from_lang, to_lang, azure_key, azure_region):
+def translate_audio_with_azure(audio_path, from_lang, to_lang):
     translation_config = speechsdk.translation.SpeechTranslationConfig(
-        subscription=azure_key,
-        region=azure_region,
+        subscription=AZURE_SPEECH_KEY,
+        region=AZURE_REGION,
         speech_recognition_language=from_lang
     )
     translation_config.add_target_language(to_lang)
@@ -39,30 +43,51 @@ def translate_audio_with_azure(audio_path, from_lang, to_lang, azure_key, azure_
     if result.reason == speechsdk.ResultReason.TranslatedSpeech:
         return result.translations[to_lang]
     elif result.reason == speechsdk.ResultReason.RecognizedSpeech:
-        return "Recognized but not translated"
+        return "Speech recognized but not translated."
     else:
         return f"❌ Error: {result.reason}"
 
-def handle_video(video, from_lang, to_lang, azure_key, azure_region):
+def handle_video(video, from_lang, to_lang):
     audio_path = extract_audio(video)
-    translated_text = translate_audio_with_azure(audio_path, from_lang, to_lang, azure_key, azure_region)
+    translated_text = translate_audio_with_azure(audio_path, from_lang, to_lang)
     if os.path.exists(audio_path):
         os.remove(audio_path)
     return translated_text
 
-# Gradio UI
+# Gradio interface
 iface = gr.Interface(
     fn=handle_video,
     inputs=[
         gr.Video(label="Upload Video"),
-        gr.Textbox(label="Source Language (e.g., en-US)"),
-        gr.Textbox(label="Target Language (e.g., hi)"),
-        gr.Textbox(label="Azure Speech Key", type="password"),
-        gr.Textbox(label="Azure Region (e.g., eastus, centralindia)"),
+
+        gr.Dropdown(
+            choices=[
+                ("English (US)", "en-US"),
+                ("Hindi", "hi-IN"),
+                ("French", "fr-FR"),
+                ("Spanish", "es-ES"),
+                ("German", "de-DE")
+            ],
+            label="Source Language",
+            value="en-US"
+        ),
+
+        gr.Dropdown(
+            choices=[
+                ("Hindi", "hi"),
+                ("English", "en"),
+                ("French", "fr"),
+                ("Spanish", "es"),
+                ("German", "de"),
+                ("Arabic", "ar")
+            ],
+            label="Target Language",
+            value="hi"
+        ),
     ],
     outputs="text",
     title="🎙 AI Video Translator",
-    description="Upload a video to extract audio, recognize speech, and translate it using Azure Speech Services."
+    description="Upload a video to extract, transcribe, and translate speech using Azure Speech Services."
 )
 
 iface.launch()
