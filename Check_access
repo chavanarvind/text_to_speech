@@ -1,70 +1,46 @@
-import os
-import azure.cognitiveservices.speech as speechsdk
+(audioenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> py .\test.py
+Traceback (most recent call last):
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\test.py", line 70, in <module>
+    translate_speech_to_french()
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\test.py", line 28, in translate_speech_to_f
 
-# Load credentials
-speech_key = os.environ.get("SPEECH__SERVICE__KEY")
-service_region = os.environ.get("SPEECH__SERVICE__REGION")
 
-# Language settings
-from_language = "en-US"
-to_language = "fr"
 
-def translate_speech_to_french():
-    if not speech_key or not service_region:
-        print("❌ Missing SPEECH__SERVICE__KEY or SPEECH__SERVICE__REGION environment variable.")
-        return
 
-    # Create translation configuration
-    translation_config = speechsdk.translation.SpeechTranslationConfig(
-        subscription=speech_key, region=service_region
-    )
-    translation_config.speech_recognition_language = from_language
-    translation_config.add_target_language(to_language)
 
-    # Audio input from file
-    audio_config = speechsdk.audio.AudioConfig(filename="input.wav")
 
-    # Create recognizer
+
+                                                                                                              french
     recognizer = speechsdk.translation.TranslationRecognizer(
-        translation_config=translation_config,
-        audio_config=audio_config
-    )
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\azure\cognitiveservices\speech\translation.py", line 375, in __init__
+    _call_hr_fn(
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\azure\cognitiveservices\speech\interop.py", line 62, in _call_hr_fn
+    _raise_if_failed(hr)
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\azure\cognitiveservices\speech\interop.py", line 55, in _raise_if_failed
+    __try_get_error(_spx_handle(hr))
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\azure\cognitiveservices\speech\interop.py", line 50, in __try_get_error
+    raise RuntimeError(message)
+RuntimeError: Exception with error code:
+[CALL STACK BEGIN]
 
-    print("🎙️ Translating speech from English to French...")
+    > pal_string_to_wstring
+    - pal_string_to_wstring
+    - pal_string_to_wstring
+    - pal_string_to_wstring
+    - pal_string_to_wstring
+    - pal_string_to_wstring
+    - pal_string_to_wstring
+    - pal_string_to_wstring
+    - pal_string_to_wstring
+    - pal_string_to_wstring
+    - pal_string_to_wstring
+    - pal_string_to_wstring
+    - pal_string_to_wstring
+    - pal_string_to_wstring
+    - recognizer_create_translation_recognizer_from_config
+    - ffi_prep_go_closure
 
-    # Perform recognition
-    result = recognizer.recognize_once()
+[CALL STACK END]
 
-    # Handle result
-    if result.reason == speechsdk.ResultReason.TranslatedSpeech:
-        original_text = result.text
-        translated_text = result.translations[to_language]
-
-        print(f"✅ Original (English): {original_text}")
-        print(f"✅ Translated (French): {translated_text}")
-
-        # Synthesize to French speech
-        speech_config = speechsdk.SpeechConfig(subscription=speech_key, region=service_region)
-        speech_config.speech_synthesis_voice_name = "fr-FR-DeniseNeural"
-        audio_output = speechsdk.audio.AudioOutputConfig(filename="fr-translation.wav")
-
-        synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_output)
-        synthesizer.speak_text_async(translated_text).get()
-        print("🔊 Saved translated speech to 'fr-translation.wav'")
-
-    elif result.reason == speechsdk.ResultReason.RecognizedSpeech:
-        print(f"⚠️ Only recognized English: {result.text}")
-        print("Translation not returned.")
-
-    elif result.reason == speechsdk.ResultReason.NoMatch:
-        print("❌ No speech could be recognized.")
-        print(f"Details: {result.no_match_details}")
-
-    elif result.reason == speechsdk.ResultReason.Canceled:
-        cancellation = result.cancellation_details
-        print("❌ Speech Recognition canceled.")
-        print(f"  Reason: {cancellation.reason}")
-        print(f"  Details: {cancellation.error_details}")
-
-# Call the function
-translate_speech_to_french()
+Exception with an error code: 0x8 (SPXERR_FILE_OPEN_FAILED)
+(audioenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> 
