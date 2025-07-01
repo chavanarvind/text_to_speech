@@ -1,31 +1,30 @@
-def translate_audio_with_azure(audio_path, from_lang, to_lang):
-    translation_config = speechsdk.translation.SpeechTranslationConfig(
-        subscription=AZURE_SPEECH_KEY,
-        region=AZURE_REGION,
-        speech_recognition_language=from_lang
-    )
-    translation_config.add_target_language(to_lang)
+(audioenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> py .\video_app1.py
+* Running on local URL:  http://127.0.0.1:7860
+* To create a public link, set `share=True` in `launch()`.
+Exception in callback _ProactorBasePipeTransport._call_connection_lost(None)
+handle: <Handle _ProactorBasePipeTransport._call_connection_lost(None)>
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\asyncio\events.py", line 80, in _run
+    self._context.run(self._callback, *self._args)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
+    self._sock.shutdown(socket.SHUT_RDWR)
+ConnectionResetError: [WinError 10054] An existing connection was forcibly closed by the remote host
+Exception in callback _ProactorBasePipeTransport._call_connection_lost(None)
+handle: <Handle _ProactorBasePipeTransport._call_connection_lost(None)>
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\asyncio\events.py", line 80, in _run
+    self._context.run(self._callback, *self._args)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
+    self._sock.shutdown(socket.SHUT_RDWR)
+ConnectionResetError: [WinError 10054] An existing connection was forcibly closed by the remote host
 
-    audio_config = speechsdk.audio.AudioConfig(filename=audio_path)
-    recognizer = speechsdk.translation.TranslationRecognizer(
-        translation_config=translation_config,
-        audio_config=audio_config
-    )
 
-    result = recognizer.recognize_once()
 
-    if result.reason == speechsdk.ResultReason.TranslatedSpeech:
-        return result.translations[to_lang]
 
-    elif result.reason == speechsdk.ResultReason.RecognizedSpeech:
-        return "Speech recognized but not translated."
 
-    elif result.reason == speechsdk.ResultReason.Canceled:
-        cancellation_details = speechsdk.CancellationDetails.from_result(result)
-        error_msg = f"❌ Canceled: {cancellation_details.reason}"
-        if cancellation_details.reason == speechsdk.CancellationReason.Error:
-            error_msg += f"\n🔍 Error Details: {cancellation_details.error_details}"
-        return error_msg
 
-    else:
-        return f"❌ Unexpected error: {result.reason}"
+
+
+
+
+
