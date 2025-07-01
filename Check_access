@@ -1,9 +1,5 @@
-1. Problem Statement
-Situation
-In the current BOM (Bill of Materials), there is no reliable way to identify Chemicals and Packaging materials, even though a category column exists. The available data is inconsistent, incomplete, or not standardized.
+CMPNT_MATL_DESC_CLEAN → Embedding via BioBERT
 
-Complication
-This lack of clarity causes challenges across various functions — especially in sustainability initiatives, where packaging material identification is critical for calculating Extended Producer Responsibility (EPR) fees and performing packaging impact assessments. The ambiguity also affects sourcing, compliance, and reporting efforts.
+CMPNT_MATL_DESC_LEN → Numerical feature
 
-Resolution
-To solve this, we developed an AI/ML-based approach to automatically enrich the data by predicting and populating a new binary classification field (e.g., Is_Chemical, Is_Packaging), enabling easy identification of relevant components for downstream analysis and reporting.
+UNIT_GROUP, CMPNT_MATL_TYPE_CATEGORY → Categorical features
