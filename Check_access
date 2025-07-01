@@ -1,2 +1,1 @@
-(audioenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> where python
-(audioenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> 
+Get-ChildItem -Path .\audioenv\Scripts\python.exe
