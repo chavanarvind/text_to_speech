@@ -7,104 +7,134 @@ import uuid
 import zipfile
 import requests
 
-def process_tts_synthesis(file_path):
-    """
-    Submits an SSML file for text-to-speech synthesis, checks job status,
-    downloads the output, and processes it into SRT format.
-    
-    Args:
-        file_path (str): Path to the SSML file to be processed.
-    """
-    logging.basicConfig(stream=sys.stdout, level=logging.INFO,
-                        format="[%(asctime)s] %(message)s", datefmt="%m/%d/%Y %I:%M:%S %p %Z")
-    logger = logging.getLogger(__name__)
+# Your Azure Speech resource settings
+SPEECH_ENDPOINT = "https://<your-resource-name>.cognitiveservices.azure.com/"
+SUBSCRIPTION_KEY = "your-subscription-key"
+API_VERSION = "2024-04-01"
 
-    SPEECH_ENDPOINT = "https://cog-speech-dto-epil-dev.cognitiveservices.azure.com/"
-    SUBSCRIPTION_KEY = ""
-    API_VERSION = "2024-04-01"
+# Sample input text
+TEXT_INPUT = "Hello! This is a test of Azure's batch text to speech service. It will convert this paragraph into audio and generate timestamps for subtitles."
 
-    def _create_job_id():
-        return str(uuid.uuid4())
+# Voice and language settings
+VOICE = "en-US-JennyNeural"
+LANG = "en-US"
 
-    def _authenticate():
-        return {'Ocp-Apim-Subscription-Key': SUBSCRIPTION_KEY}
+# Output paths
+SSML_FILE = "test_input.ssml"
+OUTPUT_ZIP = "results.zip"
+EXTRACT_DIR = "extracted_files"
 
-    def submit_synthesis(job_id):
-        url = f'{SPEECH_ENDPOINT}/texttospeech/batchsyntheses/{job_id}?api-version={API_VERSION}'
-        header = {'Content-Type': 'application/json; charset=utf-8'}
-        header.update(_authenticate())
+def generate_ssml(text, voice=VOICE, lang=LANG):
+    return f"""<speak version='1.0' xml:lang='{lang}'>
+  <voice name='{voice}'>{text}</voice>
+</speak>"""
 
-        with open(file_path, 'r', encoding="utf-8-sig") as f:
-            text = f.read()
+def write_ssml_file(text, file_path=SSML_FILE):
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(generate_ssml(text))
 
-        payload = {
-            "inputKind": "SSML",
-            'synthesisConfig': {"voice": "tr-TR-EmelNeural"},
-            "inputs": [{"content": text}],
-            "properties": {
-                "outputFormat": "audio-24khz-160kbitrate-mono-mp3",
-                "wordBoundaryEnabled": True,
-                "sentenceBoundaryEnabled": True,
-                "timeToLiveInHours": 168
-            }
+def authenticate():
+    return {'Ocp-Apim-Subscription-Key': SUBSCRIPTION_KEY}
+
+def create_job_id():
+    return str(uuid.uuid4())
+
+def submit_synthesis(job_id, file_path=SSML_FILE):
+    url = f'{SPEECH_ENDPOINT}/texttospeech/batchsyntheses/{job_id}?api-version={API_VERSION}'
+    headers = {'Content-Type': 'application/json; charset=utf-8'}
+    headers.update(authenticate())
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        ssml_text = f.read()
+
+    payload = {
+        "inputKind": "SSML",
+        "synthesisConfig": {
+            "voice": VOICE
+        },
+        "inputs": [{"content": ssml_text}],
+        "properties": {
+            "outputFormat": "audio-24khz-160kbitrate-mono-mp3",
+            "wordBoundaryEnabled": True,
+            "sentenceBoundaryEnabled": True,
+            "timeToLiveInHours": 168
         }
-        response = requests.put(url, json.dumps(payload, ensure_ascii=False), headers=header)
-        return response.json()["id"] if response.status_code < 400 else None
+    }
 
-    def get_synthesis_status(job_id):
-        url = f'{SPEECH_ENDPOINT}/texttospeech/batchsyntheses/{job_id}?api-version={API_VERSION}'
-        return requests.get(url, headers=_authenticate()).json()
+    response = requests.put(url, json.dumps(payload), headers=headers)
+    if response.status_code < 400:
+        return job_id
+    print(f"❌ Job submission failed: {response.status_code} - {response.text}")
+    return None
 
-    def download_file(url, file_name):
-        response = requests.get(url)
-        if response.status_code == 200:
-            with open(file_name, 'wb') as f:
-                f.write(response.content)
-            zipfile.ZipFile(file_name, 'r').extractall('extracted_files')
-        
-    def process_timestamps(extracted_folder):
-        sentence_file = os.path.join(extracted_folder, "0001.sentence.json")
-        if not os.path.exists(sentence_file):
-            logger.error("sentence.json file not found!")
-            return
+def get_synthesis_status(job_id):
+    url = f'{SPEECH_ENDPOINT}/texttospeech/batchsyntheses/{job_id}?api-version={API_VERSION}'
+    return requests.get(url, headers=authenticate()).json()
 
-        with open(sentence_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
+def download_and_extract(url, output_path=OUTPUT_ZIP, extract_to=EXTRACT_DIR):
+    r = requests.get(url)
+    if r.status_code == 200:
+        with open(output_path, "wb") as f:
+            f.write(r.content)
+        zipfile.ZipFile(output_path, "r").extractall(extract_to)
+        print(f"✅ Extracted to {extract_to}")
+    else:
+        print("❌ Failed to download output ZIP.")
 
-        srt_lines, subtitle_counter = [], 1
-        for phrase in data:
-            start_time, duration = phrase["AudioOffset"] / 1000, phrase["Duration"] / 1000
-            end_time = start_time + duration
-            srt_lines.extend([f"{subtitle_counter}",
-                              f"{convert_to_srt_timestamp(start_time)} --> {convert_to_srt_timestamp(end_time)}",
-                              phrase["Text"], ""])
-            subtitle_counter += 1
+def convert_to_srt_timestamp(seconds):
+    millis = int((seconds - int(seconds)) * 1000)
+    hours, remainder = divmod(int(seconds), 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02}:{minutes:02}:{seconds:02},{millis:03}"
 
-        with open(os.path.join(extracted_folder, "output.srt"), "w", encoding="utf-8") as f:
-            f.write("\n".join(srt_lines))
+def process_srt_from_json(folder=EXTRACT_DIR):
+    json_file = os.path.join(folder, "0001.sentence.json")
+    if not os.path.exists(json_file):
+        print("❌ sentence.json not found!")
+        return
+    with open(json_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
 
-    def convert_to_srt_timestamp(seconds):
-        millis = int((seconds - int(seconds)) * 1000)
-        hours, remainder = divmod(int(seconds), 3600)
-        minutes, seconds = divmod(remainder, 60)
-        return f"{hours:02}:{minutes:02}:{seconds:02},{millis:03}"
+    srt_lines = []
+    for i, sentence in enumerate(data, 1):
+        start = sentence["AudioOffset"] / 1000
+        end = start + sentence["Duration"] / 1000
+        srt_lines.extend([
+            str(i),
+            f"{convert_to_srt_timestamp(start)} --> {convert_to_srt_timestamp(end)}",
+            sentence["Text"],
+            ""
+        ])
 
-    job_id = _create_job_id()
-    if submit_synthesis(job_id):
-        while True:
-            job_response = get_synthesis_status(job_id)
-            status = job_response['status']
-            if status == 'Succeeded':
-                download_file(job_response['outputs']['result'], "results.zip")
-                process_timestamps("extracted_files")
-                logger.info("Batch synthesis job succeeded")
-                break
-            elif status == 'Failed':
-                logger.error("Batch synthesis job failed")
-                break
-            else:
-                logger.info(f"Batch synthesis job is still running, status [{status}]")
-                time.sleep(5)
+    with open(os.path.join(folder, "output.srt"), "w", encoding="utf-8") as f:
+        f.write("\n".join(srt_lines))
+    print("✅ SRT file created")
 
-# Example usage
-#process_tts_synthesis("C:/Users/AChava05/OneDrive - Kenvue/AChava05/audio/audio-agents/text2speech/text_files/test.txt")
+def run_batch_tts_pipeline():
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+    write_ssml_file(TEXT_INPUT)
+    job_id = create_job_id()
+
+    print(f"🚀 Submitting job {job_id}")
+    if not submit_synthesis(job_id):
+        return
+
+    print("⏳ Waiting for synthesis to complete...")
+    while True:
+        result = get_synthesis_status(job_id)
+        status = result.get("status")
+        if status == "Succeeded":
+            print("✅ Synthesis succeeded!")
+            result_url = result["outputs"]["result"]
+            download_and_extract(result_url)
+            process_srt_from_json()
+            break
+        elif status == "Failed":
+            print(f"❌ Synthesis failed: {result}")
+            break
+        else:
+            print(f"⏳ Still running... [{status}]")
+            time.sleep(5)
+
+# Run the full pipeline
+run_batch_tts_pipeline()
