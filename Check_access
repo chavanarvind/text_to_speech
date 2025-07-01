@@ -1,73 +1,11 @@
-import os
-import azure.cognitiveservices.speech as speechsdk
-
-# Load credentials
-speech_key = os.environ.get("SPEECH__SERVICE__KEY")
-service_region = os.environ.get("SPEECH__SERVICE__REGION")
-
-# Language settings
-from_language = "en-US"
-to_language = "fr"
-
-def translate_speech_to_french():
-    if not speech_key or not service_region:
-        print("❌ Missing SPEECH__SERVICE__KEY or SPEECH__SERVICE__REGION environment variable.")
-        return
-
-    # Create translation configuration
-    translation_config = speechsdk.translation.SpeechTranslationConfig(
-        subscription=speech_key, region=service_region
-    )
-    translation_config.speech_recognition_language = from_language
-    translation_config.add_target_language(to_language)
-
-    # Audio input from file
-    audio_config = speechsdk.audio.AudioConfig(filename="input.wav")
-
-    # Create recognizer
-    recognizer = speechsdk.translation.TranslationRecognizer(
-        translation_config=translation_config,
-        audio_config=audio_config
-    )
-
-    print("🎙️ Translating speech from English to French...")
-
-    # Perform recognition
-    result = recognizer.recognize_once()
-
-    # Handle result
-    if result.reason == speechsdk.ResultReason.TranslatedSpeech:
-        original_text = result.text
-        translated_text = result.translations[to_language]
-
-        print(f"✅ Original (English): {original_text}")
-        print(f"✅ Translated (French): {translated_text}")
-
-        # Synthesize to French speech
-        speech_config = speechsdk.SpeechConfig(subscription=speech_key, region=service_region)
-        speech_config.speech_synthesis_voice_name = "fr-FR-DeniseNeural"
-        audio_output = speechsdk.audio.AudioOutputConfig(filename="fr-translation.wav")
-
-        synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_output)
-        synthesizer.speak_text_async(translated_text).get()
-        print("🔊 Saved translated speech to 'fr-translation.wav'")
-
-    elif result.reason == speechsdk.ResultReason.RecognizedSpeech:
-        print(f"⚠️ Only recognized English: {result.text}")
-        print("Translation not returned.")
-
-    elif result.reason == speechsdk.ResultReason.NoMatch:
-        print("❌ No speech could be recognized.")
-        print(f"Details: {result.no_match_details}")
-
-    elif result.reason == speechsdk.ResultReason.Canceled:
-        cancellation = result.cancellation_details
-        print("❌ Speech Recognition canceled.")
-        print(f"  Reason: {cancellation.reason}")
-        if cancellation.reason == speechsdk.CancellationReason.Error:
-            print(f"  Error Code: {cancellation.error_code}")
-            print(f"  Error Details: {cancellation.error_details}")
-            print("🔎 Check your subscription key, region, audio format, and network access.")
-
-# Call the function
-translate_speech_to_french()
+(audioenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> py .\test.py
+🎙️ Translating speech from English to French...
+❌ Speech Recognition canceled.
+  Reason: CancellationReason.Error
+Traceback (most recent call last):
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\test.py", line 73, in <module>
+    translate_speech_to_french()
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\test.py", line 68, in translate_speech_to_french
+    print(f"  Error Code: {cancellation.error_code}")
+AttributeError: 'CancellationDetails' object has no attribute 'error_code'
+(audioenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> 
