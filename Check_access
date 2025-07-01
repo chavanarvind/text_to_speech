@@ -1,5 +1,37 @@
-CMPNT_MATL_DESC_CLEAN → Embedding via BioBERT
+3. Solution Approach
+To solve the challenge of identifying Chemical and Packaging components in BOM data, we implemented a hybrid categorization pipeline using a combination of rule-based logic and AI/ML techniques. The solution is designed to be scalable, auditable, and easy to integrate with existing data quality workflows.
 
-CMPNT_MATL_DESC_LEN → Numerical feature
+🔍 Key Elements of the Approach:
+✅ 1. Hybrid Classification Strategy
+Rule-Based Mapping: Wherever possible, predefined mappings based on existing domain knowledge are applied directly.
 
-UNIT_GROUP, CMPNT_MATL_TYPE_CATEGORY → Categorical features
+ML-Based Inference: For unmapped or ambiguous cases, machine learning models predict the category using text descriptions and other engineered features.
+
+✅ 2. AI/ML Pipeline Design
+Uses BioBERT-based embeddings to understand unstructured text in the component description.
+
+Merges embeddings with structured fields like unit of measure and material type.
+
+Employs LightGBM models to predict both category and subcategory with high confidence.
+
+✅ 3. Traceability and Confidence
+Every prediction is accompanied by:
+
+Confidence Score
+
+Matching Reason
+
+These allow for easy auditing and review of AI decisions.
+
+✅ 4. Modular and Scalable Architecture
+The pipeline is divided into independent stages:
+
+Extraction & mapping
+
+Preprocessing & feature engineering
+
+Model inference
+
+Merging results back to source
+
+It supports parallel execution and can run in local or Azure cloud environments.
