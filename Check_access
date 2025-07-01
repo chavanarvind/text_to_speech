@@ -1,1 +1,1 @@
-$env:Path = ".\audioenv\Scripts;" + $env:Path
+.\audioenv\Scripts\python.exe .\test.py
