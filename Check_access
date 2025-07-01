@@ -1,51 +1,8 @@
-import os
-import azure.cognitiveservices.speech as speechsdk
-
-# Load credentials from environment
-speech_key = os.environ["SPEECH__SERVICE__KEY"]
-service_region = os.environ["SPEECH__SERVICE__REGION"]
-
-# Language settings
-from_language = "en-US"
-to_language = "fr"
-
-def translate_speech_to_french():
-    # Create translation config
-    translation_config = speechsdk.translation.SpeechTranslationConfig(
-        subscription=speech_key, region=service_region
-    )
-    translation_config.speech_recognition_language = from_language
-    translation_config.add_target_language(to_language)
-
-    # Use audio file as input
-    audio_config = speechsdk.audio.AudioConfig(filename="input.wav")
-
-    # Create recognizer
-    recognizer = speechsdk.translation.TranslationRecognizer(
-        translation_config=translation_config,
-        audio_config=audio_config
-    )
-
-    print("Translating audio...")
-    result = recognizer.recognize_once()
-
-    # Print results
-    if result.reason == speechsdk.ResultReason.TranslatedSpeech:
-        original = result.text
-        translated = result.translations[to_language]
-        print(f"Original (English): {original}")
-        print(f"Translated (French): {translated}")
-
-        # Synthesize translated speech
-        speech_config = speechsdk.SpeechConfig(subscription=speech_key, region=service_region)
-        speech_config.speech_synthesis_voice_name = "fr-FR-DeniseNeural"  # or other French voice
-        audio_out = speechsdk.audio.AudioOutputConfig(filename="fr-translation.wav")
-        synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_out)
-        synthesizer.speak_text_async(translated).get()
-
-        print("Translated audio saved to: fr-translation.wav")
-
-    else:
-        print(f"Translation failed: {result.reason}")
-
-translate_speech_to_french()
+if result.reason == speechsdk.ResultReason.Canceled:
+    cancellation_details = result.cancellation_details
+    print("Speech Recognition canceled:")
+    print(f"  Reason: {cancellation_details.reason}")
+    if cancellation_details.reason == speechsdk.CancellationReason.Error:
+        print(f"  Error Code: {cancellation_details.error_code}")
+        print(f"  Error Details: {cancellation_details.error_details}")
+        print("Did you set the speech resource key and region correctly?")
