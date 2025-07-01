@@ -1,46 +1,6 @@
 (audioenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> py .\test.py
-Traceback (most recent call last):
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\test.py", line 70, in <module>
-    translate_speech_to_french()
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\test.py", line 28, in translate_speech_to_f
-
-
-
-
-
-
-
-                                                                                                              french
-    recognizer = speechsdk.translation.TranslationRecognizer(
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\azure\cognitiveservices\speech\translation.py", line 375, in __init__
-    _call_hr_fn(
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\azure\cognitiveservices\speech\interop.py", line 62, in _call_hr_fn
-    _raise_if_failed(hr)
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\azure\cognitiveservices\speech\interop.py", line 55, in _raise_if_failed
-    __try_get_error(_spx_handle(hr))
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\azure\cognitiveservices\speech\interop.py", line 50, in __try_get_error
-    raise RuntimeError(message)
-RuntimeError: Exception with error code:
-[CALL STACK BEGIN]
-
-    > pal_string_to_wstring
-    - pal_string_to_wstring
-    - pal_string_to_wstring
-    - pal_string_to_wstring
-    - pal_string_to_wstring
-    - pal_string_to_wstring
-    - pal_string_to_wstring
-    - pal_string_to_wstring
-    - pal_string_to_wstring
-    - pal_string_to_wstring
-    - pal_string_to_wstring
-    - pal_string_to_wstring
-    - pal_string_to_wstring
-    - pal_string_to_wstring
-    - recognizer_create_translation_recognizer_from_config
-    - ffi_prep_go_closure
-
-[CALL STACK END]
-
-Exception with an error code: 0x8 (SPXERR_FILE_OPEN_FAILED)
+🎙️ Translating speech from English to French...
+❌ Speech Recognition canceled.
+  Reason: CancellationReason.Error
+  Details: WebSocket upgrade failed: Authentication error (401). Please check subscription information and region name. SessionId: 7ec0541960744973bb35c22f000aec9e
 (audioenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> 
