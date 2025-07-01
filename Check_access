@@ -1,6 +1,1 @@
-5. Execution & Frequency
-Frequency: Weekly
-
-Trigger Time: Every Monday at 12:00 AM IST
-
-Mode: Automated batch run via scheduled job (Azure pipeline / local cron)
+venv.create('env', with_pip=True)
