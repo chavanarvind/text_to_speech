@@ -3,10 +3,18 @@ import subprocess
 import os
 import azure.cognitiveservices.speech as speechsdk
 
+# Update this path to where your ffmpeg.exe is
+ffmpeg_path = r"C:\Path\To\ffmpeg\bin\ffmpeg.exe"
+
 def extract_audio(input_video_path, output_audio_path="temp_audio.wav"):
     command = [
-        "ffmpeg", "-y", "-i", input_video_path,
-        "-vn", "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2",
+        ffmpeg_path,
+        "-y",
+        "-i", input_video_path,
+        "-vn",
+        "-acodec", "pcm_s16le",
+        "-ar", "44100",
+        "-ac", "2",
         output_audio_path
     ]
     subprocess.run(command, check=True)
@@ -27,30 +35,34 @@ def translate_audio_with_azure(audio_path, from_lang, to_lang, azure_key, azure_
     )
 
     result = recognizer.recognize_once()
+
     if result.reason == speechsdk.ResultReason.TranslatedSpeech:
         return result.translations[to_lang]
+    elif result.reason == speechsdk.ResultReason.RecognizedSpeech:
+        return "Recognized but not translated"
     else:
-        return f"Error: {result.reason}"
+        return f"❌ Error: {result.reason}"
 
 def handle_video(video, from_lang, to_lang, azure_key, azure_region):
     audio_path = extract_audio(video)
     translated_text = translate_audio_with_azure(audio_path, from_lang, to_lang, azure_key, azure_region)
-    os.remove(audio_path)
+    if os.path.exists(audio_path):
+        os.remove(audio_path)
     return translated_text
 
-# Gradio interface
+# Gradio UI
 iface = gr.Interface(
     fn=handle_video,
     inputs=[
         gr.Video(label="Upload Video"),
-        gr.Textbox(label="From Language (e.g., en-US)"),
-        gr.Textbox(label="To Language (e.g., hi)"),
+        gr.Textbox(label="Source Language (e.g., en-US)"),
+        gr.Textbox(label="Target Language (e.g., hi)"),
         gr.Textbox(label="Azure Speech Key", type="password"),
-        gr.Textbox(label="Azure Region (e.g., eastus)"),
+        gr.Textbox(label="Azure Region (e.g., eastus, centralindia)"),
     ],
     outputs="text",
-    title="🎙 Video Speech Translator",
-    description="Upload a video and get translated speech text using Azure Speech Translation."
+    title="🎙 AI Video Translator",
+    description="Upload a video to extract audio, recognize speech, and translate it using Azure Speech Services."
 )
 
 iface.launch()
