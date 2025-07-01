@@ -1,1 +1,3 @@
-.\audioenv\Scripts\python.exe -c "import sys; print(sys.path)"
+(audioenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> .\audioenv\Scripts\python.exe -c "import sys; print(sys.path)"
+['', 'C:\\Program Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\\python310.zip', 'C:\\Program Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\\DLLs', 'C:\\Program Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\\lib', 'C:\\Users\\AChava05\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.10_qbz5n2kfra8p0', 'C:\\Users\\AChava05\\OneDrive - Kenvue\\AChava05\\video_analysis\\audioenv', 'C:\\Users\\AChava05\\OneDrive - Kenvue\\AChava05\\video_analysis\\audioenv\\lib\\site-packages']
+(audioenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> 
