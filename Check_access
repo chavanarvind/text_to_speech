@@ -1,1 +1,3 @@
-Get-ChildItem .\ | Where-Object { $_.Name -like "moviepy*" }
+OneDrive - Kenvue\\AChava05\\video_analysis\\audioenv\\lib\\site-packages']
+(audioenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> Get-ChildItem .\ | Where-Object { $_.Name -like "moviepy*" }
+(audioenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> 
