@@ -1,12 +1,6 @@
-PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> pip show moviepy
-Name: moviepy
-Version: 2.2.1
-Summary: Video editing with Python
-Home-page:
-Author: Zulko 2024
-Author-email:
-License: MIT License
-Location: c:\users\achava05\onedrive - kenvue\achava05\video_analysis\audioenv\lib\site-packages
-Requires: decorator, imageio, imageio_ffmpeg, numpy, pillow, proglog, python-dotenv
-Required-by:
+(audioenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> py .\test.py
+Traceback (most recent call last):
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\test.py", line 2, in <module>
+    from moviepy.editor import VideoFileClip
+ModuleNotFoundError: No module named 'moviepy.editor'
 (audioenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> 
