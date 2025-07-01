@@ -1,1 +1,1 @@
-.\audioenv\Scripts\python.exe .\test.py
+.\audioenv\Scripts\python.exe -m pip list
