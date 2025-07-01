@@ -1,1 +1,17 @@
-choco install ffmpeg
+import subprocess
+
+def extract_audio_ffmpeg(input_video, output_audio, ffmpeg_path):
+    command = [
+        ffmpeg_path,
+        "-i", input_video,
+        "-vn",                  # no video
+        "-acodec", "pcm_s16le", # audio codec
+        "-ar", "44100",         # sample rate
+        "-ac", "2",             # channels
+        output_audio
+    ]
+    subprocess.run(command, check=True)
+
+# Example usage
+ffmpeg_path = r"C:\Tools\ffmpeg\bin\ffmpeg.exe"  # update this to your actual path
+extract_audio_ffmpeg("video.mp4", "audio.wav", ffmpeg_path)
