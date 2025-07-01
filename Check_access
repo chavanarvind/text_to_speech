@@ -1,31 +1,36 @@
-def translate_audio_with_azure(audio_path, from_lang, to_lang):
-    translation_config = speechsdk.translation.SpeechTranslationConfig(
-        subscription=AZURE_SPEECH_KEY,
-        region=AZURE_REGION,
-        speech_recognition_language=from_lang
-    )
-    translation_config.add_target_language(to_lang)
+import azure.cognitiveservices.speech as speechsdk
 
-    audio_config = speechsdk.audio.AudioConfig(filename=audio_path)
-    recognizer = speechsdk.translation.TranslationRecognizer(
-        translation_config=translation_config,
-        audio_config=audio_config
-    )
+def transcribe_audio_with_azure(audio_path, language="en-US"):
+    try:
+        speech_config = speechsdk.SpeechConfig(
+            subscription=AZURE_SPEECH_KEY,
+            region=AZURE_REGION
+        )
+        speech_config.speech_recognition_language = language
 
-    result = recognizer.recognize_once()
+        audio_input = speechsdk.audio.AudioConfig(filename=audio_path)
+        recognizer = speechsdk.SpeechRecognizer(
+            speech_config=speech_config,
+            audio_config=audio_input
+        )
 
-    if result.reason == speechsdk.ResultReason.TranslatedSpeech:
-        return result.translations[to_lang]
+        result = recognizer.recognize_once()
 
-    elif result.reason == speechsdk.ResultReason.RecognizedSpeech:
-        return "Speech recognized but not translated."
+        if result.reason == speechsdk.ResultReason.RecognizedSpeech:
+            return result.text
 
-    elif result.reason == speechsdk.ResultReason.Canceled:
-        try:
-            details = result.cancellation_details
-            return f"❌ Canceled: {details.reason}\n🔍 Error Details: {details.error_details}"
-        except Exception:
-            return "❌ Canceled for unknown reason."
+        elif result.reason == speechsdk.ResultReason.NoMatch:
+            return "🔇 No speech could be recognized."
 
-    else:
-        return f"❌ Unexpected result reason: {result.reason}"
+        elif result.reason == speechsdk.ResultReason.Canceled:
+            cancellation_details = result.cancellation_details
+            return f"❌ Canceled: {cancellation_details.reason}\nError: {cancellation_details.error_details}"
+
+    except Exception as e:
+        return f"❌ Exception: {str(e)}"
+
+
+
+text = transcribe_audio_with_azure("temp_audio.wav", language="en-US")
+print(text)
+
