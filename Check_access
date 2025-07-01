@@ -1,75 +1,67 @@
-import azure.cognitiveservices.speech as speechsdk
-import requests
-import json
-import os
+ PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> py .\test.py      
+🧠 Trying transcription with Azure SDK...
+⚠️ SDK canceled: CancellationReason.Error, WebSocket upgrade failed: Authentication error (401). Please check ssubscription information and region name. SessionId: 7c1166ba3ad54a2b98a81ebf32861d8a
+⚠️ SDK failed: SDK transcription failed
+🔁 Falling back to REST API transcription...
+Traceback (most recent call last):
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\urllib3\connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\urllib3\connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\urllib3\connection.py", line 790, in connect
+    sock_and_verified = _ssl_wrap_socket_and_match_hostname(
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\urllib3\connection.py", line 969, in _ssl_wrap_socket_and_match_hostname
+    ssl_sock = ssl_wrap_socket(
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\urllib3\util\ssl_.py", line 480, in ssl_wrap_socket
+    ssl_sock = _ssl_wrap_socket_impl(sock, context, tls_in_tls, server_hostname)
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\urllib3\util\ssl_.py", line 524, in _ssl_wrap_socket_impl
+    return ssl_context.wrap_socket(sock, server_hostname=server_hostname)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\ssl.py", line 513, in wrap_socket
+    return self.sslsocket_class._create(
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\ssl.py", line 1071, in _create
+    self.do_handshake()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\ssl.py", line 1342, in do_handshake
+    self._sslobj.do_handshake()
+ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1007)
 
-# Azure credentials
-AZURE_SPEECH_KEY = "your-key"
-AZURE_REGION = "your-region"  # e.g., eastus
-AZURE_ENDPOINT = f"https://{AZURE_REGION}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1"
+During handling of the above exception, another exception occurred:
 
-# Path to your audio file (WAV/MP3/MP4 etc.)
-AUDIO_PATH = "your_audio_file.wav"
+Traceback (most recent call last):
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\urllib3\connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\urllib3\connectionpool.py", line 488, in _make_request
+    raise new_e
+urllib3.exceptions.SSLError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1007)
 
-def transcribe_with_sdk(audio_path, language="en-US"):
-    try:
-        speech_config = speechsdk.SpeechConfig(subscription=AZURE_SPEECH_KEY, region=AZURE_REGION)
-        speech_config.speech_recognition_language = language
+The above exception was the direct cause of the following exception:
 
-        audio_input = speechsdk.audio.AudioConfig(filename=audio_path)
-        recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config, audio_config=audio_input)
+Traceback (most recent call last):
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\requests\adapters.py", line 667, in send
+    resp = conn.urlopen(
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\urllib3\connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\urllib3\util\retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='eastus.stt.speech.microsoft.com', port=443): Max retries exceeded with url: /speech/recognition/conversation/cognitiveservices/v1?language=en-US&format=simple (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1007)')))
 
-        print("🧠 Trying transcription with Azure SDK...")
-        result = recognizer.recognize_once()
+During handling of the above exception, another exception occurred:
 
-        if result.reason == speechsdk.ResultReason.RecognizedSpeech:
-            print("✅ SDK transcription succeeded.")
-            return result.text
-        elif result.reason == speechsdk.ResultReason.Canceled:
-            details = result.cancellation_details
-            print(f"⚠️ SDK canceled: {details.reason}, {details.error_details}")
-            raise Exception("SDK transcription failed")
-
-    except Exception as e:
-        print(f"⚠️ SDK failed: {e}")
-        return None
-
-def transcribe_with_rest(audio_path, language="en-US"):
-    print("🔁 Falling back to REST API transcription...")
-
-    headers = {
-        "Ocp-Apim-Subscription-Key": AZURE_SPEECH_KEY,
-        "Content-Type": "audio/wav",  # adjust if using MP3: audio/mpeg
-        "Accept": "application/json;text/xml"
-    }
-
-    params = {
-        "language": language,
-        "format": "simple"
-    }
-
-    with open(audio_path, "rb") as audio_file:
-        response = requests.post(
-            AZURE_ENDPOINT,
-            headers=headers,
-            params=params,
-            data=audio_file
-        )
-
-    if response.status_code == 200:
-        result = response.json()
-        print("✅ REST transcription succeeded.")
-        return result.get("DisplayText")
-    else:
-        print(f"❌ REST failed: {response.status_code} - {response.text}")
-        return None
-
-def transcribe_audio(audio_path, language="en-US"):
-    transcript = transcribe_with_sdk(audio_path, language)
-    if transcript:
-        return transcript
+Traceback (most recent call last):
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\test.py", line 74, in <module>
+    transcript = transcribe_audio(AUDIO_PATH, language="en-US")
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\test.py", line 71, in transcribe_audio     
     return transcribe_with_rest(audio_path, language)
-
-# Example usage
-transcript = transcribe_audio(AUDIO_PATH, language="en-US")
-print("📝 Transcript:", transcript)
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\test.py", line 52, in transcribe_with_rest 
+    response = requests.post(
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\requests\api.py", line 115, in post
+    return request("post", url, data=data, json=json, **kwargs)
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\requests\api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\requests\sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\requests\sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\requests\adapters.py", line 698, in send
+    raise SSLError(e, request=request)
+requests.exceptions.SSLError: HTTPSConnectionPool(host='eastus.stt.speech.microsoft.com', port=443): Max retries exceeded with url: /speech/recognition/conversation/cognitiveservices/v1?language=en-US&format=simple (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1007)')))
+(audioenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> 
