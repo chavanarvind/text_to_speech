@@ -1,2 +1,17 @@
-source	CMPNT_MATL_NUM	CMPNT_MATL_DESC	CHILD_NM	CHILD_TITLE_DESC
-KDLE	30055433	SHPR,16OZ,DESTN MAX STRNG DRP	PC-008694	Shipper - 376  x 281 x 84 mm - RSC - 32 ECT Flute C
+match_round_name = f'{last_match_round + 1}: {round_name}'
+print(f'MATCH ROUND {match_round_name}')
+start = time.time()
+
+# DEBUG: Check if comp ID and spec ID are in ERP and TRU
+erp_debug = erp.query("ERP_PART_ID == '30055433'")
+tru_debug = tru.query("TRU_SPEC_ID == 'PC-008694'")
+ref_debug = reference_table.query("ERP_PART_ID == '30055433' and TRU_SPEC_ID == 'PC-008694'")
+
+print("\n--- DEBUG: ERP Lookup ---")
+print(erp_debug[[ERP_PART_ID, ERP_MAT_NUM, 'SRC_SYS_CD', 'PLNT_CD']])
+
+print("\n--- DEBUG: TRU Lookup ---")
+print(tru_debug[[TRU_SPEC_ID, TRU_MAT_NUM, 'SRC_SYS_CD', 'PLNT_CD']])
+
+print("\n--- DEBUG: Ref Table Entry ---")
+print(ref_debug)
