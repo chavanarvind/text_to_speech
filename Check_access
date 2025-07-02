@@ -6,11 +6,11 @@ import uuid
 import shutil
 
 # Azure Speech settings
-SPEECH_KEY = os.environ.get("SPEECH__SERVICE__KEY")
-CUSTOM_ENDPOINT = "https://<your-custom-subdomain>.cognitiveservices.azure.com/"
+SPEECH_KEY = ""
+CUSTOM_ENDPOINT = "https://cog-speech-dto-epil-dev.cognitiveservices.azure.com/"
 
 # Path to ffmpeg.exe
-FFMPEG_PATH = r"C:\\Users\\<YourUsername>\\Downloads\\ffmpeg.exe"  # Update with your actual path
+FFMPEG_PATH = r"C:/Users/AChava05/Downloads/ffmpeg-2025-06-28-git-cfd1f81e7d-essentials_build/ffmpeg-2025-06-28-git-cfd1f81e7d-essentials_build/bin/ffmpeg.exe"  # Update with your actual path
 
 # Supported languages
 SOURCE_LANGUAGES = {
