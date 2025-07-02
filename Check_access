@@ -1,18 +1,14 @@
-match_round_name = f'{last_match_round + 1}: {round_name}'  
-    print(f'MATCH ROUND {match_round_name}')  
-    start = time.time()  
-    if round_name == 'matches_NLP_list_ERP suggested X-match':
-        print("\n=== DEBUG: Inside NLP_list_ERP round ===")
-        erp_debug = erp.query("ERP_PART_ID == '30055433'")
-        tru_debug = tru.query("TRU_SPEC_ID == 'PC-008694'")
-        ref_debug = reference_table.query("ERP_PART_ID == '30055433' and TRU_SPEC_ID == 'PC-008694'")
+if round_name == 'matches_NLP_list_ERP suggested X-match':
+    print("\n=== DEBUG: Inside NLP_list_ERP round ===")
+    erp_debug = erp.query("CMPNT_MATL_NUM == '30055433'")
+    tru_debug = tru.query("CHILD_NM == 'PC-008694'")
+    ref_debug = reference_table.query("CMPNT_MATL_NUM == '30055433' and CHILD_NM == 'PC-008694'")
 
-        print("\n--- ERP ---")
-        print(erp_debug[[ERP_PART_ID, ERP_MAT_NUM, 'SRC_SYS_CD', 'PLNT_CD']])
+    print("\n--- ERP ---")
+    print(erp_debug[['CMPNT_MATL_NUM', 'SRC_SYS_CD', 'PLNT_CD']])
 
-        print("\n--- TRU ---")
-        print(tru_debug[[TRU_SPEC_ID, TRU_MAT_NUM, 'SRC_SYS_CD', 'PLNT_CD']])
+    print("\n--- TRU ---")
+    print(tru_debug[['CHILD_NM', 'SRC_SYS_CD', 'PLNT_CD']])
 
-        print("\n--- Reference Table Entry ---")
-        print(ref_debug)
-    # First create matches per idx  
+    print("\n--- Reference Table Entry ---")
+    print(ref_debug)
