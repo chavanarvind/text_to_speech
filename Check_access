@@ -5,6 +5,7 @@ import subprocess
 from pydub import AudioSegment, silence
 import gradio as gr
 import azure.cognitiveservices.speech as speechsdk
+import time
 
 # Azure Speech settings
 SPEECH_KEY = ""
@@ -106,6 +107,8 @@ def translate_audio_segmented(audio_path, translated_wav, from_lang, to_lang):
         temp_seg_path = f"segment_{i}.wav"
         segment.export(temp_seg_path, format="wav")
 
+        time.sleep(0.1)  # Allow file to flush
+
         audio_input = speechsdk.audio.AudioConfig(filename=temp_seg_path)
         recognizer = speechsdk.translation.TranslationRecognizer(
             translation_config=translation_config,
@@ -125,7 +128,6 @@ def translate_audio_segmented(audio_path, translated_wav, from_lang, to_lang):
             tts_segment = AudioSegment.from_file(temp_out_path, format="wav")
             translated_audio_segments.append(tts_segment)
 
-            import time
             time.sleep(0.1)
             try:
                 os.remove(temp_out_path)
@@ -134,7 +136,11 @@ def translate_audio_segmented(audio_path, translated_wav, from_lang, to_lang):
         else:
             translated_audio_segments.append(AudioSegment.silent(duration=len(segment)))
 
-        os.remove(temp_seg_path)
+        time.sleep(0.1)
+        try:
+            os.remove(temp_seg_path)
+        except PermissionError:
+            print(f"Warning: Could not delete {temp_seg_path}. File still in use.")
 
     final_audio = sum(translated_audio_segments)
     final_audio.export(translated_wav, format="wav")
