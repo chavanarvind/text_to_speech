@@ -1,17 +1,18 @@
 match_round_name = f'{last_match_round + 1}: {round_name}'
 print(f'MATCH ROUND {match_round_name}')
 start = time.time()
+# 🔍 DEBUG for missing match issue
+if round_name == 'matches_NLP_list_ERP suggested X-match':
+    print("\n=== DEBUG: Inside NLP_list_ERP round ===")
+    erp_debug = erp.query("ERP_PART_ID == '30055433'")
+    tru_debug = tru.query("TRU_SPEC_ID == 'PC-008694'")
+    ref_debug = reference_table.query("ERP_PART_ID == '30055433' and TRU_SPEC_ID == 'PC-008694'")
 
-# DEBUG: Check if comp ID and spec ID are in ERP and TRU
-erp_debug = erp.query("ERP_PART_ID == '30055433'")
-tru_debug = tru.query("TRU_SPEC_ID == 'PC-008694'")
-ref_debug = reference_table.query("ERP_PART_ID == '30055433' and TRU_SPEC_ID == 'PC-008694'")
+    print("\n--- ERP ---")
+    print(erp_debug[[ERP_PART_ID, ERP_MAT_NUM, 'SRC_SYS_CD', 'PLNT_CD']])
 
-print("\n--- DEBUG: ERP Lookup ---")
-print(erp_debug[[ERP_PART_ID, ERP_MAT_NUM, 'SRC_SYS_CD', 'PLNT_CD']])
+    print("\n--- TRU ---")
+    print(tru_debug[[TRU_SPEC_ID, TRU_MAT_NUM, 'SRC_SYS_CD', 'PLNT_CD']])
 
-print("\n--- DEBUG: TRU Lookup ---")
-print(tru_debug[[TRU_SPEC_ID, TRU_MAT_NUM, 'SRC_SYS_CD', 'PLNT_CD']])
-
-print("\n--- DEBUG: Ref Table Entry ---")
-print(ref_debug)
+    print("\n--- Reference Table Entry ---")
+    print(ref_debug)
