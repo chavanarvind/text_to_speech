@@ -1,67 +1,7 @@
-import os
-import gradio as gr
-import subprocess
-import azure.cognitiveservices.speech as speechsdk
-import uuid
-import shutil
+pip install pydub
+from pydub import AudioSegment
 
-# Azure Speech settings
-SPEECH_KEY = ""
-CUSTOM_ENDPOINT = "https://cog-speech-dto-epil-dev.cognitiveservices.azure.com/"
-
-# Path to ffmpeg.exe
-FFMPEG_PATH = r"C:/Users/AChava05/Downloads/ffmpeg-2025-06-28-git-cfd1f81e7d-essentials_build/ffmpeg-2025-06-28-git-cfd1f81e7d-essentials_build/bin/ffmpeg.exe"  # Update with your actual path
-
-# Supported languages
-SOURCE_LANGUAGES = {
-    "English (US)": "en-US",
-    "French (France)": "fr-FR",
-    "German": "de-DE",
-    "Italian": "it-IT",
-    "Spanish": "es-ES",
-    "Portuguese (Brazil)": "pt-BR",
-    "Chinese (Mandarin)": "zh-CN",
-    "Japanese": "ja-JP",
-    "Korean": "ko-KR",
-    "Russian": "ru-RU",
-    "Hindi": "hi-IN",
-    "Arabic": "ar-EG",
-    "Turkish": "tr-TR",
-    "Dutch": "nl-NL",
-    "Polish": "pl-PL",
-    "Thai": "th-TH",
-    "Swedish": "sv-SE",
-    "Czech": "cs-CZ",
-    "Hungarian": "hu-HU"
-}
-
-TARGET_LANGUAGES = {
-    "French": "fr",
-    "German": "de",
-    "Spanish": "es",
-    "Italian": "it",
-    "Portuguese": "pt",
-    "Chinese": "zh-Hans",
-    "Japanese": "ja",
-    "Korean": "ko",
-    "Russian": "ru",
-    "Hindi": "hi",
-    "Arabic": "ar",
-    "Turkish": "tr",
-    "Dutch": "nl",
-    "Polish": "pl",
-    "Thai": "th",
-    "Swedish": "sv",
-    "Czech": "cs",
-    "Hungarian": "hu"
-}
-
-def extract_audio(video_path, audio_path):
-    command = [
-        FFMPEG_PATH, "-y", "-i", video_path,
-        "-vn", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", audio_path
-    ]
-    subprocess.run(command, check=True)
+from pydub import AudioSegment  # Ensure this is imported at the top
 
 def translate_audio(audio_path, translated_wav, from_lang, to_lang):
     voice_map = {
@@ -110,45 +50,23 @@ def translate_audio(audio_path, translated_wav, from_lang, to_lang):
     synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_out)
     synthesizer.speak_text_async(translated_text).get()
 
+    # Padding the translated audio to match original audio length
+    original_audio = AudioSegment.from_wav(audio_path)
+    translated_audio = AudioSegment.from_wav(translated_wav)
+
+    if len(translated_audio) < len(original_audio):
+        silence = AudioSegment.silent(duration=len(original_audio) - len(translated_audio))
+        padded_audio = translated_audio + silence
+        padded_audio.export(translated_wav, format="wav")
+
     return translated_text
+
 
 def stitch_audio_to_video(original_video, translated_audio, output_video):
     command = [
         FFMPEG_PATH, "-y", "-i", original_video,
         "-i", translated_audio, "-c:v", "copy",
-        "-map", "0:v:0", "-map", "1:a:0", "-shortest",
-        output_video
+        "-map", "0:v:0", "-map", "1:a:0",
+        output_video  # no "-shortest" here
     ]
     subprocess.run(command, check=True)
-
-def process_video(video_file_obj, from_lang_label, to_lang_label):
-    from_lang = SOURCE_LANGUAGES[from_lang_label]
-    to_lang = TARGET_LANGUAGES[to_lang_label]
-
-    uid = str(uuid.uuid4())
-    video_path = f"video_{uid}.mp4"
-    audio_path = f"audio_{uid}.wav"
-    translated_wav = f"translated_{uid}.wav"
-    output_path = f"translated_video_{uid}.mp4"
-
-    shutil.copy(video_file_obj, video_path)
-
-    extract_audio(video_path, audio_path)
-    translate_audio(audio_path, translated_wav, from_lang, to_lang)
-    stitch_audio_to_video(video_path, translated_wav, output_path)
-
-    return output_path
-
-gui = gr.Interface(
-    fn=process_video,
-    inputs=[
-        gr.File(label="Upload Video", file_types=[".mp4"]),
-        gr.Dropdown(choices=list(SOURCE_LANGUAGES.keys()), label="Source Language", value="English (US)"),
-        gr.Dropdown(choices=list(TARGET_LANGUAGES.keys()), label="Target Language", value="French")
-    ],
-    outputs=gr.Video(label="Translated Video"),
-    title="🎬 Video Translator with Azure AI",
-    description="Upload a video, select source and target languages, and get back a translated video with new audio."
-)
-
-gui.launch()
