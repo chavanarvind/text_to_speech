@@ -1,1 +1,14 @@
-SPEECH END POINT https://cog-speech-dto-epil-dev.cognitiveservices.azure.com/
+Schedule name
+rpmcategory
+Description
+--
+Time zone
+Central America Standard Time
+Schedule pattern
+Every Wednesday at 12:00 AM
+Start date
+7/3/2025
+End date
+--
+Schedule tags
+RPM_MODEL
