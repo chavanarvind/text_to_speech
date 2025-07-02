@@ -2,10 +2,11 @@ import os
 import uuid
 import shutil
 import subprocess
-from pydub import AudioSegment, silence
+import time
 import gradio as gr
 import azure.cognitiveservices.speech as speechsdk
-import time
+from pydub import AudioSegment
+import whisperx
 
 # Azure Speech settings
 SPEECH_KEY = ""
@@ -16,25 +17,25 @@ FFMPEG_PATH = r"C:/Users/AChava05/Downloads/ffmpeg-2025-06-28-git-cfd1f81e7d-ess
 
 # Supported languages
 SOURCE_LANGUAGES = {
-    "English (US)": "en-US",
-    "French (France)": "fr-FR",
-    "German": "de-DE",
-    "Italian": "it-IT",
-    "Spanish": "es-ES",
-    "Portuguese (Brazil)": "pt-BR",
-    "Chinese (Mandarin)": "zh-CN",
-    "Japanese": "ja-JP",
-    "Korean": "ko-KR",
-    "Russian": "ru-RU",
-    "Hindi": "hi-IN",
-    "Arabic": "ar-EG",
-    "Turkish": "tr-TR",
-    "Dutch": "nl-NL",
-    "Polish": "pl-PL",
-    "Thai": "th-TH",
-    "Swedish": "sv-SE",
-    "Czech": "cs-CZ",
-    "Hungarian": "hu-HU"
+    "English (US)": "en",
+    "French (France)": "fr",
+    "German": "de",
+    "Italian": "it",
+    "Spanish": "es",
+    "Portuguese (Brazil)": "pt",
+    "Chinese (Mandarin)": "zh",
+    "Japanese": "ja",
+    "Korean": "ko",
+    "Russian": "ru",
+    "Hindi": "hi",
+    "Arabic": "ar",
+    "Turkish": "tr",
+    "Dutch": "nl",
+    "Polish": "pl",
+    "Thai": "th",
+    "Swedish": "sv",
+    "Czech": "cs",
+    "Hungarian": "hu"
 }
 
 TARGET_LANGUAGES = {
@@ -65,87 +66,63 @@ def extract_audio(video_path, audio_path):
     ]
     subprocess.run(command, check=True)
 
-def translate_audio_segmented(audio_path, translated_wav, from_lang, to_lang):
-    audio = AudioSegment.from_wav(audio_path)
-    segments = silence.split_on_silence(audio, min_silence_len=500, silence_thresh=audio.dBFS - 16, keep_silence=250)
+def translate_with_speaker_diarization(audio_path, translated_wav_path, from_lang, to_lang):
+    model = whisperx.load_model("large-v3", device="cuda" if whisperx.utils.get_device() == "cuda" else "cpu", compute_type="float16")
+    audio = whisperx.load_audio(audio_path)
+    result = model.transcribe(audio, language=from_lang)
 
-    print(f"Found {len(segments)} segments.")
-    translated_audio_segments = []
+    diarize_model = whisperx.DiarizationPipeline(use_auth_token=True, device=model.device)
+    diarize_segments = diarize_model(audio_path)
 
-    translation_config = speechsdk.translation.SpeechTranslationConfig(
-        subscription=SPEECH_KEY,
-        endpoint=CUSTOM_ENDPOINT,
-        speech_recognition_language=from_lang
-    )
-    translation_config.add_target_language(to_lang)
+    segments = whisperx.merge_text_diarization(result["segments"], diarize_segments["segments"])
 
-    voice_map = {
-        "fr": "fr-FR-DeniseNeural",
-        "de": "de-DE-KatjaNeural",
-        "es": "es-ES-ElviraNeural",
-        "it": "it-IT-ElsaNeural",
-        "pt": "pt-BR-FranciscaNeural",
-        "zh-Hans": "zh-CN-XiaoxiaoNeural",
-        "ja": "ja-JP-NanamiNeural",
-        "ko": "ko-KR-SunHiNeural",
-        "ru": "ru-RU-DariyaNeural",
-        "hi": "hi-IN-SwaraNeural",
-        "ar": "ar-EG-SalmaNeural",
-        "tr": "tr-TR-EmelNeural",
-        "nl": "nl-NL-ColetteNeural",
-        "pl": "pl-PL-AgnieszkaNeural",
-        "th": "th-TH-PremNeural",
-        "sv": "sv-SE-SofieNeural",
-        "cs": "cs-CZ-VlastaNeural",
-        "hu": "hu-HU-NoemiNeural"
+    speaker_voice_map = {
+        "SPEAKER_00": "fr-FR-HenriNeural",
+        "SPEAKER_01": "fr-FR-DeniseNeural",
+        "SPEAKER_02": "fr-FR-AlainNeural"
     }
-    translation_config.voice_name = voice_map.get(to_lang, "fr-FR-DeniseNeural")
+
     speech_config = speechsdk.SpeechConfig(subscription=SPEECH_KEY, endpoint=CUSTOM_ENDPOINT)
-    speech_config.speech_synthesis_voice_name = translation_config.voice_name
+    all_audio = []
 
-    for i, segment in enumerate(segments):
-        temp_seg_path = f"segment_{i}.wav"
-        segment.export(temp_seg_path, format="wav")
+    for i, seg in enumerate(segments):
+        speaker = seg.get("speaker", "SPEAKER_00")
+        text = seg["text"]
+        print(f"[{speaker}] {text}")
 
-        time.sleep(0.1)  # Allow file to flush
-
-        audio_input = speechsdk.audio.AudioConfig(filename=temp_seg_path)
-        recognizer = speechsdk.translation.TranslationRecognizer(
-            translation_config=translation_config,
-            audio_config=audio_input
+        translation_config = speechsdk.translation.SpeechTranslationConfig(
+            subscription=SPEECH_KEY, endpoint=CUSTOM_ENDPOINT, speech_recognition_language=from_lang
         )
-        result = recognizer.recognize_once()
+        translation_config.add_target_language(to_lang)
+
+        # Translate
+        translation_config.voice_name = speaker_voice_map.get(speaker, "fr-FR-DeniseNeural")
+        speech_config.speech_synthesis_voice_name = translation_config.voice_name
+
+        synthesizer = speechsdk.SpeechSynthesizer(
+            speech_config=speech_config,
+            audio_config=speechsdk.audio.AudioOutputConfig(filename=f"temp_tts_{i}.wav")
+        )
+
+        # Use Azure Translator Text API if better translation needed
+        translator = speechsdk.translation.TranslationRecognizer(
+            translation_config=translation_config,
+            audio_config=speechsdk.audio.AudioConfig(filename=audio_path)
+        )
+        result = translator.recognize_once()
 
         if result.reason == speechsdk.ResultReason.TranslatedSpeech:
             translated_text = result.translations[to_lang]
-            print(f"[Segment {i}] Translated: {translated_text}")
-
-            temp_out_path = f"tts_{i}.wav"
-            audio_output = speechsdk.audio.AudioOutputConfig(filename=temp_out_path)
-            synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_output)
-            synthesizer.speak_text_async(translated_text).get()
-
-            tts_segment = AudioSegment.from_file(temp_out_path, format="wav")
-            translated_audio_segments.append(tts_segment)
-
-            time.sleep(0.1)
-            try:
-                os.remove(temp_out_path)
-            except PermissionError:
-                print(f"Warning: Could not delete {temp_out_path}. File still in use.")
         else:
-            translated_audio_segments.append(AudioSegment.silent(duration=len(segment)))
+            translated_text = text  # fallback
 
-        time.sleep(0.1)
-        try:
-            os.remove(temp_seg_path)
-        except PermissionError:
-            print(f"Warning: Could not delete {temp_seg_path}. File still in use.")
+        synthesizer.speak_text_async(translated_text).get()
+        audio_segment = AudioSegment.from_file(f"temp_tts_{i}.wav")
+        all_audio.append(audio_segment)
+        os.remove(f"temp_tts_{i}.wav")
 
-    final_audio = sum(translated_audio_segments)
-    final_audio.export(translated_wav, format="wav")
-
-    return "Translation complete."
+    final_audio = sum(all_audio)
+    final_audio.export(translated_wav_path, format="wav")
 
 def stitch_audio_to_video(original_video, translated_audio, output_video):
     command = [
@@ -169,7 +146,7 @@ def process_video(video_file_obj, from_lang_label, to_lang_label):
     shutil.copy(video_file_obj, video_path)
 
     extract_audio(video_path, audio_path)
-    translate_audio_segmented(audio_path, translated_wav, from_lang, to_lang)
+    translate_with_speaker_diarization(audio_path, translated_wav, from_lang, to_lang)
     stitch_audio_to_video(video_path, translated_wav, output_path)
 
     return output_path
@@ -182,8 +159,8 @@ gui = gr.Interface(
         gr.Dropdown(choices=list(TARGET_LANGUAGES.keys()), label="Target Language", value="French")
     ],
     outputs=gr.Video(label="Translated Video"),
-    title="🎬 Video Translator with Azure AI",
-    description="Upload a video, select source and target languages, and get back a translated video with aligned audio."
+    title="🎬 Video Translator with Speaker Diarization",
+    description="Upload a video, detect speakers, translate, and assign different Azure voices."
 )
 
 gui.launch()
