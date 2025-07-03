@@ -1,11 +1,46 @@
+def match_by_reference_table(erp, tru, reference_table, round_name, last_match_round):
+    match_round_name = f'{last_match_round + 1}: {round_name}'
+    print(f"\n========== MATCH ROUND {match_round_name} ==========")
 
-Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
-  File "cross_hound/matcher.py", line 1511, in <module>
-    main(input_dir=args.get('input_dir'),
-  File "cross_hound/matcher.py", line 1336, in main
-    matched, unmatched = full_matching_routine(data_version, db_style, device,
-  File "cross_hound/matcher.py", line 888, in full_matching_routine
-    matches_per_hfb, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
-  File "cross_hound/matcher.py", line 345, in match_by_reference_table
-    merged_all = merged_erp_ref.merge(tru, on=["CHILD_NM"], how="left")
-UnboundLocalError: local variable 'merged_erp_ref' referenced before assignment
+    # Focus on your record only for debugging
+    erp_focus = erp.query("CMPNT_MATL_NUM == '30055433'")
+    tru_focus = tru.query("CHILD_NM == 'PC-008694'")
+    ref_focus = reference_table.query("CMPNT_MATL_NUM == '30055433' and CHILD_NM == 'PC-008694'")
+
+    print("\n--- ERP DataFrame (Before Merge) ---")
+    print(erp_focus if not erp_focus.empty else " No record found in ERP")
+
+    print("\n--- TRU DataFrame (Before Merge) ---")
+    print(tru_focus if not tru_focus.empty else " No record found in TRU")
+
+    print("\n--- Reference Table (Before Merge) ---")
+    print(ref_focus if not ref_focus.empty else " No record found in Reference Table")
+
+    # Cast to string to avoid dtype mismatch
+    erp["CMPNT_MATL_NUM"] = erp["CMPNT_MATL_NUM"].astype(str)
+    reference_table["CMPNT_MATL_NUM"] = reference_table["CMPNT_MATL_NUM"].astype(str)
+
+    try:
+        print("\n About to merge ERP and Reference Table...")
+        merged_erp_ref = erp.merge(reference_table, on=["CMPNT_MATL_NUM"], how="left")
+        print("Merged ERP + Reference Table (shape):", merged_erp_ref.shape)
+        merged_focus = merged_erp_ref.query("CMPNT_MATL_NUM == '30055433'")
+        print("\n--- Merged ERP + Reference Table (Focused) ---")
+        print(merged_focus if not merged_focus.empty else " No match for CMPNT_MATL_NUM in merged ERP+Ref")
+    except Exception as e:
+        print(" ERROR merging ERP and Reference Table:", e)
+        return None, erp, tru, last_match_round
+
+    try:
+        print("\n About to merge with TRU...")
+        merged_all = merged_erp_ref.merge(tru, on=["CHILD_NM"], how="left")
+        print(" Merged ERP + Ref + TRU (shape):", merged_all.shape)
+        merged_all_focus = merged_all.query("CMPNT_MATL_NUM == '30055433' and CHILD_NM == 'PC-008694'")
+        print("\n--- Fully Merged DataFrame (Focused) ---")
+        print(merged_all_focus if not merged_all_focus.empty else " No match for CMPNT_MATL_NUM + CHILD_NM in final merged DataFrame")
+    except Exception as e:
+        print(" ERROR merging with TRU:", e)
+        return None, erp, tru, last_match_round
+
+    print("\nFinished Debug Merge for record 30055433 + PC-008694")
+    return None, erp, tru, last_match_round
