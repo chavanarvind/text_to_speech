@@ -1,109 +1,157 @@
-import pandas as pd
-import time
+1202  tube ntg ageshld ltn snscrn bs spf70 3fz                       NaN  
+1203         listerine essential care orig gel                       NaN  
 
-def match_by_reference_table(erp: pd.DataFrame,  
-                             tru: pd.DataFrame,  
-                             reference_table: pd.DataFrame,  
-                             last_match_round: int,  
-                             round_name: str,  
-                             bundles):  
-    '''  
-    Match records using a reference table containing ERP Part ID - TRU Spec mappings
-    with text descriptions. Includes debug tracing for specific records.
-    '''  
-    match_round_name = f'{last_match_round + 1}: {round_name}'  
-    print(f'\n=== MATCH ROUND {match_round_name} ===')  
-    start = time.time()  
+[1192 rows x 4 columns]
 
-    # ✅ Debug for target record
-    target_cmpnt = '30055433'
-    target_child = 'PC-008694'
-    debug_mode = (
-        erp['CMPNT_MATL_NUM'].eq(target_cmpnt).any() or 
-        tru['CHILD_NM'].eq(target_child).any() or 
-        reference_table['CMPNT_MATL_NUM'].eq(target_cmpnt).any()
-    )
+=== MATCH ROUND 5: matches_NLP_list_ERP suggested X-match ===
 
-    if debug_mode:
-        print("\n=== DEBUG: Filtering for CMPNT_MATL_NUM:", target_cmpnt, "and CHILD_NM:", target_child)
+=== DEBUG: Filtering for CMPNT_MATL_NUM: 30055433 and CHILD_NM: PC-008694
 
-        print("\n--- ERP ORIGINAL ---")
-        print(erp.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'"))
+--- ERP ORIGINAL ---
+       SRC_SYS_CD            MATL_NUM MATL_NUM_original MATL_SHRT_DESC   
+347051       KDLE  000000000510006535         510006535        unknown  \
 
-        print("\n--- REF ORIGINAL ---")
-        print(reference_table.query(f"CMPNT_MATL_NUM == '{target_cmpnt}' and CHILD_NM == '{target_child}'"))
+              PLNT_CD CMPNT_MATL_TYPE_CD CMPNT_MATL_NUM   
+347051  External_KDLE               None       30055433  \
 
-        print("\n--- TRU ORIGINAL ---")
-        print(tru.query(f"CHILD_NM == '{target_child}'"))
+       CMPNT_MATL_NUM_original                CMPNT_MATL_DESC   
+347051                30055433  SHPR,16OZ,DESTN MAX STRNG DRP  \
 
-    # First Merge: ERP + Reference Table
-    merged_erp_ref = erp.merge(reference_table, on=["CMPNT_MATL_NUM"], how="left")
-    if debug_mode:
-        print("\n--- AFTER ERP + REF MERGE ---")
-        print(merged_erp_ref.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'"))
+                                               key_erp  is_off_spec_erp   
+347051  000000000510006535_30055433_External_KDLE_KDLE            False  \
 
-    # Second Merge: Merged ERP + TRU
-    merged_all = merged_erp_ref.merge(tru, on=["CHILD_NM"], how="left")
-    if debug_mode:
-        print("\n--- AFTER MERGE WITH TRU ---")
-        print(merged_all.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'"))
+       CMPNT_MATL_NUM_proc             processed_desc_erp extracted_rm_erp   
+347051            30055433  shpr,16oz destn max strng drp              NaN  \
 
-    # Apply filtering (if any)
-    filtered = merged_all  # Replace with actual filtering logic if applicable
-    if debug_mode:
-        print("\n--- AFTER FILTERING (IF ANY) ---")
-        print(filtered.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'"))
+           text_for_matching_erp  perc_alpha_char_erp  
+347051  shpr destn max strng drp                  1.0  
 
-    # Original Matching Logic
-    df_erp_with_additional_id = erp[ERP_MATCH_COLS].merge(
-        reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
-        on=ERP_PART_ID,
-        how='inner'
-    )
-    matched_per_id = df_erp_with_additional_id.merge(
-        tru[TRU_MATCH_COLS],
-        left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, TRU_SPEC_ID],
-        right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, TRU_SPEC_ID],
-        how='inner'
-    )
+--- REF ORIGINAL ---
+     CMPNT_MATL_NUM   CHILD_NM     text_for_matching_erp   
+1156       30055433  PC-008694  shpr destn max strng drp  \
 
-    # Match per description
-    if not (reference_table['text_for_matching_erp'].isnull().all() or 
-            reference_table['text_for_matching_tru'].isnull().all()):
-        reference_table_text = reference_table.dropna(subset=['text_for_matching_erp', 'text_for_matching_tru'])
-        is_valid_ref = [min(len(x), len(y)) > 5 for x, y in 
-                        zip(reference_table_text['text_for_matching_erp'],
-                            reference_table_text['text_for_matching_tru'])]
-        reference_table_text = reference_table_text[is_valid_ref]
-        df_erp_with_additional_desc = erp[ERP_MATCH_COLS].merge(
-            reference_table_text[['text_for_matching_erp', 'text_for_matching_tru']].drop_duplicates(),
-            on='text_for_matching_erp',
-            how='inner'
-        )
-        matched_per_desc = df_erp_with_additional_desc.merge(
-            tru[TRU_MATCH_COLS],
-            left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, 'text_for_matching_tru'],
-            right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, 'text_for_matching_tru'],
-            how='inner'
-        )
-        matched_per_desc = matched_per_desc[matched_per_id.columns]
-    else:
-        matched_per_desc = pd.DataFrame(columns=matched_per_id.columns)
+      text_for_matching_tru  
+1156  shipper rsc ect flute  
 
-    if matched_per_id.empty and matched_per_desc.empty:
-        print(f"No reference table matches found in round {match_round_name}")
-        return pd.DataFrame(), erp, tru, last_match_round + 1
+--- TRU ORIGINAL ---
+Empty DataFrame
+Columns: [mat_num, mat_num_padded, mat_num_original, RGN_CD, FG_NM, FG_SPEC_NM, FD_NM, CHILD_NM, CHILD_NM_original, CHILD_TITLE_DESC, spec_type_inferred, TEMPL_TYPE_CD, CHILD_TYPE_CD, ERP_DESC, SPEC_FLOW_CD, TRD_NM_CONCAT, TRD_NM_FULL, key_tru, CHILD_NM_proc, processed_desc_tru, processed_desc_tru_trade_names, extracted_rm_tru, extra_info_tru, text_for_matching_tru, perc_alpha_char_tru, extracted_rm_tru_trade_names, text_for_matching_tru_trade_names, perc_alpha_char_tru_trade_names, SRC_SYS_CD, PLNT_CD, MATL_NUM, MATL_NUM_original_tru_ref]
+Index: []
 
-    matches = pd.concat([matched_per_id, matched_per_desc], ignore_index=True)
-    matches[SCORE_COL] = 1
-    matches[UNIFIED_MC_COL] = matches[f'{ERP_MAT_NUM}_original'].copy()
-    matches['is_matched'] = True
-    matches['Matching Reason'] = round_name
-    matches['confidence'] = 'high'
-    matches = add_matches_bundles(matches, bundles, tru)
-    matches.drop_duplicates(subset=NON_DUPLICATES_SET, inplace=True)
-    assign_round_name_and_report_time(matches, match_round_name, start)
+--- AFTER ERP + REF MERGE ---
+       SRC_SYS_CD            MATL_NUM MATL_NUM_original MATL_SHRT_DESC   
+296413       KDLE  000000000510006535         510006535        unknown  \
 
-    df_erp_to_match, df_tru_to_match = get_data_yet_to_match(matches, erp, tru)
+              PLNT_CD CMPNT_MATL_TYPE_CD CMPNT_MATL_NUM   
+296413  External_KDLE               None       30055433  \
 
-    return matches, df_erp_to_match, df_tru_to_match, last_match_round + 1
+       CMPNT_MATL_NUM_original                CMPNT_MATL_DESC   
+296413                30055433  SHPR,16OZ,DESTN MAX STRNG DRP  \
+
+                                               key_erp  is_off_spec_erp   
+296413  000000000510006535_30055433_External_KDLE_KDLE            False  \
+
+       CMPNT_MATL_NUM_proc             processed_desc_erp extracted_rm_erp   
+296413            30055433  shpr,16oz destn max strng drp              NaN  \
+
+         text_for_matching_erp_x  perc_alpha_char_erp   CHILD_NM   
+296413  shpr destn max strng drp                  1.0  PC-008694  \
+
+         text_for_matching_erp_y  text_for_matching_tru  
+296413  shpr destn max strng drp  shipper rsc ect flute  
+
+--- AFTER MERGE WITH TRU ---
+        SRC_SYS_CD_x          MATL_NUM_x MATL_NUM_original MATL_SHRT_DESC   
+3309395         KDLE  000000000510006535         510006535        unknown  \
+
+             PLNT_CD_x CMPNT_MATL_TYPE_CD CMPNT_MATL_NUM   
+3309395  External_KDLE               None       30055433  \
+
+        CMPNT_MATL_NUM_original                CMPNT_MATL_DESC   
+3309395                30055433  SHPR,16OZ,DESTN MAX STRNG DRP  \
+
+                                                key_erp  is_off_spec_erp   
+3309395  000000000510006535_30055433_External_KDLE_KDLE            False  \
+
+        CMPNT_MATL_NUM_proc             processed_desc_erp extracted_rm_erp   
+3309395            30055433  shpr,16oz destn max strng drp              NaN  \
+
+          text_for_matching_erp_x  perc_alpha_char_erp   CHILD_NM   
+3309395  shpr destn max strng drp                  1.0  PC-008694  \
+
+          text_for_matching_erp_y text_for_matching_tru_x mat_num   
+3309395  shpr destn max strng drp   shipper rsc ect flute     NaN  \
+
+        mat_num_padded mat_num_original RGN_CD FG_NM FG_SPEC_NM FD_NM   
+3309395            NaN              NaN    NaN   NaN        NaN   NaN  \
+
+        CHILD_NM_original CHILD_TITLE_DESC spec_type_inferred TEMPL_TYPE_CD   
+3309395               NaN              NaN                NaN           NaN  \
+
+        CHILD_TYPE_CD ERP_DESC SPEC_FLOW_CD TRD_NM_CONCAT TRD_NM_FULL key_tru   
+3309395           NaN      NaN          NaN           NaN         NaN     NaN  \
+
+        CHILD_NM_proc processed_desc_tru processed_desc_tru_trade_names   
+3309395           NaN                NaN                            NaN  \
+
+        extracted_rm_tru extra_info_tru text_for_matching_tru_y   
+3309395              NaN            NaN                     NaN  \
+
+         perc_alpha_char_tru extracted_rm_tru_trade_names   
+3309395                  NaN                          NaN  \
+
+        text_for_matching_tru_trade_names  perc_alpha_char_tru_trade_names   
+3309395                               NaN                              NaN  \
+
+        SRC_SYS_CD_y PLNT_CD_y MATL_NUM_y MATL_NUM_original_tru_ref  
+3309395          NaN       NaN        NaN                       NaN  
+
+--- AFTER FILTERING (IF ANY) ---
+        SRC_SYS_CD_x          MATL_NUM_x MATL_NUM_original MATL_SHRT_DESC   
+3309395         KDLE  000000000510006535         510006535        unknown  \
+
+             PLNT_CD_x CMPNT_MATL_TYPE_CD CMPNT_MATL_NUM   
+3309395  External_KDLE               None       30055433  \
+
+        CMPNT_MATL_NUM_original                CMPNT_MATL_DESC   
+3309395                30055433  SHPR,16OZ,DESTN MAX STRNG DRP  \
+
+                                                key_erp  is_off_spec_erp   
+3309395  000000000510006535_30055433_External_KDLE_KDLE            False  \
+
+        CMPNT_MATL_NUM_proc             processed_desc_erp extracted_rm_erp   
+3309395            30055433  shpr,16oz destn max strng drp              NaN  \
+
+          text_for_matching_erp_x  perc_alpha_char_erp   CHILD_NM   
+3309395  shpr destn max strng drp                  1.0  PC-008694  \
+
+          text_for_matching_erp_y text_for_matching_tru_x mat_num   
+3309395  shpr destn max strng drp   shipper rsc ect flute     NaN  \
+
+        mat_num_padded mat_num_original RGN_CD FG_NM FG_SPEC_NM FD_NM   
+3309395            NaN              NaN    NaN   NaN        NaN   NaN  \
+
+        CHILD_NM_original CHILD_TITLE_DESC spec_type_inferred TEMPL_TYPE_CD   
+3309395               NaN              NaN                NaN           NaN  \
+
+        CHILD_TYPE_CD ERP_DESC SPEC_FLOW_CD TRD_NM_CONCAT TRD_NM_FULL key_tru   
+3309395           NaN      NaN          NaN           NaN         NaN     NaN  \
+
+        CHILD_NM_proc processed_desc_tru processed_desc_tru_trade_names   
+3309395           NaN                NaN                            NaN  \
+
+        extracted_rm_tru extra_info_tru text_for_matching_tru_y   
+3309395              NaN            NaN                     NaN  \
+
+         perc_alpha_char_tru extracted_rm_tru_trade_names   
+3309395                  NaN                          NaN  \
+
+        text_for_matching_tru_trade_names  perc_alpha_char_tru_trade_names   
+3309395                               NaN                              NaN  \
+
+        SRC_SYS_CD_y PLNT_CD_y MATL_NUM_y MATL_NUM_original_tru_ref  
+3309395          NaN       NaN        NaN                       NaN  
+****** Adding 232 more matches based on SPEC_FLOW_CD
+5: matches_NLP_list_ERP suggested X-match round matched: 4044 (4.3 seconds)
+df_erp_to_match cases:  289918
+df_tru_to_match cases:  269586
