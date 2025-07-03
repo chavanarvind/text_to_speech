@@ -1,77 +1,13 @@
-import re
-import time
-
-import pandas as pd
-
-from cross_hound.constants import ERP_PART_ID, TRU_SPEC_ID, ERP_PART_DESC, TRU_SPEC_DESC
-
-
-def single_block(string: str) -> str:
-    """
-    Given a string, transform it in a unified format.
-
-    For example, strings such as ListerineBottle250 will be formatted to listerine bottle 250
-
-    """
-    # Add a space before every capital letter that is preceded by a lowercase letter
-    words = re.sub(r"(?<=[a-z])(?=[A-Z])", ' ', string)
-    # Merge consecutive capitalized letters and digits
-    words = re.sub(r'(?<=[A-Z])(?=[A-Z\d])|(?<=\d)(?=\d)', '', words)
-
-    # If there are spaces between the string, try to combine digits and spaces
-    if re.search(r'\s', words):
-        # Merge consecutive digits
-        words = re.sub(r'(?<=\D)(?=\d)|(?<=\d)(?=\D)', ' ', words)
-        # Merge digits with commas or dots in between
-        words = re.sub(r'(\d)[,.](\d)', r'\1\2', words)
-
-    # Replace "-" with a space. Notice that there is short and long version
-    words = re.sub(r'(\s?)-(\s?)', r'\1 \2', words)
-    words = re.sub(r'(\s?)–(\s?)', r'\1 \2', words)
-
-    # Substitute commas and full stops with a space, only between alphabetic characters
-    words = re.sub(r'(?<=[a-zA-Z ])[,.](?=[a-zA-Z ])', ' ', words)
-
-    # remove extra spaces and convert to lower case
-    lowercase_string = re.sub(r'\s+', ' ', words).lower()
-
-    # remove spaces between digits and units of measures.
-    final_string = re.sub(r'(\d+)\s*(ml|m|l|kg|Kg|g|mm|Fl|fl|floz|Floz|FlOz|fl oz|Fl Oz)', r'\1\2', lowercase_string)
-
-    # remove punctuation
-    final_string = re.sub(r'(?<=[a-zA-Z])[\.,](?=[a-zA-Z])|(?<=[a-zA-Z])[\.,](?=\s)', '', final_string)
-    return final_string
-
-
-def process_text_description(text_description: str) -> str:
-    """
-    Format text data.
-
-    This function only formats the text. Example ListerineBottle -> listerine bottle.
-
-    """
-    try:
-        chunks = text_description.split(' ')
-    except Exception as e:
-        return text_description
-    if len(chunks) == 1:
-        final_string = single_block(text_description)
-    else:
-        processed_chunks = []
-        for chunk in chunks:
-            processed_chunk = single_block(chunk)
-            processed_chunks.append(processed_chunk)
-        final_string = ' '.join(processed_chunks)
-        final_string = re.sub(r'\s+', ' ', final_string)
-    return final_string
-
-
 def format_raw_material_id(erp: pd.DataFrame, tru: pd.DataFrame) -> (pd.DataFrame, pd.DataFrame):
     start = time.time()
     pattern = r"(rm)\s*[t /–-]*(\d+)"
-    # use the replace() method to replace all non-alphanumeric characters and spaces with an empty string
     erp[f'{ERP_PART_ID}_proc'] = erp[ERP_PART_ID].str.lower().replace(pattern, r"\1\2", regex=True)
     tru[f'{TRU_SPEC_ID}_proc'] = tru[TRU_SPEC_ID].str.lower().replace(pattern, r"\1\2", regex=True)
+    
+    # ✅ DEBUG: Check if PC-008694 is present
+    print("\n[DEBUG] After format_raw_material_id - TRU")
+    print(tru.query("TRU_SPEC_ID == 'PC-008694'"))
+
     print(f'Format raw material took {time.time() - start} seconds')
     return erp, tru
 
@@ -82,15 +18,26 @@ def preprocessed_text_description(erp: pd.DataFrame, tru: pd.DataFrame) -> (pd.D
     print('erp part desc nulls', erp[ERP_PART_DESC].isna().sum())
     print('tru spec desc nulls: ', tru[TRU_SPEC_DESC].isna().sum())
 
+    # ✅ DEBUG: Before processing
+    print("\n[DEBUG] Before text processing - TRU")
+    print(tru.query("TRU_SPEC_ID == 'PC-008694'"))
+
     print('processing erp')
     erp['processed_desc_erp'] = [process_text_description(d) for d in erp[ERP_PART_DESC]]
 
     print('processing tru')
     tru['processed_desc_tru'] = [process_text_description(d) for d in tru[TRU_SPEC_DESC]]
-    print(f'Process text description took {time.time() - start} seconds')
+
+    # ✅ DEBUG: After processing descriptions
+    print("\n[DEBUG] After processed_desc_tru")
+    print(tru.query("TRU_SPEC_ID == 'PC-008694'"))
 
     print('processing tru trade names')
     tru['processed_desc_tru_trade_names'] = [process_text_description(d) for d in tru['TRD_NM_FULL']]
+
+    # ✅ DEBUG: After processing trade names
+    print("\n[DEBUG] After processed_desc_tru_trade_names")
+    print(tru.query("TRU_SPEC_ID == 'PC-008694'"))
 
     print(f'Process text description took {time.time() - start} seconds')
     return erp, tru
