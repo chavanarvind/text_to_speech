@@ -1,3 +1,6 @@
+import pandas as pd
+import time
+
 def match_by_reference_table(erp: pd.DataFrame,  
                              tru: pd.DataFrame,  
                              reference_table: pd.DataFrame,  
@@ -5,85 +8,102 @@ def match_by_reference_table(erp: pd.DataFrame,
                              round_name: str,  
                              bundles):  
     '''  
-    A reference table contains two types of mappings, Part ID - RM Spec and their respective text descriptions.  
-    This method attempts to match records using the two types of mappings.  
+    Match records using a reference table containing ERP Part ID - TRU Spec mappings
+    with text descriptions. Includes debug tracing for specific records.
     '''  
     match_round_name = f'{last_match_round + 1}: {round_name}'  
-    print(f'MATCH ROUND {match_round_name}')  
+    print(f'\n=== MATCH ROUND {match_round_name} ===')  
     start = time.time()  
-    if round_name == 'matches_NLP_list_ERP suggested X-match':
-        # Print ERP for this component
-     print("\n=== ERP BEFORE MERGE ===")
-     print(erp.query("CMPNT_MATL_NUM == '30055433'"))
 
-      # Print Reference Table for this component
-     print("\n=== REFERENCE TABLE BEFORE MERGE ===")
-     print(reference_table.query("CMPNT_MATL_NUM == '30055433' and CHILD_NM == 'PC-008694'"))
+    # ✅ Debug for target record
+    target_cmpnt = '30055433'
+    target_child = 'PC-008694'
+    debug_mode = (
+        erp['CMPNT_MATL_NUM'].eq(target_cmpnt).any() or 
+        tru['CHILD_NM'].eq(target_child).any() or 
+        reference_table['CMPNT_MATL_NUM'].eq(target_cmpnt).any()
+    )
 
-     # First Merge: ERP + Reference Table
-     merged_erp_ref = erp.merge(reference_table, on=["CMPNT_MATL_NUM"], how="left")
-     print("\n=== AFTER ERP + REFERENCE MERGE ===")
-     print(merged_erp_ref.query("CMPNT_MATL_NUM == '30055433'"))
+    if debug_mode:
+        print("\n=== DEBUG: Filtering for CMPNT_MATL_NUM:", target_cmpnt, "and CHILD_NM:", target_child)
 
-     # Print TRU for this child
-     print("\n=== TRU BEFORE MERGE ===")
-     print(tru.query("CHILD_NM == 'PC-008694'"))
+        print("\n--- ERP ORIGINAL ---")
+        print(erp.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'"))
+
+        print("\n--- REF ORIGINAL ---")
+        print(reference_table.query(f"CMPNT_MATL_NUM == '{target_cmpnt}' and CHILD_NM == '{target_child}'"))
+
+        print("\n--- TRU ORIGINAL ---")
+        print(tru.query(f"CHILD_NM == '{target_child}'"))
+
+    # First Merge: ERP + Reference Table
+    merged_erp_ref = erp.merge(reference_table, on=["CMPNT_MATL_NUM"], how="left")
+    if debug_mode:
+        print("\n--- AFTER ERP + REF MERGE ---")
+        print(merged_erp_ref.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'"))
 
     # Second Merge: Merged ERP + TRU
     merged_all = merged_erp_ref.merge(tru, on=["CHILD_NM"], how="left")
-    print("\n=== AFTER MERGE WITH TRU ===")
-    print(merged_all.query("CMPNT_MATL_NUM == '30055433'"))
+    if debug_mode:
+        print("\n--- AFTER MERGE WITH TRU ---")
+        print(merged_all.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'"))
 
-    # Optional: If any filtering happens after merge
-    filtered = merged_all  # (replace this with the actual filtering step in your code)
-    print("\n=== AFTER FILTERING (IF ANY) ===")
-    print(filtered.query("CMPNT_MATL_NUM == '30055433'"))
-    # First create matches per idx  
-    df_erp_with_additional_id = erp[ERP_MATCH_COLS].merge(  
-        reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),  
-        on=ERP_PART_ID,  
-        how='inner'  
-    )  
-    matched_per_id = df_erp_with_additional_id.merge(  
-        tru[TRU_MATCH_COLS],  
-        left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, TRU_SPEC_ID],  
-        right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, TRU_SPEC_ID],  
-        how='inner'  
-    )  
-    # Now match per description. Make sure to include only meaningful text  
-    if not (reference_table['text_for_matching_erp'].isnull().all() or   
-            reference_table['text_for_matching_tru'].isnull().all()):  
-        reference_table_text = reference_table.dropna(subset=['text_for_matching_erp', 'text_for_matching_tru'])  
-        is_valid_ref = [min(len(x), len(y)) > 5 for x, y in   
-                        zip(reference_table_text['text_for_matching_erp'],   
-                            reference_table_text['text_for_matching_tru'])]  
-        reference_table_text = reference_table_text[is_valid_ref]  
-        df_erp_with_additional_desc = erp[ERP_MATCH_COLS].merge(  
-            reference_table_text[['text_for_matching_erp', 'text_for_matching_tru']].drop_duplicates(),  
-            on='text_for_matching_erp',  
-            how='inner'  
-        )  
-        matched_per_desc = df_erp_with_additional_desc.merge(  
-            tru[TRU_MATCH_COLS],  
-            left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, 'text_for_matching_tru'],  
-            right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, 'text_for_matching_tru'],  
-            how='inner'  
-        )  
-        matched_per_desc = matched_per_desc[matched_per_id.columns]  
-    else:  
+    # Apply filtering (if any)
+    filtered = merged_all  # Replace with actual filtering logic if applicable
+    if debug_mode:
+        print("\n--- AFTER FILTERING (IF ANY) ---")
+        print(filtered.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'"))
+
+    # Original Matching Logic
+    df_erp_with_additional_id = erp[ERP_MATCH_COLS].merge(
+        reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
+        on=ERP_PART_ID,
+        how='inner'
+    )
+    matched_per_id = df_erp_with_additional_id.merge(
+        tru[TRU_MATCH_COLS],
+        left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, TRU_SPEC_ID],
+        right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, TRU_SPEC_ID],
+        how='inner'
+    )
+
+    # Match per description
+    if not (reference_table['text_for_matching_erp'].isnull().all() or 
+            reference_table['text_for_matching_tru'].isnull().all()):
+        reference_table_text = reference_table.dropna(subset=['text_for_matching_erp', 'text_for_matching_tru'])
+        is_valid_ref = [min(len(x), len(y)) > 5 for x, y in 
+                        zip(reference_table_text['text_for_matching_erp'],
+                            reference_table_text['text_for_matching_tru'])]
+        reference_table_text = reference_table_text[is_valid_ref]
+        df_erp_with_additional_desc = erp[ERP_MATCH_COLS].merge(
+            reference_table_text[['text_for_matching_erp', 'text_for_matching_tru']].drop_duplicates(),
+            on='text_for_matching_erp',
+            how='inner'
+        )
+        matched_per_desc = df_erp_with_additional_desc.merge(
+            tru[TRU_MATCH_COLS],
+            left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, 'text_for_matching_tru'],
+            right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, 'text_for_matching_tru'],
+            how='inner'
+        )
+        matched_per_desc = matched_per_desc[matched_per_id.columns]
+    else:
         matched_per_desc = pd.DataFrame(columns=matched_per_id.columns)
-    #add by arvind
+
     if matched_per_id.empty and matched_per_desc.empty:
         print(f"No reference table matches found in round {match_round_name}")
-        return pd.DataFrame(), erp, tru, last_match_round + 1  
-    matches = pd.concat([matched_per_id, matched_per_desc], ignore_index=True)  
-    matches[SCORE_COL] = 1  
-    matches[UNIFIED_MC_COL] = matches[f'{ERP_MAT_NUM}_original'].copy()  
-    matches['is_matched'] = True  
-    matches['Matching Reason'] = round_name  
-    matches['confidence'] = 'high'  
-    matches = add_matches_bundles(matches, bundles, tru)  
-    matches.drop_duplicates(subset=NON_DUPLICATES_SET, inplace=True)  
-    assign_round_name_and_report_time(matches, match_round_name, start)  
-    df_erp_to_match, df_tru_to_match = get_data_yet_to_match(matches, erp, tru)  
-    return matches, df_erp_to_match, df_tru_to_match, last_match_round + 1  
+        return pd.DataFrame(), erp, tru, last_match_round + 1
+
+    matches = pd.concat([matched_per_id, matched_per_desc], ignore_index=True)
+    matches[SCORE_COL] = 1
+    matches[UNIFIED_MC_COL] = matches[f'{ERP_MAT_NUM}_original'].copy()
+    matches['is_matched'] = True
+    matches['Matching Reason'] = round_name
+    matches['confidence'] = 'high'
+    matches = add_matches_bundles(matches, bundles, tru)
+    matches.drop_duplicates(subset=NON_DUPLICATES_SET, inplace=True)
+    assign_round_name_and_report_time(matches, match_round_name, start)
+
+    df_erp_to_match, df_tru_to_match = get_data_yet_to_match(matches, erp, tru)
+
+    return matches, df_erp_to_match, df_tru_to_match, last_match_round + 1
