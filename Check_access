@@ -1,157 +1,96 @@
-1202  tube ntg ageshld ltn snscrn bs spf70 3fz                       NaN  
-1203         listerine essential care orig gel                       NaN  
+import re
+import time
 
-[1192 rows x 4 columns]
+import pandas as pd
 
-=== MATCH ROUND 5: matches_NLP_list_ERP suggested X-match ===
+from cross_hound.constants import ERP_PART_ID, TRU_SPEC_ID, ERP_PART_DESC, TRU_SPEC_DESC
 
-=== DEBUG: Filtering for CMPNT_MATL_NUM: 30055433 and CHILD_NM: PC-008694
 
---- ERP ORIGINAL ---
-       SRC_SYS_CD            MATL_NUM MATL_NUM_original MATL_SHRT_DESC   
-347051       KDLE  000000000510006535         510006535        unknown  \
+def single_block(string: str) -> str:
+    """
+    Given a string, transform it in a unified format.
 
-              PLNT_CD CMPNT_MATL_TYPE_CD CMPNT_MATL_NUM   
-347051  External_KDLE               None       30055433  \
+    For example, strings such as ListerineBottle250 will be formatted to listerine bottle 250
 
-       CMPNT_MATL_NUM_original                CMPNT_MATL_DESC   
-347051                30055433  SHPR,16OZ,DESTN MAX STRNG DRP  \
+    """
+    # Add a space before every capital letter that is preceded by a lowercase letter
+    words = re.sub(r"(?<=[a-z])(?=[A-Z])", ' ', string)
+    # Merge consecutive capitalized letters and digits
+    words = re.sub(r'(?<=[A-Z])(?=[A-Z\d])|(?<=\d)(?=\d)', '', words)
 
-                                               key_erp  is_off_spec_erp   
-347051  000000000510006535_30055433_External_KDLE_KDLE            False  \
+    # If there are spaces between the string, try to combine digits and spaces
+    if re.search(r'\s', words):
+        # Merge consecutive digits
+        words = re.sub(r'(?<=\D)(?=\d)|(?<=\d)(?=\D)', ' ', words)
+        # Merge digits with commas or dots in between
+        words = re.sub(r'(\d)[,.](\d)', r'\1\2', words)
 
-       CMPNT_MATL_NUM_proc             processed_desc_erp extracted_rm_erp   
-347051            30055433  shpr,16oz destn max strng drp              NaN  \
+    # Replace "-" with a space. Notice that there is short and long version
+    words = re.sub(r'(\s?)-(\s?)', r'\1 \2', words)
+    words = re.sub(r'(\s?)–(\s?)', r'\1 \2', words)
 
-           text_for_matching_erp  perc_alpha_char_erp  
-347051  shpr destn max strng drp                  1.0  
+    # Substitute commas and full stops with a space, only between alphabetic characters
+    words = re.sub(r'(?<=[a-zA-Z ])[,.](?=[a-zA-Z ])', ' ', words)
 
---- REF ORIGINAL ---
-     CMPNT_MATL_NUM   CHILD_NM     text_for_matching_erp   
-1156       30055433  PC-008694  shpr destn max strng drp  \
+    # remove extra spaces and convert to lower case
+    lowercase_string = re.sub(r'\s+', ' ', words).lower()
 
-      text_for_matching_tru  
-1156  shipper rsc ect flute  
+    # remove spaces between digits and units of measures.
+    final_string = re.sub(r'(\d+)\s*(ml|m|l|kg|Kg|g|mm|Fl|fl|floz|Floz|FlOz|fl oz|Fl Oz)', r'\1\2', lowercase_string)
 
---- TRU ORIGINAL ---
-Empty DataFrame
-Columns: [mat_num, mat_num_padded, mat_num_original, RGN_CD, FG_NM, FG_SPEC_NM, FD_NM, CHILD_NM, CHILD_NM_original, CHILD_TITLE_DESC, spec_type_inferred, TEMPL_TYPE_CD, CHILD_TYPE_CD, ERP_DESC, SPEC_FLOW_CD, TRD_NM_CONCAT, TRD_NM_FULL, key_tru, CHILD_NM_proc, processed_desc_tru, processed_desc_tru_trade_names, extracted_rm_tru, extra_info_tru, text_for_matching_tru, perc_alpha_char_tru, extracted_rm_tru_trade_names, text_for_matching_tru_trade_names, perc_alpha_char_tru_trade_names, SRC_SYS_CD, PLNT_CD, MATL_NUM, MATL_NUM_original_tru_ref]
-Index: []
+    # remove punctuation
+    final_string = re.sub(r'(?<=[a-zA-Z])[\.,](?=[a-zA-Z])|(?<=[a-zA-Z])[\.,](?=\s)', '', final_string)
+    return final_string
 
---- AFTER ERP + REF MERGE ---
-       SRC_SYS_CD            MATL_NUM MATL_NUM_original MATL_SHRT_DESC   
-296413       KDLE  000000000510006535         510006535        unknown  \
 
-              PLNT_CD CMPNT_MATL_TYPE_CD CMPNT_MATL_NUM   
-296413  External_KDLE               None       30055433  \
+def process_text_description(text_description: str) -> str:
+    """
+    Format text data.
 
-       CMPNT_MATL_NUM_original                CMPNT_MATL_DESC   
-296413                30055433  SHPR,16OZ,DESTN MAX STRNG DRP  \
+    This function only formats the text. Example ListerineBottle -> listerine bottle.
 
-                                               key_erp  is_off_spec_erp   
-296413  000000000510006535_30055433_External_KDLE_KDLE            False  \
+    """
+    try:
+        chunks = text_description.split(' ')
+    except Exception as e:
+        return text_description
+    if len(chunks) == 1:
+        final_string = single_block(text_description)
+    else:
+        processed_chunks = []
+        for chunk in chunks:
+            processed_chunk = single_block(chunk)
+            processed_chunks.append(processed_chunk)
+        final_string = ' '.join(processed_chunks)
+        final_string = re.sub(r'\s+', ' ', final_string)
+    return final_string
 
-       CMPNT_MATL_NUM_proc             processed_desc_erp extracted_rm_erp   
-296413            30055433  shpr,16oz destn max strng drp              NaN  \
 
-         text_for_matching_erp_x  perc_alpha_char_erp   CHILD_NM   
-296413  shpr destn max strng drp                  1.0  PC-008694  \
+def format_raw_material_id(erp: pd.DataFrame, tru: pd.DataFrame) -> (pd.DataFrame, pd.DataFrame):
+    start = time.time()
+    pattern = r"(rm)\s*[t /–-]*(\d+)"
+    # use the replace() method to replace all non-alphanumeric characters and spaces with an empty string
+    erp[f'{ERP_PART_ID}_proc'] = erp[ERP_PART_ID].str.lower().replace(pattern, r"\1\2", regex=True)
+    tru[f'{TRU_SPEC_ID}_proc'] = tru[TRU_SPEC_ID].str.lower().replace(pattern, r"\1\2", regex=True)
+    print(f'Format raw material took {time.time() - start} seconds')
+    return erp, tru
 
-         text_for_matching_erp_y  text_for_matching_tru  
-296413  shpr destn max strng drp  shipper rsc ect flute  
 
---- AFTER MERGE WITH TRU ---
-        SRC_SYS_CD_x          MATL_NUM_x MATL_NUM_original MATL_SHRT_DESC   
-3309395         KDLE  000000000510006535         510006535        unknown  \
+def preprocessed_text_description(erp: pd.DataFrame, tru: pd.DataFrame) -> (pd.DataFrame, pd.DataFrame):
+    start = time.time()
 
-             PLNT_CD_x CMPNT_MATL_TYPE_CD CMPNT_MATL_NUM   
-3309395  External_KDLE               None       30055433  \
+    print('erp part desc nulls', erp[ERP_PART_DESC].isna().sum())
+    print('tru spec desc nulls: ', tru[TRU_SPEC_DESC].isna().sum())
 
-        CMPNT_MATL_NUM_original                CMPNT_MATL_DESC   
-3309395                30055433  SHPR,16OZ,DESTN MAX STRNG DRP  \
+    print('processing erp')
+    erp['processed_desc_erp'] = [process_text_description(d) for d in erp[ERP_PART_DESC]]
 
-                                                key_erp  is_off_spec_erp   
-3309395  000000000510006535_30055433_External_KDLE_KDLE            False  \
+    print('processing tru')
+    tru['processed_desc_tru'] = [process_text_description(d) for d in tru[TRU_SPEC_DESC]]
+    print(f'Process text description took {time.time() - start} seconds')
 
-        CMPNT_MATL_NUM_proc             processed_desc_erp extracted_rm_erp   
-3309395            30055433  shpr,16oz destn max strng drp              NaN  \
+    print('processing tru trade names')
+    tru['processed_desc_tru_trade_names'] = [process_text_description(d) for d in tru['TRD_NM_FULL']]
 
-          text_for_matching_erp_x  perc_alpha_char_erp   CHILD_NM   
-3309395  shpr destn max strng drp                  1.0  PC-008694  \
-
-          text_for_matching_erp_y text_for_matching_tru_x mat_num   
-3309395  shpr destn max strng drp   shipper rsc ect flute     NaN  \
-
-        mat_num_padded mat_num_original RGN_CD FG_NM FG_SPEC_NM FD_NM   
-3309395            NaN              NaN    NaN   NaN        NaN   NaN  \
-
-        CHILD_NM_original CHILD_TITLE_DESC spec_type_inferred TEMPL_TYPE_CD   
-3309395               NaN              NaN                NaN           NaN  \
-
-        CHILD_TYPE_CD ERP_DESC SPEC_FLOW_CD TRD_NM_CONCAT TRD_NM_FULL key_tru   
-3309395           NaN      NaN          NaN           NaN         NaN     NaN  \
-
-        CHILD_NM_proc processed_desc_tru processed_desc_tru_trade_names   
-3309395           NaN                NaN                            NaN  \
-
-        extracted_rm_tru extra_info_tru text_for_matching_tru_y   
-3309395              NaN            NaN                     NaN  \
-
-         perc_alpha_char_tru extracted_rm_tru_trade_names   
-3309395                  NaN                          NaN  \
-
-        text_for_matching_tru_trade_names  perc_alpha_char_tru_trade_names   
-3309395                               NaN                              NaN  \
-
-        SRC_SYS_CD_y PLNT_CD_y MATL_NUM_y MATL_NUM_original_tru_ref  
-3309395          NaN       NaN        NaN                       NaN  
-
---- AFTER FILTERING (IF ANY) ---
-        SRC_SYS_CD_x          MATL_NUM_x MATL_NUM_original MATL_SHRT_DESC   
-3309395         KDLE  000000000510006535         510006535        unknown  \
-
-             PLNT_CD_x CMPNT_MATL_TYPE_CD CMPNT_MATL_NUM   
-3309395  External_KDLE               None       30055433  \
-
-        CMPNT_MATL_NUM_original                CMPNT_MATL_DESC   
-3309395                30055433  SHPR,16OZ,DESTN MAX STRNG DRP  \
-
-                                                key_erp  is_off_spec_erp   
-3309395  000000000510006535_30055433_External_KDLE_KDLE            False  \
-
-        CMPNT_MATL_NUM_proc             processed_desc_erp extracted_rm_erp   
-3309395            30055433  shpr,16oz destn max strng drp              NaN  \
-
-          text_for_matching_erp_x  perc_alpha_char_erp   CHILD_NM   
-3309395  shpr destn max strng drp                  1.0  PC-008694  \
-
-          text_for_matching_erp_y text_for_matching_tru_x mat_num   
-3309395  shpr destn max strng drp   shipper rsc ect flute     NaN  \
-
-        mat_num_padded mat_num_original RGN_CD FG_NM FG_SPEC_NM FD_NM   
-3309395            NaN              NaN    NaN   NaN        NaN   NaN  \
-
-        CHILD_NM_original CHILD_TITLE_DESC spec_type_inferred TEMPL_TYPE_CD   
-3309395               NaN              NaN                NaN           NaN  \
-
-        CHILD_TYPE_CD ERP_DESC SPEC_FLOW_CD TRD_NM_CONCAT TRD_NM_FULL key_tru   
-3309395           NaN      NaN          NaN           NaN         NaN     NaN  \
-
-        CHILD_NM_proc processed_desc_tru processed_desc_tru_trade_names   
-3309395           NaN                NaN                            NaN  \
-
-        extracted_rm_tru extra_info_tru text_for_matching_tru_y   
-3309395              NaN            NaN                     NaN  \
-
-         perc_alpha_char_tru extracted_rm_tru_trade_names   
-3309395                  NaN                          NaN  \
-
-        text_for_matching_tru_trade_names  perc_alpha_char_tru_trade_names   
-3309395                               NaN                              NaN  \
-
-        SRC_SYS_CD_y PLNT_CD_y MATL_NUM_y MATL_NUM_original_tru_ref  
-3309395          NaN       NaN        NaN                       NaN  
-****** Adding 232 more matches based on SPEC_FLOW_CD
-5: matches_NLP_list_ERP suggested X-match round matched: 4044 (4.3 seconds)
-df_erp_to_match cases:  289918
-df_tru_to_match cases:  269586
+    print(f'Process text description took {time.time() - start} seconds')
+    return erp, tru
