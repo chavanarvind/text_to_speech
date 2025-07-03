@@ -1,14 +1,11 @@
-if round_name == 'matches_NLP_list_ERP suggested X-match':
-    print("\n=== DEBUG: Inside NLP_list_ERP round ===")
-    erp_debug = erp.query("CMPNT_MATL_NUM == '30055433'")
-    tru_debug = tru.query("CHILD_NM == 'PC-008694'")
-    ref_debug = reference_table.query("CMPNT_MATL_NUM == '30055433' and CHILD_NM == 'PC-008694'")
 
-    print("\n--- ERP ---")
-    print(erp_debug[['CMPNT_MATL_NUM', 'SRC_SYS_CD', 'PLNT_CD']])
-
-    print("\n--- TRU ---")
-    print(tru_debug[['CHILD_NM', 'SRC_SYS_CD', 'PLNT_CD']])
-
-    print("\n--- Reference Table Entry ---")
-    print(ref_debug)
+Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
+  File "cross_hound/matcher.py", line 1511, in <module>
+    main(input_dir=args.get('input_dir'),
+  File "cross_hound/matcher.py", line 1336, in main
+    matched, unmatched = full_matching_routine(data_version, db_style, device,
+  File "cross_hound/matcher.py", line 888, in full_matching_routine
+    matches_per_hfb, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
+  File "cross_hound/matcher.py", line 345, in match_by_reference_table
+    merged_all = merged_erp_ref.merge(tru, on=["CHILD_NM"], how="left")
+UnboundLocalError: local variable 'merged_erp_ref' referenced before assignment
