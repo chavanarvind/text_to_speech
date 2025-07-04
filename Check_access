@@ -1,47 +1,31 @@
-# 🔥 Debug block after df_erp_with_additional_id creation
+=== MATCH ROUND 5: matches_NLP_list_ERP suggested X-match ===
 
-df_erp_with_additional_id = erp[ERP_MATCH_COLS].merge(
-    reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
-    on=ERP_PART_ID,
-    how='inner'
-)
+=== DEBUG: Filtering for CMPNT_MATL_NUM: 30055433 and CHILD_NM: PC-008694
 
-# ✅ Debug for target record
-target_cmpnt = '30055433'
-target_child = 'PC-008694'
-debug_mode = (
-    df_erp_with_additional_id['CMPNT_MATL_NUM'].eq(target_cmpnt).any() or 
-    tru['CHILD_NM'].eq(target_child).any()
-)
+--- ERP + REF MERGE RESULT ---
+     SRC_SYS_CD            MATL_NUM MATL_NUM_original MATL_SHRT_DESC   
+6394       KDLE  000000000510006535         510006535        unknown  \
 
-if debug_mode:
-    print("\n=== DEBUG: Filtering for CMPNT_MATL_NUM:", target_cmpnt, "and CHILD_NM:", target_child)
+            PLNT_CD CMPNT_MATL_TYPE_CD CMPNT_MATL_NUM CMPNT_MATL_NUM_original   
+6394  External_KDLE               None       30055433                30055433  \
 
-    print("\n--- ERP + REF MERGE RESULT ---")
-    print(df_erp_with_additional_id.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'"))
+                    CMPNT_MATL_DESC     text_for_matching_erp   
+6394  SHPR,16OZ,DESTN MAX STRNG DRP  shpr destn max strng drp  \
 
-    print("\n--- TRU ORIGINAL ---")
-    print(tru.query(f"CHILD_NM == '{target_child}'"))
+     extracted_rm_erp  perc_alpha_char_erp   
+6394              NaN                  1.0  \
 
-    print("\n✅ Checking key alignments and datatypes")
-    erp_debug = df_erp_with_additional_id.query("CMPNT_MATL_NUM == '30055433'")
-    tru_debug = tru[TRU_MATCH_COLS].query("CHILD_NM == 'PC-008694'")
+                                             key_erp   CHILD_NM  
+6394  000000000510006535_30055433_External_KDLE_KDLE  PC-008694  
 
-    if not erp_debug.empty and not tru_debug.empty:
-        print("\nERP SRC_SYS_CD:", erp_debug['SRC_SYS_CD'].unique())
-        print("TRU SRC_SYS_CD:", tru_debug['SRC_SYS_CD'].unique())
+--- TRU ORIGINAL ---
+Empty DataFrame
+Columns: [mat_num, mat_num_padded, mat_num_original, RGN_CD, FG_NM, FG_SPEC_NM, FD_NM, CHILD_NM, CHILD_NM_original, CHILD_TITLE_DESC, spec_type_inferred, TEMPL_TYPE_CD, CHILD_TYPE_CD, ERP_DESC, SPEC_FLOW_CD, TRD_NM_CONCAT, TRD_NM_FULL, key_tru, CHILD_NM_proc, processed_desc_tru, processed_desc_tru_trade_names, extracted_rm_tru, extra_info_tru, text_for_matching_tru, perc_alpha_char_tru, extracted_rm_tru_trade_names, text_for_matching_tru_trade_names, perc_alpha_char_tru_trade_names, SRC_SYS_CD, PLNT_CD, MATL_NUM, MATL_NUM_original_tru_ref]
+Index: []
 
-        print("\nERP PLNT_CD:", erp_debug['PLNT_CD'].unique())
-        print("TRU PLNT_CD:", tru_debug['PLNT_CD'].unique())
+✅ Checking key alignments and datatypes
 
-        print("\nERP_MAT_NUM:", erp_debug['CMPNT_MATL_NUM'].unique())
-        print("TRU_SPEC_ID:", tru_debug[TRU_SPEC_ID].unique())
+⚠️ ERP or TRU debug data is empty.
 
-        # Normalize keys
-        erp_ids = set(erp_debug['CMPNT_MATL_NUM'].astype(str).str.strip())
-        tru_ids = set(tru_debug[TRU_SPEC_ID].astype(str).str.strip())
-        print("\nNormalized ERP IDs:", erp_ids)
-        print("Normalized TRU IDs:", tru_ids)
-        print("✅ Overlap:", erp_ids.intersection(tru_ids))
-    else:
-        print("\n⚠️ ERP or TRU debug data is empty.")
+=== END DEBUG ===
+
