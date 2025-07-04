@@ -1,181 +1,89 @@
-=== MATCH ROUND 4: Human Feedback ===
+# ✅ Debug for target record
+    target_cmpnt = '30055433'
+    target_child = 'PC-008694'
+    debug_mode = (
+        erp['CMPNT_MATL_NUM'].eq(target_cmpnt).any() or 
+        tru['CHILD_NM'].eq(target_child).any() or 
+        reference_table['CMPNT_MATL_NUM'].eq(target_cmpnt).any()
+    )
 
-=== DEBUG: Filtering for CMPNT_MATL_NUM: 30055433 and CHILD_NM: PC-008694
+    if debug_mode:
+        print("\n=== DEBUG: Filtering for CMPNT_MATL_NUM:", target_cmpnt, "and CHILD_NM:", target_child)
 
---- ERP ORIGINAL ---
-       SRC_SYS_CD            MATL_NUM MATL_NUM_original MATL_SHRT_DESC   
-347051       KDLE  000000000510006535         510006535        unknown  \
+        print("\n--- ERP ORIGINAL ---")
+        print(erp.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'"))
 
-              PLNT_CD CMPNT_MATL_TYPE_CD CMPNT_MATL_NUM   
-347051  External_KDLE               None       30055433  \
+        print("\n--- REF ORIGINAL ---")
+        print(reference_table.query(f"CMPNT_MATL_NUM == '{target_cmpnt}' and CHILD_NM == '{target_child}'"))
 
-       CMPNT_MATL_NUM_original                CMPNT_MATL_DESC   
-347051                30055433  SHPR,16OZ,DESTN MAX STRNG DRP  \
+        print("\n--- TRU ORIGINAL ---")
+        print(tru.query(f"CHILD_NM == '{target_child}'"))
 
-                                               key_erp  is_off_spec_erp   
-347051  000000000510006535_30055433_External_KDLE_KDLE            False  \
+    # First Merge: ERP + Reference Table
+    merged_erp_ref = erp.merge(reference_table, on=["CMPNT_MATL_NUM"], how="left")
+    if debug_mode:
+        print("\n--- AFTER ERP + REF MERGE ---")
+        print(merged_erp_ref.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'"))
 
-       CMPNT_MATL_NUM_proc             processed_desc_erp extracted_rm_erp   
-347051            30055433  shpr,16oz destn max strng drp              NaN  \
+    # Second Merge: Merged ERP + TRU
+    merged_all = merged_erp_ref.merge(tru, on=["CHILD_NM"], how="left")
+    if debug_mode:
+        print("\n--- AFTER MERGE WITH TRU ---")
+        print(merged_all.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'"))
 
-           text_for_matching_erp  perc_alpha_char_erp  
-347051  shpr destn max strng drp                  1.0  
+    # Apply filtering (if any)
+    filtered = merged_all  # Replace with actual filtering logic if applicable
+    if debug_mode:
+        print("\n--- AFTER FILTERING (IF ANY) ---")
+        print(filtered.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'"))
 
---- REF ORIGINAL ---
-Empty DataFrame
-Columns: [CMPNT_MATL_NUM, CHILD_NM, text_for_matching_erp, text_for_matching_tru]
-Index: []
-
---- TRU ORIGINAL ---
-Empty DataFrame
-Columns: [mat_num, mat_num_padded, mat_num_original, RGN_CD, FG_NM, FG_SPEC_NM, FD_NM, CHILD_NM, CHILD_NM_original, CHILD_TITLE_DESC, spec_type_inferred, TEMPL_TYPE_CD, CHILD_TYPE_CD, ERP_DESC, SPEC_FLOW_CD, TRD_NM_CONCAT, TRD_NM_FULL, key_tru, CHILD_NM_proc, processed_desc_tru, processed_desc_tru_trade_names, extracted_rm_tru, extra_info_tru, text_for_matching_tru, perc_alpha_char_tru, extracted_rm_tru_trade_names, text_for_matching_tru_trade_names, perc_alpha_char_tru_trade_names, SRC_SYS_CD, PLNT_CD, MATL_NUM, MATL_NUM_original_tru_ref]
-Index: []
-
---- AFTER ERP + REF MERGE ---
-       SRC_SYS_CD            MATL_NUM MATL_NUM_original MATL_SHRT_DESC   
-303041       KDLE  000000000510006535         510006535        unknown  \
-
-              PLNT_CD CMPNT_MATL_TYPE_CD CMPNT_MATL_NUM   
-303041  External_KDLE               None       30055433  \
-
-       CMPNT_MATL_NUM_original                CMPNT_MATL_DESC   
-303041                30055433  SHPR,16OZ,DESTN MAX STRNG DRP  \
-
-                                               key_erp  is_off_spec_erp   
-303041  000000000510006535_30055433_External_KDLE_KDLE            False  \
-
-       CMPNT_MATL_NUM_proc             processed_desc_erp extracted_rm_erp   
-303041            30055433  shpr,16oz destn max strng drp              NaN  \
-
-         text_for_matching_erp_x  perc_alpha_char_erp CHILD_NM   
-303041  shpr destn max strng drp                  1.0      NaN  \
-
-       text_for_matching_erp_y text_for_matching_tru  
-303041                     NaN                   NaN  
-
---- AFTER MERGE WITH TRU ---
-         SRC_SYS_CD_x          MATL_NUM_x MATL_NUM_original MATL_SHRT_DESC   
-15490362         KDLE  000000000510006535         510006535        unknown  \
-
-              PLNT_CD_x CMPNT_MATL_TYPE_CD CMPNT_MATL_NUM   
-15490362  External_KDLE               None       30055433  \
-
-         CMPNT_MATL_NUM_original                CMPNT_MATL_DESC   
-15490362                30055433  SHPR,16OZ,DESTN MAX STRNG DRP  \
-
-                                                 key_erp  is_off_spec_erp   
-15490362  000000000510006535_30055433_External_KDLE_KDLE            False  \
-
-         CMPNT_MATL_NUM_proc             processed_desc_erp extracted_rm_erp   
-15490362            30055433  shpr,16oz destn max strng drp              NaN  \
-
-           text_for_matching_erp_x  perc_alpha_char_erp CHILD_NM   
-15490362  shpr destn max strng drp                  1.0      NaN  \
-
-         text_for_matching_erp_y text_for_matching_tru_x mat_num   
-15490362                     NaN                     NaN     NaN  \
-
-         mat_num_padded mat_num_original RGN_CD FG_NM FG_SPEC_NM FD_NM   
-15490362            NaN              NaN    NaN   NaN        NaN   NaN  \
-
-         CHILD_NM_original CHILD_TITLE_DESC spec_type_inferred TEMPL_TYPE_CD   
-15490362               NaN              NaN                NaN           NaN  \
-
-         CHILD_TYPE_CD ERP_DESC SPEC_FLOW_CD TRD_NM_CONCAT TRD_NM_FULL   
-15490362           NaN      NaN          NaN           NaN         NaN  \
-
-         key_tru CHILD_NM_proc processed_desc_tru   
-15490362     NaN           NaN                NaN  \
-
-         processed_desc_tru_trade_names extracted_rm_tru extra_info_tru   
-15490362                            NaN              NaN            NaN  \
-
-         text_for_matching_tru_y  perc_alpha_char_tru   
-15490362                     NaN                  NaN  \
-
-         extracted_rm_tru_trade_names text_for_matching_tru_trade_names   
-15490362                          NaN                               NaN  \
-
-          perc_alpha_char_tru_trade_names SRC_SYS_CD_y PLNT_CD_y MATL_NUM_y   
-15490362                              NaN          NaN       NaN        NaN  \
-
-         MATL_NUM_original_tru_ref  
-15490362                       NaN  
-
---- AFTER FILTERING (IF ANY) ---
-         SRC_SYS_CD_x          MATL_NUM_x MATL_NUM_original MATL_SHRT_DESC   
-15490362         KDLE  000000000510006535         510006535        unknown  \
-
-              PLNT_CD_x CMPNT_MATL_TYPE_CD CMPNT_MATL_NUM   
-15490362  External_KDLE               None       30055433  \
-
-         CMPNT_MATL_NUM_original                CMPNT_MATL_DESC   
-15490362                30055433  SHPR,16OZ,DESTN MAX STRNG DRP  \
-
-                                                 key_erp  is_off_spec_erp   
-15490362  000000000510006535_30055433_External_KDLE_KDLE            False  \
-
-         CMPNT_MATL_NUM_proc             processed_desc_erp extracted_rm_erp   
-15490362            30055433  shpr,16oz destn max strng drp              NaN  \
-
-           text_for_matching_erp_x  perc_alpha_char_erp CHILD_NM   
-15490362  shpr destn max strng drp                  1.0      NaN  \
-
-         text_for_matching_erp_y text_for_matching_tru_x mat_num   
-15490362                     NaN                     NaN     NaN  \
-
-         mat_num_padded mat_num_original RGN_CD FG_NM FG_SPEC_NM FD_NM   
-15490362            NaN              NaN    NaN   NaN        NaN   NaN  \
-
-         CHILD_NM_original CHILD_TITLE_DESC spec_type_inferred TEMPL_TYPE_CD   
-15490362               NaN              NaN                NaN           NaN  \
-
-         CHILD_TYPE_CD ERP_DESC SPEC_FLOW_CD TRD_NM_CONCAT TRD_NM_FULL   
-15490362           NaN      NaN          NaN           NaN         NaN  \
-
-         key_tru CHILD_NM_proc processed_desc_tru   
-15490362     NaN           NaN                NaN  \
-
-         processed_desc_tru_trade_names extracted_rm_tru extra_info_tru   
-15490362                            NaN              NaN            NaN  \
-
-         text_for_matching_tru_y  perc_alpha_char_tru   
-15490362                     NaN                  NaN  \
-
-         extracted_rm_tru_trade_names text_for_matching_tru_trade_names   
-15490362                          NaN                               NaN  \
-
-          perc_alpha_char_tru_trade_names SRC_SYS_CD_y PLNT_CD_y MATL_NUM_y   
-15490362                              NaN          NaN       NaN        NaN  \
-
-         MATL_NUM_original_tru_ref  
-15490362                       NaN  
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.20161819458007812 seconds
-Traceback (most recent call last):
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 3652, in get_loc
-    return self._engine.get_loc(casted_key)
-  File "pandas/_libs/index.pyx", line 147, in pandas._libs.index.IndexEngine.get_loc
-  File "pandas/_libs/index.pyx", line 176, in pandas._libs.index.IndexEngine.get_loc
-  File "pandas/_libs/hashtable_class_helper.pxi", line 7080, in pandas._libs.hashtable.PyObjectHashTable.get_item
-  File "pandas/_libs/hashtable_class_helper.pxi", line 7088, in pandas._libs.hashtable.PyObjectHashTable.get_item
-KeyError: 'TRU_SPEC_ID'
-
-The above exception was the direct cause of the following exception:
-
-Traceback (most recent call last):
-  File "cross_hound/matcher.py", line 1581, in <module>
-    main(input_dir=args.get('input_dir'),
-  File "cross_hound/matcher.py", line 1406, in main
-    matched, unmatched = full_matching_routine(data_version, db_style, device,
-  File "cross_hound/matcher.py", line 950, in full_matching_routine
-    matches_per_hfb, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
-  File "cross_hound/matcher.py", line 373, in match_by_reference_table
+    # Original Matching Logic
+    df_erp_with_additional_id = erp[ERP_MATCH_COLS].merge(
+        reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
+        on=ERP_PART_ID,
+        how='inner'
+    )
+    # 🟣 Add debug block **before strict merge**
     if '30055433' in df_erp_with_additional_id['CMPNT_MATL_NUM'].astype(str).values or 'PC-008694' in df_erp_with_additional_id['TRU_SPEC_ID'].astype(str).values:
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/frame.py", line 3760, in __getitem__
-    indexer = self.columns.get_loc(key)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 3654, in get_loc
-    raise KeyError(key) from err
-KeyError: 'TRU_SPEC_ID'
+    
+     print("\n=== DEBUG: Pre-merge diagnostics for CMPNT_MATL_NUM: 30055433 and CHILD_NM: PC-008694 ===")
+     erp_debug = df_erp_with_additional_id.query("CMPNT_MATL_NUM == '30055433'")
+     tru_debug = tru[TRU_MATCH_COLS].query("CHILD_NM == 'PC-008694'")
+     ref_debug = reference_table.query("CMPNT_MATL_NUM == '30055433' and CHILD_NM == 'PC-008694'")
 
+     print("\n✅ ERP DEBUG:")
+     print(erp_debug if not erp_debug.empty else "❌ No ERP record for 30055433")
+
+     print("\n✅ TRU DEBUG:")
+     print(tru_debug if not tru_debug.empty else "❌ No TRU record for PC-008694")
+
+     print("\n✅ REF TABLE DEBUG:")
+     print(ref_debug if not ref_debug.empty else "❌ No REF record for 30055433 -> PC-008694")
+
+    if not erp_debug.empty and not tru_debug.empty:
+        print("\n🔎 Checking SRC_SYS_CD mismatches:")
+        print("ERP SRC_SYS_CD:", erp_debug['SRC_SYS_CD'].unique())
+        print("TRU SRC_SYS_CD:", tru_debug['SRC_SYS_CD'].unique())
+
+        print("\n🔎 Checking PLNT_CD mismatches:")
+        print("ERP PLNT_CD:", erp_debug['PLNT_CD'].unique())
+        print("TRU PLNT_CD:", tru_debug['PLNT_CD'].unique())
+
+        print("\n🔎 Checking ERP_MAT_NUM vs TRU_SPEC_ID key formatting:")
+        print("ERP_MAT_NUM:", erp_debug['CMPNT_MATL_NUM'].unique())
+        print("TRU_SPEC_ID:", tru_debug[TRU_SPEC_ID].unique())
+
+        # Check for leading zeros or type mismatch
+        print("\n🔎 Datatypes for ERP_MAT_NUM and TRU_SPEC_ID:")
+        print("ERP_MAT_NUM dtype:", erp_debug['CMPNT_MATL_NUM'].dtype)
+        print("TRU_SPEC_ID dtype:", tru_debug[TRU_SPEC_ID].dtype)
+
+        # Strip and normalize keys to compare
+        erp_ids = set(erp_debug['CMPNT_MATL_NUM'].astype(str).str.strip())
+        tru_ids = set(tru_debug[TRU_SPEC_ID].astype(str).str.strip())
+        print("\n🟣 Normalized ERP IDs:", erp_ids)
+        print("🟣 Normalized TRU IDs:", tru_ids)
+        print("✅ Overlap:", erp_ids.intersection(tru_ids))
+    else:
+        print("\n⚠️ Cannot check mismatches because one side is empty.")
+        print("\n=== END DEBUG ===\n")
