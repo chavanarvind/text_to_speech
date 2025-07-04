@@ -1,3 +1,58 @@
- DEBUG 7a: Before ERP + REF merge
+=== MATCH ROUND 5: matches_NLP_list_ERP suggested X-match ===
+
+✅ DEBUG 7a: Before ERP + REF merge
 Checking TRU for PC-008694 before ERP+TRU merge in matches_NLP_list_ERP suggested X-match
-         CHILD_NM             mat_num
+Empty DataFrame
+Columns: [CHILD_NM, CHILD_NM, mat_num]
+Index: []
+
+=== DEBUG: Filtering for CMPNT_MATL_NUM: 30055433 and CHILD_NM: PC-008694
+
+--- ERP + REF MERGE RESULT ---
+     SRC_SYS_CD            MATL_NUM MATL_NUM_original MATL_SHRT_DESC   
+6292       KDLE  000000000510006535         510006535        unknown  \
+
+            PLNT_CD CMPNT_MATL_TYPE_CD CMPNT_MATL_NUM CMPNT_MATL_NUM_original   
+6292  External_KDLE               None       30055433                30055433  \
+
+                    CMPNT_MATL_DESC     text_for_matching_erp   
+6292  SHPR,16OZ,DESTN MAX STRNG DRP  shpr destn max strng drp  \
+
+     extracted_rm_erp  perc_alpha_char_erp   
+6292              NaN                  1.0  \
+
+                                             key_erp   CHILD_NM  
+6292  000000000510006535_30055433_External_KDLE_KDLE  PC-008694  
+
+--- TRU ORIGINAL ---
+Empty DataFrame
+Columns: [mat_num, mat_num_padded, mat_num_original, RGN_CD, FG_NM, FG_SPEC_NM, FD_NM, CHILD_NM, CHILD_NM_original, CHILD_TITLE_DESC, spec_type_inferred, TEMPL_TYPE_CD, CHILD_TYPE_CD, ERP_DESC, SPEC_FLOW_CD, TRD_NM_CONCAT, TRD_NM_FULL, key_tru, CHILD_NM_proc, processed_desc_tru, processed_desc_tru_trade_names, extracted_rm_tru, extra_info_tru, text_for_matching_tru, perc_alpha_char_tru, extracted_rm_tru_trade_names, text_for_matching_tru_trade_names, perc_alpha_char_tru_trade_names, SRC_SYS_CD, PLNT_CD, MATL_NUM, MATL_NUM_original_tru_ref]
+Index: []
+
+✅ Checking key alignments and datatypes
+
+⚠️ ERP or TRU debug data is empty.
+
+=== END DEBUG ===
+
+
+✅ DEBUG 7b: Before ERP+TRU merge
+Checking ERP for CMPNT_MATL_NUM = 30055433 in matches_NLP_list_ERP suggested X-match
+     CMPNT_MATL_NUM            MATL_NUM SRC_SYS_CD        PLNT_CD
+6292       30055433  000000000510006535       KDLE  External_KDLE
+Checking TRU for PC-008694 before ERP+TRU merge in matches_NLP_list_ERP suggested X-match
+Empty DataFrame
+Columns: [CHILD_NM, CHILD_NM, mat_num, SRC_SYS_CD, PLNT_CD]
+Index: []
+
+✅ DEBUG 7c: After ERP+TRU merge
+Empty DataFrame
+Columns: [CMPNT_MATL_NUM, CHILD_NM, CMPNT_MATL_NUM, CHILD_NM, SRC_SYS_CD, PLNT_CD]
+Index: []
+❌ ALERT: PC-008694 did not match in this merge
+****** Adding 234 more matches based on SPEC_FLOW_CD
+5: matches_NLP_list_ERP suggested X-match round matched: 4041 (1.17 seconds)
+df_erp_to_match cases:  289775
+df_tru_to_match cases:  269540
+Amount of current matches:  4041
+     SRC_SYS_CD            MATL_NUM   MATL_NUM_original   
