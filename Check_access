@@ -1,59 +1,47 @@
-# 🟣 Pre-merge debug for target record
-target_cmpnt = '30055433'
-target_child = 'PC-008694'
+# 🔥 Debug block after df_erp_with_additional_id creation
 
-print("\n=== DEBUG: Pre-merge diagnostics for CMPNT_MATL_NUM:", target_cmpnt, "and CHILD_NM:", target_child, "===")
-
-print("\n✅ ERP DEBUG:")
-erp_debug = erp.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'")
-print(erp_debug)
-
-print("\n✅ REF TABLE DEBUG:")
-ref_debug = reference_table.query(f"CMPNT_MATL_NUM == '{target_cmpnt}' and CHILD_NM == '{target_child}'")
-print(ref_debug)
-
-print("\n✅ TRU DEBUG:")
-tru_debug = tru.query(f"CHILD_NM == '{target_child}'")
-print(tru_debug)
-
-# 🔄 Original merge (ERP + REF)
 df_erp_with_additional_id = erp[ERP_MATCH_COLS].merge(
     reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
     on=ERP_PART_ID,
     how='inner'
 )
 
-# 🟣 Debug after creating df_erp_with_additional_id
-print("\n=== DEBUG: Post-ERP+REF merge ===")
-merged_debug = df_erp_with_additional_id.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'")
-print(merged_debug)
-
-# 🟣 Check system and plant codes
-print("\n🔎 SRC_SYS_CD in ERP:", erp_debug['SRC_SYS_CD'].unique())
-print("🔎 SRC_SYS_CD in TRU:", tru_debug['SRC_SYS_CD'].unique())
-
-print("\n🔎 PLNT_CD in ERP:", erp_debug['PLNT_CD'].unique())
-print("🔎 PLNT_CD in TRU:", tru_debug['PLNT_CD'].unique())
-
-# 🟣 Compare IDs
-print("\n🔎 ERP_MAT_NUM values:", erp_debug['CMPNT_MATL_NUM'].unique())
-print("🔎 TRU_SPEC_ID values:", tru_debug[TRU_SPEC_ID].unique())
-
-# 🟣 Normalize and compare IDs
-erp_ids = set(erp_debug['CMPNT_MATL_NUM'].astype(str).str.strip())
-tru_ids = set(tru_debug[TRU_SPEC_ID].astype(str).str.strip())
-print("\n🟣 Normalized ERP IDs:", erp_ids)
-print("🟣 Normalized TRU IDs:", tru_ids)
-print("✅ Overlap between ERP and TRU:", erp_ids.intersection(tru_ids))
-
-# 🟣 Debug after strict merge with TRU
-matched_per_id = df_erp_with_additional_id.merge(
-    tru[TRU_MATCH_COLS],
-    left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, TRU_SPEC_ID],
-    right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, TRU_SPEC_ID],
-    how='inner'
+# ✅ Debug for target record
+target_cmpnt = '30055433'
+target_child = 'PC-008694'
+debug_mode = (
+    df_erp_with_additional_id['CMPNT_MATL_NUM'].eq(target_cmpnt).any() or 
+    tru['CHILD_NM'].eq(target_child).any()
 )
 
-print("\n=== DEBUG: Post-strict merge with TRU ===")
-post_merge_debug = matched_per_id.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'")
-print(post_merge_debug if not post_merge_debug.empty else "❌ Target record not found after strict merge")
+if debug_mode:
+    print("\n=== DEBUG: Filtering for CMPNT_MATL_NUM:", target_cmpnt, "and CHILD_NM:", target_child)
+
+    print("\n--- ERP + REF MERGE RESULT ---")
+    print(df_erp_with_additional_id.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'"))
+
+    print("\n--- TRU ORIGINAL ---")
+    print(tru.query(f"CHILD_NM == '{target_child}'"))
+
+    print("\n✅ Checking key alignments and datatypes")
+    erp_debug = df_erp_with_additional_id.query("CMPNT_MATL_NUM == '30055433'")
+    tru_debug = tru[TRU_MATCH_COLS].query("CHILD_NM == 'PC-008694'")
+
+    if not erp_debug.empty and not tru_debug.empty:
+        print("\nERP SRC_SYS_CD:", erp_debug['SRC_SYS_CD'].unique())
+        print("TRU SRC_SYS_CD:", tru_debug['SRC_SYS_CD'].unique())
+
+        print("\nERP PLNT_CD:", erp_debug['PLNT_CD'].unique())
+        print("TRU PLNT_CD:", tru_debug['PLNT_CD'].unique())
+
+        print("\nERP_MAT_NUM:", erp_debug['CMPNT_MATL_NUM'].unique())
+        print("TRU_SPEC_ID:", tru_debug[TRU_SPEC_ID].unique())
+
+        # Normalize keys
+        erp_ids = set(erp_debug['CMPNT_MATL_NUM'].astype(str).str.strip())
+        tru_ids = set(tru_debug[TRU_SPEC_ID].astype(str).str.strip())
+        print("\nNormalized ERP IDs:", erp_ids)
+        print("Normalized TRU IDs:", tru_ids)
+        print("✅ Overlap:", erp_ids.intersection(tru_ids))
+    else:
+        print("\n⚠️ ERP or TRU debug data is empty.")
