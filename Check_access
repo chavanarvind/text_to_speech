@@ -1,84 +1,65 @@
-# ✅ Debug for target record
-    target_cmpnt = '30055433'
-    target_child = 'PC-008694'
+# 🟣 Pre-merge debug for target record
+target_cmpnt = '30055433'
+target_child = 'PC-008694'
+
+try:
     debug_mode = (
-        erp['CMPNT_MATL_NUM'].eq(target_cmpnt).any() or 
-        tru['CHILD_NM'].eq(target_child).any() or 
-        reference_table['CMPNT_MATL_NUM'].eq(target_cmpnt).any()
+        df_erp_with_additional_id.get('CMPNT_MATL_NUM', pd.Series()).astype(str).eq(target_cmpnt).any() or
+        df_erp_with_additional_id.get('TRU_SPEC_ID', pd.Series()).astype(str).eq(target_child).any()
     )
+except Exception as e:
+    debug_mode = False
+    print(f"⚠️ Could not evaluate debug_mode due to: {e}")
 
-    if debug_mode:
-        print("\n=== DEBUG: Filtering for CMPNT_MATL_NUM:", target_cmpnt, "and CHILD_NM:", target_child)
+if debug_mode:
+    print("\n=== DEBUG: Pre-merge diagnostics for CMPNT_MATL_NUM:", target_cmpnt, "and CHILD_NM:", target_child, "===")
 
-        print("\n--- ERP ORIGINAL ---")
-        print(erp.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'"))
+    # ✅ ERP DEBUG
+    if 'CMPNT_MATL_NUM' in df_erp_with_additional_id.columns:
+        erp_debug = df_erp_with_additional_id.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'")
+        print("\n✅ ERP DEBUG:")
+        print(erp_debug if not erp_debug.empty else "❌ No ERP record for CMPNT_MATL_NUM =", target_cmpnt)
+    else:
+        print("⚠️ ERP table missing CMPNT_MATL_NUM column.")
+        erp_debug = pd.DataFrame()
 
-        print("\n--- REF ORIGINAL ---")
-        print(reference_table.query(f"CMPNT_MATL_NUM == '{target_cmpnt}' and CHILD_NM == '{target_child}'"))
+    # ✅ TRU DEBUG
+    if 'CHILD_NM' in tru.columns:
+        tru_debug = tru[TRU_MATCH_COLS].query(f"CHILD_NM == '{target_child}'")
+        print("\n✅ TRU DEBUG:")
+        print(tru_debug if not tru_debug.empty else "❌ No TRU record for CHILD_NM =", target_child)
+    else:
+        print("⚠️ TRU table missing CHILD_NM column.")
+        tru_debug = pd.DataFrame()
 
-        print("\n--- TRU ORIGINAL ---")
-        print(tru.query(f"CHILD_NM == '{target_child}'"))
+    # ✅ REF DEBUG
+    if {'CMPNT_MATL_NUM', 'CHILD_NM'}.issubset(reference_table.columns):
+        ref_debug = reference_table.query(f"CMPNT_MATL_NUM == '{target_cmpnt}' and CHILD_NM == '{target_child}'")
+        print("\n✅ REF TABLE DEBUG:")
+        print(ref_debug if not ref_debug.empty else f"❌ No REF record for {target_cmpnt} -> {target_child}")
+    else:
+        print("⚠️ Reference table missing CMPNT_MATL_NUM and/or CHILD_NM columns.")
+        ref_debug = pd.DataFrame()
 
-    # First Merge: ERP + Reference Table
-    merged_erp_ref = erp.merge(reference_table, on=["CMPNT_MATL_NUM"], how="left")
-    if debug_mode:
-        print("\n--- AFTER ERP + REF MERGE ---")
-        print(merged_erp_ref.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'"))
-
-    # Second Merge: Merged ERP + TRU
-    merged_all = merged_erp_ref.merge(tru, on=["CHILD_NM"], how="left")
-    if debug_mode:
-        print("\n--- AFTER MERGE WITH TRU ---")
-        print(merged_all.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'"))
-
-    # Apply filtering (if any)
-    filtered = merged_all  # Replace with actual filtering logic if applicable
-    if debug_mode:
-        print("\n--- AFTER FILTERING (IF ANY) ---")
-        print(filtered.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'"))
-
-    # Original Matching Logic
-    df_erp_with_additional_id = erp[ERP_MATCH_COLS].merge(
-        reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
-        on=ERP_PART_ID,
-        how='inner'
-    )
-    # 🟣 Add debug block **before strict merge**
-    if '30055433' in df_erp_with_additional_id['CMPNT_MATL_NUM'].astype(str).values or 'PC-008694' in df_erp_with_additional_id['TRU_SPEC_ID'].astype(str).values:
-    
-     print("\n=== DEBUG: Pre-merge diagnostics for CMPNT_MATL_NUM: 30055433 and CHILD_NM: PC-008694 ===")
-     erp_debug = df_erp_with_additional_id.query("CMPNT_MATL_NUM == '30055433'")
-     tru_debug = tru[TRU_MATCH_COLS].query("CHILD_NM == 'PC-008694'")
-     ref_debug = reference_table.query("CMPNT_MATL_NUM == '30055433' and CHILD_NM == 'PC-008694'")
-
-     print("\n✅ ERP DEBUG:")
-     print(erp_debug if not erp_debug.empty else "❌ No ERP record for 30055433")
-
-     print("\n✅ TRU DEBUG:")
-     print(tru_debug if not tru_debug.empty else "❌ No TRU record for PC-008694")
-
-     print("\n✅ REF TABLE DEBUG:")
-     print(ref_debug if not ref_debug.empty else "❌ No REF record for 30055433 -> PC-008694")
-
+    # ✅ Extra Checks if both ERP & TRU have data
     if not erp_debug.empty and not tru_debug.empty:
         print("\n🔎 Checking SRC_SYS_CD mismatches:")
-        print("ERP SRC_SYS_CD:", erp_debug['SRC_SYS_CD'].unique())
-        print("TRU SRC_SYS_CD:", tru_debug['SRC_SYS_CD'].unique())
+        print("ERP SRC_SYS_CD:", erp_debug.get('SRC_SYS_CD', pd.Series()).unique())
+        print("TRU SRC_SYS_CD:", tru_debug.get('SRC_SYS_CD', pd.Series()).unique())
 
         print("\n🔎 Checking PLNT_CD mismatches:")
-        print("ERP PLNT_CD:", erp_debug['PLNT_CD'].unique())
-        print("TRU PLNT_CD:", tru_debug['PLNT_CD'].unique())
+        print("ERP PLNT_CD:", erp_debug.get('PLNT_CD', pd.Series()).unique())
+        print("TRU PLNT_CD:", tru_debug.get('PLNT_CD', pd.Series()).unique())
 
-        print("\n🔎 Checking ERP_MAT_NUM vs TRU_SPEC_ID key formatting:")
-        print("ERP_MAT_NUM:", erp_debug['CMPNT_MATL_NUM'].unique())
-        print("TRU_SPEC_ID:", tru_debug[TRU_SPEC_ID].unique())
+        print("\n🔎 Checking CMPNT_MATL_NUM vs TRU_SPEC_ID key formatting:")
+        print("ERP CMPNT_MATL_NUM:", erp_debug.get('CMPNT_MATL_NUM', pd.Series()).unique())
+        print("TRU TRU_SPEC_ID:", tru_debug.get(TRU_SPEC_ID, pd.Series()).unique())
 
-        # Check for leading zeros or type mismatch
-        print("\n🔎 Datatypes for ERP_MAT_NUM and TRU_SPEC_ID:")
-        print("ERP_MAT_NUM dtype:", erp_debug['CMPNT_MATL_NUM'].dtype)
-        print("TRU_SPEC_ID dtype:", tru_debug[TRU_SPEC_ID].dtype)
+        print("\n🔎 Datatypes for CMPNT_MATL_NUM and TRU_SPEC_ID:")
+        print("ERP CMPNT_MATL_NUM dtype:", erp_debug['CMPNT_MATL_NUM'].dtype)
+        print("TRU TRU_SPEC_ID dtype:", tru_debug[TRU_SPEC_ID].dtype)
 
-        # Strip and normalize keys to compare
+        # Normalize IDs and compare
         erp_ids = set(erp_debug['CMPNT_MATL_NUM'].astype(str).str.strip())
         tru_ids = set(tru_debug[TRU_SPEC_ID].astype(str).str.strip())
         print("\n🟣 Normalized ERP IDs:", erp_ids)
@@ -86,4 +67,5 @@
         print("✅ Overlap:", erp_ids.intersection(tru_ids))
     else:
         print("\n⚠️ Cannot check mismatches because one side is empty.")
-        print("\n=== END DEBUG ===\n")
+
+    print("\n=== END DEBUG ===\n")
