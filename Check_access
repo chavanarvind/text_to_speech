@@ -1,3 +1,16 @@
-print(tru.query("CHILD_NM == 'PC-008694'")[[
-    "TRU_SPEC_ID", "CHILD_NM", TRU_MAT_NUM
-]])
+✅ DEBUG 1: Checking TRU before adding SRC_SYS_CD and PLNT_CD
+         CHILD_NM   CHILD_NM             mat_num
+309975  PC-008694  PC-008694  000000000510006535
+
+✅ DEBUG 1a: Checking ERP for TRU_MAT_NUM in unique_combinations
+Cleaning up all outstanding Run operations, waiting 300.0 seconds
+1 items cleaning up...
+Cleanup took 0.23566365242004395 seconds
+Traceback (most recent call last):
+  File "cross_hound/matcher.py", line 1569, in <module>
+    main(input_dir=args.get('input_dir'),
+  File "cross_hound/matcher.py", line 1394, in main
+    matched, unmatched = full_matching_routine(data_version, db_style, device,
+  File "cross_hound/matcher.py", line 858, in full_matching_routine
+    print(unique_combinations.query(f"{ERP_MAT_NUM} == '510006535'"))
+UnboundLocalError: local variable 'unique_combinations' referenced before assignment
