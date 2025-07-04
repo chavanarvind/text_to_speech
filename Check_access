@@ -1,18 +1,3 @@
-✅ DEBUG 1: Checking TRU before adding SRC_SYS_CD and PLNT_CD
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.17653608322143555 seconds
-Traceback (most recent call last):
-  File "cross_hound/matcher.py", line 1569, in <module>
-    main(input_dir=args.get('input_dir'),
-  File "cross_hound/matcher.py", line 1394, in main
-    matched, unmatched = full_matching_routine(data_version, db_style, device,
-  File "cross_hound/matcher.py", line 854, in full_matching_routine
-    print(tru.query("CHILD_NM == 'PC-008694'")[[
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/frame.py", line 3766, in __getitem__
-    indexer = self.columns._get_indexer_strict(key, "columns")[1]
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 5876, in _get_indexer_strict
-    self._raise_if_missing(keyarr, indexer, axis_name)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 5938, in _raise_if_missing
-    raise KeyError(f"{not_found} not in index")
-KeyError: "['TRU_SPEC_ID'] not in index"
+print(tru.query("CHILD_NM == 'PC-008694'")[[
+    "TRU_SPEC_ID", "CHILD_NM", TRU_MAT_NUM
+]])
