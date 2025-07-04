@@ -1,768 +1,128 @@
+def match_by_reference_table(erp: pd.DataFrame,  
+                             tru: pd.DataFrame,  
+                             reference_table: pd.DataFrame,  
+                             last_match_round: int,  
+                             round_name: str,  
+                             bundles):  
+    '''  
+    Match records using a reference table containing ERP Part ID - TRU Spec mappings
+    with text descriptions. Includes debug tracing for specific records.
+    '''  
+    match_round_name = f'{last_match_round + 1}: {round_name}'  
+    print(f'\n=== MATCH ROUND {match_round_name} ===')  
+    start = time.time()  
+    
+    # 🔥 Debug block after df_erp_with_additional_id creation
+    print("\n✅ DEBUG 7a: Before ERP + REF merge")
+    print(f"Checking TRU for PC-008694 before ERP+TRU merge in {round_name}")
+    print(tru.query("CHILD_NM == 'PC-008694'")[["CHILD_NM", TRU_SPEC_ID, TRU_MAT_NUM]])
+
+    df_erp_with_additional_id = erp[ERP_MATCH_COLS].merge(
+    reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
+    on=ERP_PART_ID,
+    how='inner')
+
+    # ✅ Debug for target record
+    target_cmpnt = '30055433'
+    target_child = 'PC-008694'
+    debug_mode = (
+    df_erp_with_additional_id['CMPNT_MATL_NUM'].eq(target_cmpnt).any() or 
+    tru['CHILD_NM'].eq(target_child).any())
+
+    if debug_mode:
+        print("\n=== DEBUG: Filtering for CMPNT_MATL_NUM:", target_cmpnt, "and CHILD_NM:", target_child)
+
+        print("\n--- ERP + REF MERGE RESULT ---")
+        print(df_erp_with_additional_id.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'"))
+
+        print("\n--- TRU ORIGINAL ---")
+        print(tru.query(f"CHILD_NM == '{target_child}'"))
+
+        print("\n✅ Checking key alignments and datatypes")
+        erp_debug = df_erp_with_additional_id.query("CMPNT_MATL_NUM == '30055433'")
+        tru_debug = tru[TRU_MATCH_COLS].query("CHILD_NM == 'PC-008694'")
+
+        if not erp_debug.empty and not tru_debug.empty:
+            print("\nERP SRC_SYS_CD:", erp_debug['SRC_SYS_CD'].unique())
+            print("TRU SRC_SYS_CD:", tru_debug['SRC_SYS_CD'].unique())
+
+            print("\nERP PLNT_CD:", erp_debug['PLNT_CD'].unique())
+            print("TRU PLNT_CD:", tru_debug['PLNT_CD'].unique())
+
+            print("\nERP_MAT_NUM:", erp_debug['CMPNT_MATL_NUM'].unique())
+            print("TRU_SPEC_ID:", tru_debug[TRU_SPEC_ID].unique())
+
+            # Normalize keys
+            erp_ids = set(erp_debug['CMPNT_MATL_NUM'].astype(str).str.strip())
+            tru_ids = set(tru_debug[TRU_SPEC_ID].astype(str).str.strip())
+            print("\nNormalized ERP IDs:", erp_ids)
+            print("Normalized TRU IDs:", tru_ids)
+            print("✅ Overlap:", erp_ids.intersection(tru_ids))
+        else:
+            print("\n⚠️ ERP or TRU debug data is empty.")
 
-
-[DEBUG] TRU:Check if PC-008694 is present in data ingestion step
-                   mat_num      mat_num_padded    mat_num_original RGN_CD   
-152523  000000000510006535  000000000510006535  000000000510006535    NaN  \
-
-             FG_NM                                         FG_SPEC_NM FD_NM   
-152523  FG-0048803  510006535 Desitin Maximum Strength Paste 40% Z...  None  \
-
-         CHILD_NM CHILD_NM_original   
-152523  PC-008694         PC-008694  \
-
-                                         CHILD_TITLE_DESC spec_type_inferred   
-152523  Shipper - 376  x 281 x 84 mm - RSC - 32 ECT Fl...                 PC  \
-
-               TEMPL_TYPE_CD        CHILD_TYPE_CD   
-152523  Corrugated / Shipper  Packaging Component  \
-
-                           ERP_DESC                         SPEC_FLOW_CD   
-152523  DESITIN MS OINTMENT JAR 16Z  FG-0048803 > DC-0079931 > PC-008694  \
-
-       TRD_NM_CONCAT TRD_NM_FULL                       key_tru  
-152523           NaN         NaN  000000000510006535_PC-008694  
-
-🟢 AFTER ingest_data_and_prepare_examples
-                   mat_num      mat_num_padded    mat_num_original RGN_CD   
-152523  000000000510006535  000000000510006535  000000000510006535    NaN  \
-
-             FG_NM                                         FG_SPEC_NM FD_NM   
-152523  FG-0048803  510006535 Desitin Maximum Strength Paste 40% Z...  None  \
-
-         CHILD_NM CHILD_NM_original   
-152523  PC-008694         PC-008694  \
-
-                                         CHILD_TITLE_DESC spec_type_inferred   
-152523  Shipper - 376  x 281 x 84 mm - RSC - 32 ECT Fl...                 PC  \
-
-               TEMPL_TYPE_CD        CHILD_TYPE_CD   
-152523  Corrugated / Shipper  Packaging Component  \
-
-                           ERP_DESC                         SPEC_FLOW_CD   
-152523  DESITIN MS OINTMENT JAR 16Z  FG-0048803 > DC-0079931 > PC-008694  \
-
-       TRD_NM_CONCAT TRD_NM_FULL                       key_tru  
-152523           NaN         NaN  000000000510006535_PC-008694  
-Format raw material took 1.7443418502807617 seconds
-
-[DEBUG] After format_raw_material_id - TRU
-                   mat_num      mat_num_padded    mat_num_original RGN_CD   
-152523  000000000510006535  000000000510006535  000000000510006535    NaN  \
-
-             FG_NM                                         FG_SPEC_NM FD_NM   
-152523  FG-0048803  510006535 Desitin Maximum Strength Paste 40% Z...  None  \
-
-         CHILD_NM CHILD_NM_original   
-152523  PC-008694         PC-008694  \
-
-                                         CHILD_TITLE_DESC spec_type_inferred   
-152523  Shipper - 376  x 281 x 84 mm - RSC - 32 ECT Fl...                 PC  \
-
-               TEMPL_TYPE_CD        CHILD_TYPE_CD   
-152523  Corrugated / Shipper  Packaging Component  \
-
-                           ERP_DESC                         SPEC_FLOW_CD   
-152523  DESITIN MS OINTMENT JAR 16Z  FG-0048803 > DC-0079931 > PC-008694  \
-
-       TRD_NM_CONCAT TRD_NM_FULL                       key_tru CHILD_NM_proc  
-152523           NaN         NaN  000000000510006535_PC-008694     pc-008694  
-
- AFTER format_raw_material_id
-                   mat_num      mat_num_padded    mat_num_original RGN_CD   
-152523  000000000510006535  000000000510006535  000000000510006535    NaN  \
-
-             FG_NM                                         FG_SPEC_NM FD_NM   
-152523  FG-0048803  510006535 Desitin Maximum Strength Paste 40% Z...  None  \
-
-         CHILD_NM CHILD_NM_original   
-152523  PC-008694         PC-008694  \
-
-                                         CHILD_TITLE_DESC spec_type_inferred   
-152523  Shipper - 376  x 281 x 84 mm - RSC - 32 ECT Fl...                 PC  \
-
-               TEMPL_TYPE_CD        CHILD_TYPE_CD   
-152523  Corrugated / Shipper  Packaging Component  \
-
-                           ERP_DESC                         SPEC_FLOW_CD   
-152523  DESITIN MS OINTMENT JAR 16Z  FG-0048803 > DC-0079931 > PC-008694  \
-
-       TRD_NM_CONCAT TRD_NM_FULL                       key_tru CHILD_NM_proc  
-152523           NaN         NaN  000000000510006535_PC-008694     pc-008694  
-erp part desc nulls 0
-tru spec desc nulls:  0
-processing erp
-processing tru
-Process text description took 62.139235734939575 seconds
-processing tru trade names
-Process text description took 73.56462621688843 seconds
-
- AFTER preprocessed_text_description
-                   mat_num      mat_num_padded    mat_num_original RGN_CD   
-152523  000000000510006535  000000000510006535  000000000510006535    NaN  \
-
-             FG_NM                                         FG_SPEC_NM FD_NM   
-152523  FG-0048803  510006535 Desitin Maximum Strength Paste 40% Z...  None  \
-
-         CHILD_NM CHILD_NM_original   
-152523  PC-008694         PC-008694  \
-
-                                         CHILD_TITLE_DESC spec_type_inferred   
-152523  Shipper - 376  x 281 x 84 mm - RSC - 32 ECT Fl...                 PC  \
-
-               TEMPL_TYPE_CD        CHILD_TYPE_CD   
-152523  Corrugated / Shipper  Packaging Component  \
-
-                           ERP_DESC                         SPEC_FLOW_CD   
-152523  DESITIN MS OINTMENT JAR 16Z  FG-0048803 > DC-0079931 > PC-008694  \
-
-       TRD_NM_CONCAT TRD_NM_FULL                       key_tru CHILD_NM_proc   
-152523           NaN         NaN  000000000510006535_PC-008694     pc-008694  \
-
-                                  processed_desc_tru   
-152523  shipper 376 x 281 x 84 mm rsc 32 ect flute c  \
-
-       processed_desc_tru_trade_names  
-152523                            NaN  
-
- AFTER create_features (tru)
-                   mat_num      mat_num_padded    mat_num_original RGN_CD   
-152523  000000000510006535  000000000510006535  000000000510006535    NaN  \
-
-             FG_NM                                         FG_SPEC_NM FD_NM   
-152523  FG-0048803  510006535 Desitin Maximum Strength Paste 40% Z...  None  \
-
-         CHILD_NM CHILD_NM_original   
-152523  PC-008694         PC-008694  \
-
-                                         CHILD_TITLE_DESC spec_type_inferred   
-152523  Shipper - 376  x 281 x 84 mm - RSC - 32 ECT Fl...                 PC  \
-
-               TEMPL_TYPE_CD        CHILD_TYPE_CD   
-152523  Corrugated / Shipper  Packaging Component  \
-
-                           ERP_DESC                         SPEC_FLOW_CD   
-152523  DESITIN MS OINTMENT JAR 16Z  FG-0048803 > DC-0079931 > PC-008694  \
-
-       TRD_NM_CONCAT TRD_NM_FULL                       key_tru CHILD_NM_proc   
-152523           NaN         NaN  000000000510006535_PC-008694     pc-008694  \
-
-                                  processed_desc_tru   
-152523  shipper 376 x 281 x 84 mm rsc 32 ect flute c  \
-
-       processed_desc_tru_trade_names extracted_rm_tru extra_info_tru   
-152523                            NaN              NaN            NaN  \
-
-        text_for_matching_tru  perc_alpha_char_tru  
-152523  shipper rsc ect flute                  1.0  
-
-🟢 AFTER create_features (tru_trade_names)
-                   mat_num      mat_num_padded    mat_num_original RGN_CD   
-152523  000000000510006535  000000000510006535  000000000510006535    NaN  \
-
-             FG_NM                                         FG_SPEC_NM FD_NM   
-152523  FG-0048803  510006535 Desitin Maximum Strength Paste 40% Z...  None  \
-
-         CHILD_NM CHILD_NM_original   
-152523  PC-008694         PC-008694  \
-
-                                         CHILD_TITLE_DESC spec_type_inferred   
-152523  Shipper - 376  x 281 x 84 mm - RSC - 32 ECT Fl...                 PC  \
-
-               TEMPL_TYPE_CD        CHILD_TYPE_CD   
-152523  Corrugated / Shipper  Packaging Component  \
-
-                           ERP_DESC                         SPEC_FLOW_CD   
-152523  DESITIN MS OINTMENT JAR 16Z  FG-0048803 > DC-0079931 > PC-008694  \
-
-       TRD_NM_CONCAT TRD_NM_FULL                       key_tru CHILD_NM_proc   
-152523           NaN         NaN  000000000510006535_PC-008694     pc-008694  \
-
-                                  processed_desc_tru   
-152523  shipper 376 x 281 x 84 mm rsc 32 ect flute c  \
-
-       processed_desc_tru_trade_names extracted_rm_tru extra_info_tru   
-152523                            NaN              NaN            NaN  \
-
-        text_for_matching_tru  perc_alpha_char_tru   
-152523  shipper rsc ect flute                  1.0  \
-
-       extracted_rm_tru_trade_names text_for_matching_tru_trade_names   
-152523                          NaN                                    \
-
-        perc_alpha_char_tru_trade_names  
-152523                              0.0  
-Create features took 105.02428317070007 seconds
-files in mounted dir: /mnt/azureml/cr/j/096f41553b5e4f2eb20d9bf26acf3193/cap/data-capability/wd/INPUT_transformer_model
-folder_with_model: /mnt/azureml/cr/j/096f41553b5e4f2eb20d9bf26acf3193/cap/data-capability/wd/INPUT_transformer_model/fine_tuned_roberta
-erp records without embedding:  0
-tru records without embedding:  0
-
-✅ STEP 5a: Checking TRU before merge with unique_combinations
-         CHILD_NM             mat_num
-152523  PC-008694  000000000510006535
-
-✅ STEP 5b: Checking ERP for TRU_MAT_NUM (padded & unpadded)
-                  MATL_NUM SRC_SYS_CD        PLNT_CD
-326925  000000000510006535       KDLE  External_KDLE
-328061  000000000510006535       KDLE  External_KDLE
-332874  000000000510006535       KDLE  External_KDLE
-
-✅ Found TRU_MAT_NUM in ERP
-
-✅ DEBUG 1b: ERP columns at this point:
-['SRC_SYS_CD', 'MATL_NUM', 'MATL_NUM_original', 'MATL_SHRT_DESC', 'PLNT_CD', 'CMPNT_MATL_TYPE_CD', 'CMPNT_MATL_NUM', 'CMPNT_MATL_NUM_original', 'CMPNT_MATL_DESC', 'key_erp', 'is_off_spec_erp', 'CMPNT_MATL_NUM_proc', 'processed_desc_erp', 'extracted_rm_erp', 'text_for_matching_erp', 'perc_alpha_char_erp', 'embedding_erp']
-ununique_combinations contain erp or not
-
- DEBUG 2: After tru.merge(unique_combinations)
-         CHILD_NM   CHILD_NM SRC_SYS_CD        PLNT_CD             mat_num
-316059  PC-008694  PC-008694       KDLE  External_KDLE  000000000510006535
-
- AFTER tru.merge(unique_combinations)
-                   mat_num      mat_num_padded    mat_num_original RGN_CD   
-316059  000000000510006535  000000000510006535  000000000510006535    NaN  \
-
-             FG_NM                                         FG_SPEC_NM FD_NM   
-316059  FG-0048803  510006535 Desitin Maximum Strength Paste 40% Z...  None  \
-
-         CHILD_NM CHILD_NM_original   
-316059  PC-008694         PC-008694  \
-
-                                         CHILD_TITLE_DESC spec_type_inferred   
-316059  Shipper - 376  x 281 x 84 mm - RSC - 32 ECT Fl...                 PC  \
-
-               TEMPL_TYPE_CD        CHILD_TYPE_CD   
-316059  Corrugated / Shipper  Packaging Component  \
-
-                           ERP_DESC                         SPEC_FLOW_CD   
-316059  DESITIN MS OINTMENT JAR 16Z  FG-0048803 > DC-0079931 > PC-008694  \
-
-       TRD_NM_CONCAT TRD_NM_FULL                       key_tru CHILD_NM_proc   
-316059           NaN         NaN  000000000510006535_PC-008694     pc-008694  \
-
-                                  processed_desc_tru   
-316059  shipper 376 x 281 x 84 mm rsc 32 ect flute c  \
-
-       processed_desc_tru_trade_names extracted_rm_tru extra_info_tru   
-316059                            NaN              NaN            NaN  \
-
-        text_for_matching_tru  perc_alpha_char_tru   
-316059  shipper rsc ect flute                  1.0  \
-
-       extracted_rm_tru_trade_names text_for_matching_tru_trade_names   
-316059                          NaN                                    \
-
-        perc_alpha_char_tru_trade_names   
-316059                              0.0  \
-
-                                            embedding_tru SRC_SYS_CD   
-316059  [0.042153895, 0.022906022, -0.0073228977, 0.04...       KDLE  \
-
-              PLNT_CD            MATL_NUM MATL_NUM_original_tru_ref  
-316059  External_KDLE  000000000510006535                 510006535  
-------------------------------------------------------------
-MATCH ROUND 1: ERP Part vs RM Spec
-1: ERP Part vs RM Spec round matched: 1506 (0.45 seconds)
-df_erp_to_match cases:  351082
-df_tru_to_match cases:  356145
-------------------------------------------------------------
-MATCH ROUND 2: ERP Part vs RM Title
-cross_hound/matcher.py:179: UserWarning: This pattern is interpreted as a regular expression, and has match groups. To actually get the groups, use str.extract.
-  results = (s
-cross_hound/matcher.py:179: UserWarning: This pattern is interpreted as a regular expression, and has match groups. To actually get the groups, use str.extract.
-  results = (s
-****** Adding 27703 more matches based on SPEC_FLOW_CD
-2: ERP Part vs RM Title round matched: 75043 (569.25 seconds)
-df_erp_to_match cases:  304343
-df_tru_to_match cases:  284112
-------------------------------------------------------------
-MATCH ROUND 3: ERP Desc vs RM Spec
-****** Adding 1 more matches based on SPEC_FLOW_CD
-3: ERP Desc vs RM Spec round matched: 3036 (2183.3 seconds)
-df_erp_to_match cases:  301307
-df_tru_to_match cases:  281077
-Amount of current matches:  75043
-363 duplicates found in matches
-------------------------------------------------------------
-
-=== MATCH ROUND 4: Human Feedback ===
-
-✅ DEBUG 7a: Before ERP + REF merge
-Checking TRU for PC-008694 before ERP+TRU merge in Human Feedback
-Empty DataFrame
-Columns: [CHILD_NM, CHILD_NM, mat_num]
-Index: []
-
-=== END DEBUG ===
-
-
-✅ DEBUG 7b: Before ERP+TRU merge
-Checking ERP for CMPNT_MATL_NUM = 30055433 in Human Feedback
-Empty DataFrame
-Columns: [CMPNT_MATL_NUM, MATL_NUM, SRC_SYS_CD, PLNT_CD]
-Index: []
-Checking TRU for PC-008694 before ERP+TRU merge in Human Feedback
-Empty DataFrame
-Columns: [CHILD_NM, CHILD_NM, mat_num, SRC_SYS_CD, PLNT_CD]
-Index: []
-
-✅ DEBUG 7c: After ERP+TRU merge
-Empty DataFrame
-Columns: [CMPNT_MATL_NUM, CHILD_NM, CMPNT_MATL_NUM, CHILD_NM, SRC_SYS_CD, PLNT_CD]
-Index: []
-❌ ALERT: PC-008694 did not match in this merge
-****** Adding 110 more matches based on SPEC_FLOW_CD
-4: Human Feedback round matched: 8139 (1.15 seconds)
-df_erp_to_match cases:  293666
-df_tru_to_match cases:  273539
-Amount of current matches:  8139
-------------------------------------------------------------
-reading xmatches_EPR_priority_confidence file from folder 
-mapping using ERP PART ID
-    source      CMPNT_MATL_NUM                           CMPNT_MATL_DESC   
-0      1S4  000000000000153931            2 1/2" LDPE Carton Bundle Wrap  \
-1      1S4             900120K         ALUMINIUM SACHET FRENADOL COMPLEX   
-2      1S4             900088N                  LEAFLET FRENADOL COMPLEX   
-3      1S4             900105K        ALUMINIUM TUBE TITANOREINE 20G (F)   
-4      1S4             900031L              FOLDING BOX FRENADOL COMPLEX   
-..     ...                 ...                                       ...   
-886    NaN          1.8123E+11               Pocket Mist Actuator Common   
-887    NaN          1.8123E+11          Mint Cover_Cool Mint(PocketMist)   
-888    NaN          1.8123E+11             Trigger_Cool Mint(PocketMist)   
-889    NaN          1.8123E+11         Natural Collar Common(PocketMist)   
-890    NaN          1.8123E+11  Spray Pump Assembly Common (Pocket Mist)   
-
-       CHILD_NM                                   CHILD_TITLE_DESC   
-0    PC-0005147      Guelph, 2.5" LDPE Carton Bundle Wrap - 153931  \
-1    PC-0000336        Aluminium Foil - 110x57 mm- 85 g/m² - 65 µm   
-2    PC-0000855     Leaflet - 315x170 mm - Reels - 50 GSM - Single   
-3    PC-0000886  TUBE - Aluminium tube - 20ml - Internal and ex...   
-4    PC-0000830  Folding Carton - 59.5 x 59.5  x 111.5 mm - A10...   
-..          ...                                                ...   
-886   PC-057563                                                NaN   
-887  PC-0005780                                                NaN   
-888  PC-0005784                                                NaN   
-889  PC-0005827                                                NaN   
-890   PC-058374                                                NaN   
-
-    text_for_matching_erp  
-0                     NaN  
-1                     NaN  
-2                     NaN  
-3                     NaN  
-4                     NaN  
-..                    ...  
-886                   NaN  
-887                   NaN  
-888                   NaN  
-889                   NaN  
-890                   NaN  
-
-[891 rows x 6 columns]
- in nlp list ref phase 1
-                   mat_num      mat_num_padded    mat_num_original RGN_CD   
-316059  000000000510006535  000000000510006535  000000000510006535    NaN  \
-
-             FG_NM                                         FG_SPEC_NM FD_NM   
-316059  FG-0048803  510006535 Desitin Maximum Strength Paste 40% Z...  None  \
-
-         CHILD_NM CHILD_NM_original   
-316059  PC-008694         PC-008694  \
-
-                                         CHILD_TITLE_DESC spec_type_inferred   
-316059  Shipper - 376  x 281 x 84 mm - RSC - 32 ECT Fl...                 PC  \
-
-               TEMPL_TYPE_CD        CHILD_TYPE_CD   
-316059  Corrugated / Shipper  Packaging Component  \
-
-                           ERP_DESC                         SPEC_FLOW_CD   
-316059  DESITIN MS OINTMENT JAR 16Z  FG-0048803 > DC-0079931 > PC-008694  \
-
-       TRD_NM_CONCAT TRD_NM_FULL   
-316059           NaN         NaN  \
-
-                                                key_tru CHILD_NM_proc   
-316059  000000000510006535_PC-008694_External_KDLE_KDLE     pc-008694  \
-
-                                  processed_desc_tru   
-316059  shipper 376 x 281 x 84 mm rsc 32 ect flute c  \
-
-       processed_desc_tru_trade_names extracted_rm_tru extra_info_tru   
-316059                            NaN              NaN            NaN  \
-
-        text_for_matching_tru  perc_alpha_char_tru   
-316059  shipper rsc ect flute                  1.0  \
-
-       extracted_rm_tru_trade_names text_for_matching_tru_trade_names   
-316059                          NaN                                    \
-
-        perc_alpha_char_tru_trade_names SRC_SYS_CD        PLNT_CD   
-316059                              0.0       KDLE  External_KDLE  \
-
-                  MATL_NUM MATL_NUM_original_tru_ref  
-316059  000000000510006535                 510006535  
-
-
-=== MATCH ROUND 5: matches_NLP_list_ERP suggested X-match ===
-
-✅ DEBUG 7a: Before ERP + REF merge
-Checking TRU for PC-008694 before ERP+TRU merge in matches_NLP_list_ERP suggested X-match
-Empty DataFrame
-Columns: [CHILD_NM, CHILD_NM, mat_num]
-Index: []
-
-=== DEBUG: Filtering for CMPNT_MATL_NUM: 30055433 and CHILD_NM: PC-008694
-
---- ERP + REF MERGE RESULT ---
-     SRC_SYS_CD            MATL_NUM MATL_NUM_original MATL_SHRT_DESC   
-6292       KDLE  000000000510006535         510006535        unknown  \
-
-            PLNT_CD CMPNT_MATL_TYPE_CD CMPNT_MATL_NUM CMPNT_MATL_NUM_original   
-6292  External_KDLE               None       30055433                30055433  \
-
-                    CMPNT_MATL_DESC     text_for_matching_erp   
-6292  SHPR,16OZ,DESTN MAX STRNG DRP  shpr destn max strng drp  \
-
-     extracted_rm_erp  perc_alpha_char_erp   
-6292              NaN                  1.0  \
-
-                                             key_erp   CHILD_NM  
-6292  000000000510006535_30055433_External_KDLE_KDLE  PC-008694  
-
---- TRU ORIGINAL ---
-Empty DataFrame
-Columns: [mat_num, mat_num_padded, mat_num_original, RGN_CD, FG_NM, FG_SPEC_NM, FD_NM, CHILD_NM, CHILD_NM_original, CHILD_TITLE_DESC, spec_type_inferred, TEMPL_TYPE_CD, CHILD_TYPE_CD, ERP_DESC, SPEC_FLOW_CD, TRD_NM_CONCAT, TRD_NM_FULL, key_tru, CHILD_NM_proc, processed_desc_tru, processed_desc_tru_trade_names, extracted_rm_tru, extra_info_tru, text_for_matching_tru, perc_alpha_char_tru, extracted_rm_tru_trade_names, text_for_matching_tru_trade_names, perc_alpha_char_tru_trade_names, SRC_SYS_CD, PLNT_CD, MATL_NUM, MATL_NUM_original_tru_ref]
-Index: []
-
-✅ Checking key alignments and datatypes
-
-⚠️ ERP or TRU debug data is empty.
-
-=== END DEBUG ===
-
-
-✅ DEBUG 7b: Before ERP+TRU merge
-Checking ERP for CMPNT_MATL_NUM = 30055433 in matches_NLP_list_ERP suggested X-match
-     CMPNT_MATL_NUM            MATL_NUM SRC_SYS_CD        PLNT_CD
-6292       30055433  000000000510006535       KDLE  External_KDLE
-Checking TRU for PC-008694 before ERP+TRU merge in matches_NLP_list_ERP suggested X-match
-Empty DataFrame
-Columns: [CHILD_NM, CHILD_NM, mat_num, SRC_SYS_CD, PLNT_CD]
-Index: []
-
-✅ DEBUG 7c: After ERP+TRU merge
-Empty DataFrame
-Columns: [CMPNT_MATL_NUM, CHILD_NM, CMPNT_MATL_NUM, CHILD_NM, SRC_SYS_CD, PLNT_CD]
-Index: []
-❌ ALERT: PC-008694 did not match in this merge
-****** Adding 234 more matches based on SPEC_FLOW_CD
-5: matches_NLP_list_ERP suggested X-match round matched: 4041 (1.17 seconds)
-df_erp_to_match cases:  289775
-df_tru_to_match cases:  269540
-Amount of current matches:  4041
-
-
-=== MATCH ROUND 6: Pair found in Pendulum ===
-
-✅ DEBUG 7a: Before ERP + REF merge
-Checking TRU for PC-008694 before ERP+TRU merge in Pair found in Pendulum
-Empty DataFrame
-Columns: [CHILD_NM, CHILD_NM, mat_num]
-Index: []
-
-=== END DEBUG ===
-
-
-✅ DEBUG 7b: Before ERP+TRU merge
-Checking ERP for CMPNT_MATL_NUM = 30055433 in Pair found in Pendulum
-Empty DataFrame
-Columns: [CMPNT_MATL_NUM, MATL_NUM, SRC_SYS_CD, PLNT_CD]
-Index: []
-Checking TRU for PC-008694 before ERP+TRU merge in Pair found in Pendulum
-Empty DataFrame
-Columns: [CHILD_NM, CHILD_NM, mat_num, SRC_SYS_CD, PLNT_CD]
-Index: []
-
-✅ DEBUG 7c: After ERP+TRU merge
-Empty DataFrame
-Columns: [CMPNT_MATL_NUM, CHILD_NM, CMPNT_MATL_NUM, CHILD_NM, SRC_SYS_CD, PLNT_CD]
-Index: []
-❌ ALERT: PC-008694 did not match in this merge
-****** Adding 1134 more matches based on SPEC_FLOW_CD
-6: Pair found in Pendulum round matched: 146823 (2.69 seconds)
-df_erp_to_match cases:  148546
-df_tru_to_match cases:  127817
-Amount of current matches:  146823
-------------------------------------------------------------
-
-=== MATCH ROUND 7: Fortrea suggested X-match ===
-
-✅ DEBUG 7a: Before ERP + REF merge
-Checking TRU for PC-008694 before ERP+TRU merge in Fortrea suggested X-match
-Empty DataFrame
-Columns: [CHILD_NM, CHILD_NM, mat_num]
-Index: []
-
-=== END DEBUG ===
-
-
-✅ DEBUG 7b: Before ERP+TRU merge
-Checking ERP for CMPNT_MATL_NUM = 30055433 in Fortrea suggested X-match
-Empty DataFrame
-Columns: [CMPNT_MATL_NUM, MATL_NUM, SRC_SYS_CD, PLNT_CD]
-Index: []
-Checking TRU for PC-008694 before ERP+TRU merge in Fortrea suggested X-match
-Empty DataFrame
-Columns: [CHILD_NM, CHILD_NM, mat_num, SRC_SYS_CD, PLNT_CD]
-Index: []
-
-✅ DEBUG 7c: After ERP+TRU merge
-Empty DataFrame
-Columns: [CMPNT_MATL_NUM, CHILD_NM, CMPNT_MATL_NUM, CHILD_NM, SRC_SYS_CD, PLNT_CD]
-Index: []
-❌ ALERT: PC-008694 did not match in this merge
-****** Adding 217 more matches based on SPEC_FLOW_CD
-7: Fortrea suggested X-match round matched: 7614 (0.65 seconds)
-df_erp_to_match cases:  141320
-df_tru_to_match cases:  120384
-Amount of current matches:  7614
-------------------------------------------------------------
-
-=== MATCH ROUND 8: Fortrea Pendulum Validated ===
-
-✅ DEBUG 7a: Before ERP + REF merge
-Checking TRU for PC-008694 before ERP+TRU merge in Fortrea Pendulum Validated
-Empty DataFrame
-Columns: [CHILD_NM, CHILD_NM, mat_num]
-Index: []
-
-=== END DEBUG ===
-
-
-✅ DEBUG 7b: Before ERP+TRU merge
-Checking ERP for CMPNT_MATL_NUM = 30055433 in Fortrea Pendulum Validated
-Empty DataFrame
-Columns: [CMPNT_MATL_NUM, MATL_NUM, SRC_SYS_CD, PLNT_CD]
-Index: []
-Checking TRU for PC-008694 before ERP+TRU merge in Fortrea Pendulum Validated
-Empty DataFrame
-Columns: [CHILD_NM, CHILD_NM, mat_num, SRC_SYS_CD, PLNT_CD]
-Index: []
-
-✅ DEBUG 7c: After ERP+TRU merge
-Empty DataFrame
-Columns: [CMPNT_MATL_NUM, CHILD_NM, CMPNT_MATL_NUM, CHILD_NM, SRC_SYS_CD, PLNT_CD]
-Index: []
-❌ ALERT: PC-008694 did not match in this merge
-****** Adding 2 more matches based on SPEC_FLOW_CD
-8: Fortrea Pendulum Validated round matched: 18 (0.54 seconds)
-df_erp_to_match cases:  141303
-df_tru_to_match cases:  120366
-Amount of current matches:  18
-------------------------------------------------------------
-                           text_for_matching_erp CMPNT_MATL_NUM
-0                     sod hydroxide liquid tanic         187010
-1                                 mannitol 150sd         444366
-2              sp versathix mbal lq sg ibc croda        5014045
-3                                         thymol         610520
-4                        tubete pap tuboleve esp         113585
-...                                          ...            ...
-352564           remypro n80 irradiated material         134911
-352571       shrink film 12 clysar hpgf 45 gauge          64000
-352573  label ntgcos moistsmth colrstk 160sd shd   358030031140
-352580            ctn bactidol hlem 6x16l v2 phl         131289
-352582              folding box motilium 20 tabs        4602756
-
-[58286 rows x 2 columns]
-
-=== MATCH ROUND 9: Pomezia suggested X-match ===
-
-✅ DEBUG 7a: Before ERP + REF merge
-Checking TRU for PC-008694 before ERP+TRU merge in Pomezia suggested X-match
-Empty DataFrame
-Columns: [CHILD_NM, CHILD_NM, mat_num]
-Index: []
-
-=== END DEBUG ===
-
-
-✅ DEBUG 7b: Before ERP+TRU merge
-Checking ERP for CMPNT_MATL_NUM = 30055433 in Pomezia suggested X-match
-Empty DataFrame
-Columns: [CMPNT_MATL_NUM, MATL_NUM, SRC_SYS_CD, PLNT_CD]
-Index: []
-Checking TRU for PC-008694 before ERP+TRU merge in Pomezia suggested X-match
-Empty DataFrame
-Columns: [CHILD_NM, CHILD_NM, mat_num, SRC_SYS_CD, PLNT_CD]
-Index: []
-
-✅ DEBUG 7c: After ERP+TRU merge
-Empty DataFrame
-Columns: [CMPNT_MATL_NUM, CHILD_NM, CMPNT_MATL_NUM, CHILD_NM, SRC_SYS_CD, PLNT_CD]
-Index: []
-❌ ALERT: PC-008694 did not match in this merge
-9: Pomezia suggested X-match round matched: 2114 (0.43 seconds)
-df_erp_to_match cases:  139189
-df_tru_to_match cases:  118252
-Amount of current matches:  2114
- 
-
-=== MATCH ROUND 10: VDR_TRU suggested X-match ===
-
-✅ DEBUG 7a: Before ERP + REF merge
-Checking TRU for PC-008694 before ERP+TRU merge in VDR_TRU suggested X-match
-Empty DataFrame
-Columns: [CHILD_NM, CHILD_NM, mat_num]
-Index: []
-
-=== END DEBUG ===
-
-
-✅ DEBUG 7b: Before ERP+TRU merge
-Checking ERP for CMPNT_MATL_NUM = 30055433 in VDR_TRU suggested X-match
-Empty DataFrame
-Columns: [CMPNT_MATL_NUM, MATL_NUM, SRC_SYS_CD, PLNT_CD]
-Index: []
-Checking TRU for PC-008694 before ERP+TRU merge in VDR_TRU suggested X-match
-Empty DataFrame
-Columns: [CHILD_NM, CHILD_NM, mat_num, SRC_SYS_CD, PLNT_CD]
-Index: []
-
-✅ DEBUG 7c: After ERP+TRU merge
-Empty DataFrame
-Columns: [CMPNT_MATL_NUM, CHILD_NM, CMPNT_MATL_NUM, CHILD_NM, SRC_SYS_CD, PLNT_CD]
-Index: []
-❌ ALERT: PC-008694 did not match in this merge
-****** Adding 5 more matches based on SPEC_FLOW_CD
-10: VDR_TRU suggested X-match round matched: 841 (0.53 seconds)
-df_erp_to_match cases:  138359
-df_tru_to_match cases:  117421
-Amount of current matches:  841
-
-=== MATCH ROUND 11: Xref_Request_for_SJC suggested X-match ===
-
-✅ DEBUG 7a: Before ERP + REF merge
-Checking TRU for PC-008694 before ERP+TRU merge in Xref_Request_for_SJC suggested X-match
-Empty DataFrame
-Columns: [CHILD_NM, CHILD_NM, mat_num]
-Index: []
-
-=== END DEBUG ===
-
-
-✅ DEBUG 7b: Before ERP+TRU merge
-Checking ERP for CMPNT_MATL_NUM = 30055433 in Xref_Request_for_SJC suggested X-match
-Empty DataFrame
-Columns: [CMPNT_MATL_NUM, MATL_NUM, SRC_SYS_CD, PLNT_CD]
-Index: []
-Checking TRU for PC-008694 before ERP+TRU merge in Xref_Request_for_SJC suggested X-match
-Empty DataFrame
-Columns: [CHILD_NM, CHILD_NM, mat_num, SRC_SYS_CD, PLNT_CD]
-Index: []
-
-✅ DEBUG 7c: After ERP+TRU merge
-Empty DataFrame
-Columns: [CMPNT_MATL_NUM, CHILD_NM, CMPNT_MATL_NUM, CHILD_NM, SRC_SYS_CD, PLNT_CD]
-Index: []
-❌ ALERT: PC-008694 did not match in this merge
-11: Xref_Request_for_SJC suggested X-match round matched: 28 (0.38 seconds)
-df_erp_to_match cases:  138331
-df_tru_to_match cases:  117407
-Amount of current matches:  28
    
+    print("\n=== END DEBUG ===\n")
+    print("\n✅ DEBUG 7b: Before ERP+TRU merge")
+    print(f"Checking ERP for CMPNT_MATL_NUM = 30055433 in {round_name}")
+    print(df_erp_with_additional_id.query("CMPNT_MATL_NUM == '30055433'")[[
+    ERP_PART_ID, ERP_MAT_NUM, 'SRC_SYS_CD', 'PLNT_CD'
+]])
+    print(f"Checking TRU for PC-008694 before ERP+TRU merge in {round_name}")
+    print(tru.query("CHILD_NM == 'PC-008694'")[[
+    "CHILD_NM", TRU_SPEC_ID, TRU_MAT_NUM, "SRC_SYS_CD", "PLNT_CD"]])
 
-=== MATCH ROUND 12: matches_EPR_priority_confidence suggested X-match ===
+    matched_per_id = df_erp_with_additional_id.merge(
+        tru[TRU_MATCH_COLS],
+        left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, TRU_SPEC_ID],
+        right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, TRU_SPEC_ID],
+        how='inner'
+    )
+    print("\n✅ DEBUG 7c: After ERP+TRU merge")
+    print(matched_per_id.query("CHILD_NM == 'PC-008694' or CMPNT_MATL_NUM == '30055433'")[[
+    ERP_PART_ID, TRU_SPEC_ID, "CMPNT_MATL_NUM", "CHILD_NM", "SRC_SYS_CD", "PLNT_CD"]])
 
-✅ DEBUG 7a: Before ERP + REF merge
-Checking TRU for PC-008694 before ERP+TRU merge in matches_EPR_priority_confidence suggested X-match
-Empty DataFrame
-Columns: [CHILD_NM, CHILD_NM, mat_num]
-Index: []
+    if matched_per_id.query("CHILD_NM == 'PC-008694'").empty:
+      print("❌ ALERT: PC-008694 did not match in this merge")
+    else:
+      print("✅ SUCCESS: PC-008694 matched in this merge")
+    # Match per description
+    if not (reference_table['text_for_matching_erp'].isnull().all() or 
+            reference_table['text_for_matching_tru'].isnull().all()):
+        reference_table_text = reference_table.dropna(subset=['text_for_matching_erp', 'text_for_matching_tru'])
+        is_valid_ref = [min(len(x), len(y)) > 5 for x, y in 
+                        zip(reference_table_text['text_for_matching_erp'],
+                            reference_table_text['text_for_matching_tru'])]
+        reference_table_text = reference_table_text[is_valid_ref]
+        df_erp_with_additional_desc = erp[ERP_MATCH_COLS].merge(
+            reference_table_text[['text_for_matching_erp', 'text_for_matching_tru']].drop_duplicates(),
+            on='text_for_matching_erp',
+            how='inner'
+        )
+        matched_per_desc = df_erp_with_additional_desc.merge(
+            tru[TRU_MATCH_COLS],
+            left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, 'text_for_matching_tru'],
+            right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, 'text_for_matching_tru'],
+            how='inner'
+        )
+        matched_per_desc = matched_per_desc[matched_per_id.columns]
+    else:
+        matched_per_desc = pd.DataFrame(columns=matched_per_id.columns)
 
-=== END DEBUG ===
+    if matched_per_id.empty and matched_per_desc.empty:
+        print(f"No reference table matches found in round {match_round_name}")
+        return pd.DataFrame(), erp, tru, last_match_round + 1
 
+    matches = pd.concat([matched_per_id, matched_per_desc], ignore_index=True)
+    matches[SCORE_COL] = 1
+    matches[UNIFIED_MC_COL] = matches[f'{ERP_MAT_NUM}_original'].copy()
+    matches['is_matched'] = True
+    matches['Matching Reason'] = round_name
+    matches['confidence'] = 'high'
+    matches = add_matches_bundles(matches, bundles, tru)
+    matches.drop_duplicates(subset=NON_DUPLICATES_SET, inplace=True)
+    assign_round_name_and_report_time(matches, match_round_name, start)
 
-✅ DEBUG 7b: Before ERP+TRU merge
-Checking ERP for CMPNT_MATL_NUM = 30055433 in matches_EPR_priority_confidence suggested X-match
-Empty DataFrame
-Columns: [CMPNT_MATL_NUM, MATL_NUM, SRC_SYS_CD, PLNT_CD]
-Index: []
-Checking TRU for PC-008694 before ERP+TRU merge in matches_EPR_priority_confidence suggested X-match
-Empty DataFrame
-Columns: [CHILD_NM, CHILD_NM, mat_num, SRC_SYS_CD, PLNT_CD]
-Index: []
+    df_erp_to_match, df_tru_to_match = get_data_yet_to_match(matches, erp, tru)
 
-✅ DEBUG 7c: After ERP+TRU merge
-Empty DataFrame
-Columns: [CMPNT_MATL_NUM, CHILD_NM, CMPNT_MATL_NUM, CHILD_NM, SRC_SYS_CD, PLNT_CD]
-Index: []
-❌ ALERT: PC-008694 did not match in this merge
-12: matches_EPR_priority_confidence suggested X-match round matched: 14 (0.38 seconds)
-df_erp_to_match cases:  138317
-df_tru_to_match cases:  117393
-Amount of current matches:  14
-
-=== MATCH ROUND 13: matches_Potential_PC_DC_Spec suggested X-match ===
-
-✅ DEBUG 7a: Before ERP + REF merge
-Checking TRU for PC-008694 before ERP+TRU merge in matches_Potential_PC_DC_Spec suggested X-match
-Empty DataFrame
-Columns: [CHILD_NM, CHILD_NM, mat_num]
-Index: []
-
-=== END DEBUG ===
-
-
-✅ DEBUG 7b: Before ERP+TRU merge
-Checking ERP for CMPNT_MATL_NUM = 30055433 in matches_Potential_PC_DC_Spec suggested X-match
-Empty DataFrame
-Columns: [CMPNT_MATL_NUM, MATL_NUM, SRC_SYS_CD, PLNT_CD]
-Index: []
-Checking TRU for PC-008694 before ERP+TRU merge in matches_Potential_PC_DC_Spec suggested X-match
-Empty DataFrame
-Columns: [CHILD_NM, CHILD_NM, mat_num, SRC_SYS_CD, PLNT_CD]
-Index: []
-
-✅ DEBUG 7c: After ERP+TRU merge
-Empty DataFrame
-Columns: [CMPNT_MATL_NUM, CHILD_NM, CMPNT_MATL_NUM, CHILD_NM, SRC_SYS_CD, PLNT_CD]
-Index: []
-❌ ALERT: PC-008694 did not match in this merge
-13: matches_Potential_PC_DC_Spec suggested X-match round matched: 31 (0.38 seconds)
-df_erp_to_match cases:  138286
-df_tru_to_match cases:  117362
-Amount of current matches:  31
-  
-
-=== MATCH ROUND 14: Self Learnt through other products with similar BOM ===
-
-✅ DEBUG 7a: Before ERP + REF merge
-Checking TRU for PC-008694 before ERP+TRU merge in Self Learnt through other products with similar BOM
-Empty DataFrame
-Columns: [CHILD_NM, CHILD_NM, mat_num]
-Index: []
-
-=== END DEBUG ===
-
-
-✅ DEBUG 7b: Before ERP+TRU merge
-Checking ERP for CMPNT_MATL_NUM = 30055433 in Self Learnt through other products with similar BOM
-Empty DataFrame
-Columns: [CMPNT_MATL_NUM, MATL_NUM, SRC_SYS_CD, PLNT_CD]
-Index: []
-Checking TRU for PC-008694 before ERP+TRU merge in Self Learnt through other products with similar BOM
-Empty DataFrame
-Columns: [CHILD_NM, CHILD_NM, mat_num, SRC_SYS_CD, PLNT_CD]
-Index: []
-
-✅ DEBUG 7c: After ERP+TRU merge
-Empty DataFrame
-Columns: [CMPNT_MATL_NUM, CHILD_NM, CMPNT_MATL_NUM, CHILD_NM, SRC_SYS_CD, PLNT_CD]
-Index: []
-❌ ALERT: PC-008694 did not match in this merge
-****** Adding 597 more matches based on SPEC_FLOW_CD
-14: Self Learnt through other products with similar BOM round matched: 2499 (1.2 seconds)
-df_erp_to_match cases:  136383
-df_tru_to_match cases:  114972
-Amount of current matches:  251384
-  
-------------------------------------------------------------
+    return matches, df_erp_to_match, df_tru_to_match, last_match_round + 1
