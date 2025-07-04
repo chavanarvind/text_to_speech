@@ -2,70 +2,58 @@
 target_cmpnt = '30055433'
 target_child = 'PC-008694'
 
-try:
-    debug_mode = (
-        df_erp_with_additional_id.get('CMPNT_MATL_NUM', pd.Series()).astype(str).eq(target_cmpnt).any() or
-        df_erp_with_additional_id.get('TRU_SPEC_ID', pd.Series()).astype(str).eq(target_child).any()
-    )
-except Exception as e:
-    debug_mode = False
-    print(f"⚠️ Could not evaluate debug_mode due to: {e}")
+print("\n=== DEBUG: Pre-merge diagnostics for CMPNT_MATL_NUM:", target_cmpnt, "and CHILD_NM:", target_child, "===")
 
-if debug_mode:
-    print("\n=== DEBUG: Pre-merge diagnostics for CMPNT_MATL_NUM:", target_cmpnt, "and CHILD_NM:", target_child, "===")
+print("\n✅ ERP DEBUG:")
+erp_debug = erp.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'")
+print(erp_debug)
 
-    # ✅ ERP DEBUG
-    if 'CMPNT_MATL_NUM' in df_erp_with_additional_id.columns:
-        erp_debug = df_erp_with_additional_id.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'")
-        print("\n✅ ERP DEBUG:")
-        print(erp_debug if not erp_debug.empty else "❌ No ERP record for CMPNT_MATL_NUM =", target_cmpnt)
-    else:
-        print("⚠️ ERP table missing CMPNT_MATL_NUM column.")
-        erp_debug = pd.DataFrame()
+print("\n✅ REF TABLE DEBUG:")
+ref_debug = reference_table.query(f"CMPNT_MATL_NUM == '{target_cmpnt}' and CHILD_NM == '{target_child}'")
+print(ref_debug)
 
-    # ✅ TRU DEBUG
-    if 'CHILD_NM' in tru.columns:
-        tru_debug = tru[TRU_MATCH_COLS].query(f"CHILD_NM == '{target_child}'")
-        print("\n✅ TRU DEBUG:")
-        print(tru_debug if not tru_debug.empty else "❌ No TRU record for CHILD_NM =", target_child)
-    else:
-        print("⚠️ TRU table missing CHILD_NM column.")
-        tru_debug = pd.DataFrame()
+print("\n✅ TRU DEBUG:")
+tru_debug = tru.query(f"CHILD_NM == '{target_child}'")
+print(tru_debug)
 
-    # ✅ REF DEBUG
-    if {'CMPNT_MATL_NUM', 'CHILD_NM'}.issubset(reference_table.columns):
-        ref_debug = reference_table.query(f"CMPNT_MATL_NUM == '{target_cmpnt}' and CHILD_NM == '{target_child}'")
-        print("\n✅ REF TABLE DEBUG:")
-        print(ref_debug if not ref_debug.empty else f"❌ No REF record for {target_cmpnt} -> {target_child}")
-    else:
-        print("⚠️ Reference table missing CMPNT_MATL_NUM and/or CHILD_NM columns.")
-        ref_debug = pd.DataFrame()
+# 🔄 Original merge (ERP + REF)
+df_erp_with_additional_id = erp[ERP_MATCH_COLS].merge(
+    reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
+    on=ERP_PART_ID,
+    how='inner'
+)
 
-    # ✅ Extra Checks if both ERP & TRU have data
-    if not erp_debug.empty and not tru_debug.empty:
-        print("\n🔎 Checking SRC_SYS_CD mismatches:")
-        print("ERP SRC_SYS_CD:", erp_debug.get('SRC_SYS_CD', pd.Series()).unique())
-        print("TRU SRC_SYS_CD:", tru_debug.get('SRC_SYS_CD', pd.Series()).unique())
+# 🟣 Debug after creating df_erp_with_additional_id
+print("\n=== DEBUG: Post-ERP+REF merge ===")
+merged_debug = df_erp_with_additional_id.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'")
+print(merged_debug)
 
-        print("\n🔎 Checking PLNT_CD mismatches:")
-        print("ERP PLNT_CD:", erp_debug.get('PLNT_CD', pd.Series()).unique())
-        print("TRU PLNT_CD:", tru_debug.get('PLNT_CD', pd.Series()).unique())
+# 🟣 Check system and plant codes
+print("\n🔎 SRC_SYS_CD in ERP:", erp_debug['SRC_SYS_CD'].unique())
+print("🔎 SRC_SYS_CD in TRU:", tru_debug['SRC_SYS_CD'].unique())
 
-        print("\n🔎 Checking CMPNT_MATL_NUM vs TRU_SPEC_ID key formatting:")
-        print("ERP CMPNT_MATL_NUM:", erp_debug.get('CMPNT_MATL_NUM', pd.Series()).unique())
-        print("TRU TRU_SPEC_ID:", tru_debug.get(TRU_SPEC_ID, pd.Series()).unique())
+print("\n🔎 PLNT_CD in ERP:", erp_debug['PLNT_CD'].unique())
+print("🔎 PLNT_CD in TRU:", tru_debug['PLNT_CD'].unique())
 
-        print("\n🔎 Datatypes for CMPNT_MATL_NUM and TRU_SPEC_ID:")
-        print("ERP CMPNT_MATL_NUM dtype:", erp_debug['CMPNT_MATL_NUM'].dtype)
-        print("TRU TRU_SPEC_ID dtype:", tru_debug[TRU_SPEC_ID].dtype)
+# 🟣 Compare IDs
+print("\n🔎 ERP_MAT_NUM values:", erp_debug['CMPNT_MATL_NUM'].unique())
+print("🔎 TRU_SPEC_ID values:", tru_debug[TRU_SPEC_ID].unique())
 
-        # Normalize IDs and compare
-        erp_ids = set(erp_debug['CMPNT_MATL_NUM'].astype(str).str.strip())
-        tru_ids = set(tru_debug[TRU_SPEC_ID].astype(str).str.strip())
-        print("\n🟣 Normalized ERP IDs:", erp_ids)
-        print("🟣 Normalized TRU IDs:", tru_ids)
-        print("✅ Overlap:", erp_ids.intersection(tru_ids))
-    else:
-        print("\n⚠️ Cannot check mismatches because one side is empty.")
+# 🟣 Normalize and compare IDs
+erp_ids = set(erp_debug['CMPNT_MATL_NUM'].astype(str).str.strip())
+tru_ids = set(tru_debug[TRU_SPEC_ID].astype(str).str.strip())
+print("\n🟣 Normalized ERP IDs:", erp_ids)
+print("🟣 Normalized TRU IDs:", tru_ids)
+print("✅ Overlap between ERP and TRU:", erp_ids.intersection(tru_ids))
 
-    print("\n=== END DEBUG ===\n")
+# 🟣 Debug after strict merge with TRU
+matched_per_id = df_erp_with_additional_id.merge(
+    tru[TRU_MATCH_COLS],
+    left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, TRU_SPEC_ID],
+    right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, TRU_SPEC_ID],
+    how='inner'
+)
+
+print("\n=== DEBUG: Post-strict merge with TRU ===")
+post_merge_debug = matched_per_id.query(f"CMPNT_MATL_NUM == '{target_cmpnt}'")
+print(post_merge_debug if not post_merge_debug.empty else "❌ Target record not found after strict merge")
