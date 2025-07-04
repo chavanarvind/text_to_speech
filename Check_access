@@ -1,19 +1,16 @@
-print("\n✅ DEBUG 1b: Checking ERP for TRU_MAT_NUM (padded & unpadded)")
+print("\n✅ STEP 5a: Checking TRU before merge with unique_combinations")
+print(tru.query("CHILD_NM == 'PC-008694'")[["CHILD_NM", TRU_MAT_NUM]])
 
-erp_matches = erp.query(
-    f"{ERP_MAT_NUM} == '510006535' or {ERP_MAT_NUM} == '000000000510006535'"
-)
-
-if not erp_matches.empty:
-    print("✅ Found TRU_MAT_NUM in ERP:")
-    print(erp_matches[[ERP_MAT_NUM, 'SRC_SYS_CD', 'PLNT_CD']])
-else:
+print("\n✅ STEP 5b: Checking ERP for TRU_MAT_NUM (padded & unpadded)")
+erp_matches = erp.query(f"{ERP_MAT_NUM} == '510006535' or {ERP_MAT_NUM} == '000000000510006535'")
+print(erp_matches[[ERP_MAT_NUM, 'SRC_SYS_CD', 'PLNT_CD']])
+if erp_matches.empty:
     print("❌ ERP does NOT contain TRU_MAT_NUM (padded or unpadded)")
+else:
+    print("✅ Found TRU_MAT_NUM in ERP")
 
 
-
- Add this before unique_combinations = ...
-
-
-print("\n✅ DEBUG 1b: ERP columns at this point:")
-print(erp.columns.tolist())
+print("\n✅ STEP 6: After tru.merge(unique_combinations)")
+print(tru.query("CHILD_NM == 'PC-008694'"))
+if tru.query("CHILD_NM == 'PC-008694'").empty:
+    print("❌ PC-008694 DROPPED during merge with unique_combinations")
