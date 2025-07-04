@@ -1,102 +1,65 @@
-Here’s where you need to check for the CHILD_NM:
+print("\n🔵 BEFORE ingest_data_and_prepare_examples")
+# tru is not available yet
 
-Initial ingestion:
+erp, tru, erp_discarded, tru_discarded, run_params, tru_no_erp, tru_off_specs_no_common, bundles = ingest_data_and_prepare_examples(...)
 
-python
-Copy
-Edit
-erp, tru, ... = ingest_data_and_prepare_examples(...)
-🔥 Add:
-
-python
-Copy
-Edit
-print("Step: After ingest_data_and_prepare_examples")
+print("\n🟢 AFTER ingest_data_and_prepare_examples")
 print(tru.query("CHILD_NM == 'PC-008694'"))
-After preprocessing (raw material IDs):
 
-python
-Copy
-Edit
+
+
+print("\n🔵 BEFORE format_raw_material_id")
+print(tru.query("CHILD_NM == 'PC-008694'"))
+
 erp, tru = format_raw_material_id(erp, tru)
-🔥 Add:
 
-python
-Copy
-Edit
-print("Step: After format_raw_material_id")
+print("\n🟢 AFTER format_raw_material_id")
 print(tru.query("CHILD_NM == 'PC-008694'"))
-After text preprocessing:
 
-python
-Copy
-Edit
+
+
+
+print("\n🔵 BEFORE preprocessed_text_description")
+print(tru.query("CHILD_NM == 'PC-008694'"))
+
 erp, tru = preprocessed_text_description(erp, tru)
-🔥 Add:
 
-python
-Copy
-Edit
-print("Step: After preprocessed_text_description")
+print("\n🟢 AFTER preprocessed_text_description")
 print(tru.query("CHILD_NM == 'PC-008694'"))
-After features creation (called twice):
 
-python
-Copy
-Edit
+
+print("\n🔵 BEFORE create_features (tru)")
+print(tru.query("CHILD_NM == 'PC-008694'"))
+
 tru = create_features(tru, 'tru')
-🔥 Add after each call:
 
-python
-Copy
-Edit
-print("Step: After create_features (tru)")
+print("\n🟢 AFTER create_features (tru)")
 print(tru.query("CHILD_NM == 'PC-008694'"))
-After embeddings:
 
-python
-Copy
-Edit
+
+print("\n🔵 BEFORE create_features (tru_trade_names)")
+print(tru.query("CHILD_NM == 'PC-008694'"))
+
+tru = create_features(tru, 'tru_trade_names')
+
+print("\n🟢 AFTER create_features (tru_trade_names)")
+print(tru.query("CHILD_NM == 'PC-008694'"))
+
+
+print("\n🔵 BEFORE get_or_calculate_embeddings")
+print(tru.query("CHILD_NM == 'PC-008694'"))
+
 erp, tru = get_or_calculate_embeddings(...)
-🔥 Add:
 
-python
-Copy
-Edit
-print("Step: After get_or_calculate_embeddings")
+print("\n🟢 AFTER get_or_calculate_embeddings")
 print(tru.query("CHILD_NM == 'PC-008694'"))
-After tru merge for expansion:
 
-python
-Copy
-Edit
-tru = tru.merge(unique_combinations, ...)
-🔥 Add:
-
-python
-Copy
-Edit
-print("Step: After tru.merge(unique_combinations)")
+print("\n🔵 BEFORE tru.merge(unique_combinations)")
 print(tru.query("CHILD_NM == 'PC-008694'"))
-Before every call to match_by_reference_table:
-Each call like:
 
-python
-Copy
-Edit
-matches_per_hfb, erp_to_match, tru_to_match, ... = match_by_reference_table(...)
-🔥 Add before call:
+tru = tru.merge(unique_combinations, left_on=[TRU_MAT_NUM], right_on=[ERP_MAT_NUM], how='inner')
+tru.rename(columns={f'{ERP_MAT_NUM}_original': f'{ERP_MAT_NUM}_original_tru_ref'}, inplace=True)
 
-python
-Copy
-Edit
-print("Step: Before match_by_reference_table")
-print(tru_to_match.query("CHILD_NM == 'PC-008694'"))
-Inside match_by_reference_table:
-You already added debug prints, but you can also check:
-
-python
-Copy
-Edit
-print("\nDEBUG: TRU at entry of match_by_reference_table")
+print("\n🟢 AFTER tru.merge(unique_combinations)")
 print(tru.query("CHILD_NM == 'PC-008694'"))
+
