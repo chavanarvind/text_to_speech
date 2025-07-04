@@ -1,9 +1,20 @@
-df_erp_with_additional_id = erp[ERP_MATCH_COLS].merge(
-    reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
-    on=ERP_PART_ID,
-    how='inner'
-)
-
-print("\n✅ DEBUG 7a: Before ERP + REF merge")
+print("\n✅ DEBUG 7b: Before ERP+TRU merge")
+print(f"Checking ERP for CMPNT_MATL_NUM = 30055433 in {round_name}")
+print(df_erp_with_additional_id.query("CMPNT_MATL_NUM == '30055433'")[[
+    ERP_PART_ID, ERP_MAT_NUM, 'SRC_SYS_CD', 'PLNT_CD'
+]])
 print(f"Checking TRU for PC-008694 before ERP+TRU merge in {round_name}")
-print(tru.query("CHILD_NM == 'PC-008694'")[["CHILD_NM", "TRU_SPEC_ID", TRU_MAT_NUM]])
+print(tru.query("CHILD_NM == 'PC-008694'")[[
+    "CHILD_NM", "TRU_SPEC_ID", TRU_MAT_NUM, "SRC_SYS_CD", "PLNT_CD"
+]])
+
+
+print("\n✅ DEBUG 7c: After ERP+TRU merge")
+print(matched_per_id.query("TRU_SPEC_ID == 'PC-008694' or CMPNT_MATL_NUM == '30055433'")[[
+    ERP_PART_ID, TRU_SPEC_ID, "CMPNT_MATL_NUM", "CHILD_NM", "SRC_SYS_CD", "PLNT_CD"
+]])
+
+if matched_per_id.query("TRU_SPEC_ID == 'PC-008694'").empty:
+    print("❌ ALERT: PC-008694 did not match in this merge")
+else:
+    print("✅ SUCCESS: PC-008694 matched in this merge")
