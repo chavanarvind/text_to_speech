@@ -1,7 +1,7 @@
-print("\n✅ DEBUG 1: Checking TRU before adding SRC_SYS_CD and PLNT_CD")
+print("\n✅ DEBUG 2: After tru.merge(unique_combinations)")
 print(tru.query("CHILD_NM == 'PC-008694'")[[
-    "TRU_SPEC_ID", "CHILD_NM", TRU_MAT_NUM
+    "TRU_SPEC_ID", "CHILD_NM", "SRC_SYS_CD", "PLNT_CD", TRU_MAT_NUM
 ]])
 
-print("\n✅ DEBUG 1a: Checking ERP for TRU_MAT_NUM in unique_combinations")
-print(unique_combinations.query(f"{ERP_MAT_NUM} == '510006535'"))
+if tru.query("CHILD_NM == 'PC-008694'").empty:
+    print("\n❌ ALERT: PC-008694 was DROPPED during merge with unique_combinations!")
