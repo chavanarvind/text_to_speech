@@ -1,2 +1,15 @@
-current_full_matches = matches_NLP_list_ERP
-current_full_matches = pd.concat([current_full_matches, matches_NLP_list_ERP], ignore_index=True)
+check_duplicates(matches_NLP_list_ERP)
+print(matches_NLP_list_ERP)
+
+# ✅ Save NLP_list_ERP matches to user_logs folder
+import os
+
+# Get the log folder path
+log_folder = os.path.join(os.getcwd(), "user_logs")
+os.makedirs(log_folder, exist_ok=True)
+
+# Save CSV
+nlp_list_matches_path = os.path.join(log_folder, "matches_NLP_list_ERP.csv")
+matches_NLP_list_ERP.to_csv(nlp_list_matches_path, index=False)
+
+print(f"Saved NLP_list_ERP matches to: {nlp_list_matches_path}")
