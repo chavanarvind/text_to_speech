@@ -1,3 +1,2 @@
-current_full_matches = matches_per_id
-
-current_full_matches = pd.concat([current_full_matches, matches_per_id], ignore_index=True)
+current_full_matches = matches_NLP_list_ERP
+current_full_matches = pd.concat([current_full_matches, matches_NLP_list_ERP], ignore_index=True)
