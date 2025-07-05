@@ -1,10 +1,3 @@
-Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
-  File "cross_hound/matcher.py", line 1526, in <module>
-    main(input_dir=args.get('input_dir'),
-  File "cross_hound/matcher.py", line 1351, in main
-    matched, unmatched = full_matching_routine(data_version, db_style, device,
-  File "cross_hound/matcher.py", line 863, in full_matching_routine
-    current_full_matches = pd.concat([current_full_matches, matches_per_id], ignore_index=True)
-UnboundLocalError: local variable 'current_full_matches' referenced before assignment
+current_full_matches = matches_per_id
 
-
+current_full_matches = pd.concat([current_full_matches, matches_per_id], ignore_index=True)
