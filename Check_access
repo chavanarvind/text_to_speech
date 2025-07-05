@@ -1,36 +1,51 @@
-##############NLP_LIST_ERP########
-    print('-' * 60)
-    NLP_list_ERP_folder = os.path.dirname(os.path.realpath(__file__))
-    NLP_list_ERP_folder = os.path.abspath(os.path.join(NLP_list_ERP_folder, os.pardir))
-    xmatches_NLP_list_ERP = pd.read_csv(f'{NLP_list_ERP_folder}/reference_tables/NLP_list_ERP.csv',encoding='latin1',dtype='str')
-    #xmatches_EPR_priority_confidence=xmatches_EPR_priority_confidence.astype(str)
-    print('reading xmatches_NLP_list_ERP file from folder ')
-    print(xmatches_NLP_list_ERP)
-    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP.merge(
-        erp[['text_for_matching_erp', ERP_PART_ID]].drop_duplicates(),
-        how='left',
-        on=ERP_PART_ID)
-    print('mapping using ERP PART ID')
-    print(xmatches_NLP_list_ERP_with_text)
-    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text.merge(
-        tru[['text_for_matching_tru', TRU_SPEC_ID]].drop_duplicates(),
-        how='left',
-        on=TRU_SPEC_ID)
-    print('mapping using TRU_SPEC_ID')
-    print(xmatches_NLP_list_ERP_with_text)
-    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text[[ERP_PART_ID,
-                                                             TRU_SPEC_ID,
-                                                             'text_for_matching_erp',
-                                                             'text_for_matching_tru']]
-    print('xmatches_NLP_list_ERP_with_text s1',xmatches_NLP_list_ERP_with_text)
-    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text.drop_duplicates()
-    print('xmatches_NLP_list_ERP_with_text s2',xmatches_NLP_list_ERP_with_text)
-    matches_NLP_list_ERP, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
-                                                                                           tru_to_match,
-                                                                                           xmatches_NLP_list_ERP_with_text,
-                                                                                           previous_round,
-                                                                                           'matches_NLP_list_ERP suggested X-match',
-                                                                                           bundles)
-    check_duplicates(matches_NLP_list_ERP)
-    print(matches_NLP_list_ERP)
+previous_round = 0
+print('-' * 60)
+matches_per_id, erp_to_match, tru_to_match, previous_round = match_erp_part_vs_rm_spec(
+    erp, tru, previous_round, bundles
+)
 
+
+# 🟢 Start with NLP_list_ERP matching
+print('-' * 60)
+NLP_list_ERP_folder = os.path.dirname(os.path.realpath(__file__))
+NLP_list_ERP_folder = os.path.abspath(os.path.join(NLP_list_ERP_folder, os.pardir))
+xmatches_NLP_list_ERP = pd.read_csv(
+    f'{NLP_list_ERP_folder}/reference_tables/NLP_list_ERP.csv', 
+    encoding='latin1', dtype='str'
+)
+print('reading xmatches_NLP_list_ERP file from folder')
+print(xmatches_NLP_list_ERP)
+
+xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP.merge(
+    erp[['text_for_matching_erp', ERP_PART_ID]].drop_duplicates(),
+    how='left',
+    on=ERP_PART_ID
+)
+print('mapping using ERP PART ID')
+print(xmatches_NLP_list_ERP_with_text)
+
+xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text.merge(
+    tru[['text_for_matching_tru', TRU_SPEC_ID]].drop_duplicates(),
+    how='left',
+    on=TRU_SPEC_ID
+)
+print('mapping using TRU_SPEC_ID')
+print(xmatches_NLP_list_ERP_with_text)
+
+xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text[
+    [ERP_PART_ID, TRU_SPEC_ID, 'text_for_matching_erp', 'text_for_matching_tru']
+].drop_duplicates()
+
+matches_NLP_list_ERP, erp_to_match, tru_to_match, previous_round = match_by_reference_table(
+    erp,
+    tru,
+    xmatches_NLP_list_ERP_with_text,
+    previous_round,
+    'matches_NLP_list_ERP suggested X-match',
+    bundles
+)
+check_duplicates(matches_NLP_list_ERP)
+print(matches_NLP_list_ERP)
+
+# 🟢 Set matches_NLP_list_ERP as initial matches
+current_full_matches = matches_NLP_list_ERP
