@@ -1345,6 +1345,7 @@ def main(input_dir,
         #new missing combination
         # 
         #
+
         # Step 3: Include extra TRU specs not in tru_discarded
         tru_mat_ids_full = set(tru[TRU_MAT_NUM])
         extra_common_ids = all_erp_codes.intersection(tru_mat_ids_full)
