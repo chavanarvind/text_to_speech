@@ -1,2 +1,20 @@
-CMPNT_MATL_NUM	CMPNT_MATL_DESC	CHILD_NM
-668080	et.fr.bedtime bath 500 uk	PC-0000253
+if df_id.isin(['668080']).any():
+    print("[DEBUG] 668080 found in ERP dataset during off-spec check.")
+
+if df_desc[df_id == '668080'].any():
+    print(f"[DEBUG] 668080 Description: {df_desc[df_id == '668080'].iloc[0]}")
+
+if df_id.isin(['668080']).any() and match_by_id[df_id == '668080'].any():
+    print("[DEBUG] 668080 was classified as off-spec by ID match.")
+elif df_id.isin(['668080']).any():
+    print("[DEBUG] 668080 was NOT classified as off-spec.")
+
+
+
+matches_per_id, erp_to_match, tru_to_match, previous_round = match_erp_part_vs_rm_spec(...)
+if '668080' in matches_per_id['ERP_PART_ID'].values and \
+   'PC-0000253' in matches_per_id['TRU_SPEC_ID'].values:
+    print("[DEBUG] Pair 668080 + PC-0000253 matched in main round (ID spec match).")
+else:
+    print("[DEBUG] Pair 668080 + PC-0000253 NOT found in main round (ID spec match).")
+
