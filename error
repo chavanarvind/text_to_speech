@@ -1,6 +1,12 @@
-matched, unmatched = full_matching_routine(
-    data_version, db_style, device,
-    embeddings_save_dir, erp, model_type,
-    sentence_transformer_dir, tru, use_azure_dataset, bundles, output_dir
-)
-unmatched['Matching Reason'] = 'Not match in any round'
+Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
+  File "cross_hound/matcher.py", line 1487, in <module>
+    main(input_dir=args.get('input_dir'),
+  File "cross_hound/matcher.py", line 1303, in main
+    erp, tru, erp_discarded, tru_discarded, run_params, tru_no_erp,tru_off_specs_no_common, bundles = ingest_data_and_prepare_examples(
+  File "/mnt/azureml/cr/j/0c5a0ec080ae4c189771d43ac8296765/exe/wd/cross_hound/data_ingestion.py", line 605, in ingest_data_and_prepare_examples
+    erp_discarded['key_prediction'] = erp_discarded['key_erp'] + '_' + erp_discarded['key_tru']
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/frame.py", line 3760, in __getitem__
+    indexer = self.columns.get_loc(key)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 3654, in get_loc
+    raise KeyError(key) from err
+KeyError: 'key_tru'
