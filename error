@@ -1,4 +1,4 @@
-# ✅ Filter erp_discarded and tru_discarded using rejections
+# ✅ Filter erp_discarded and tru_discarded for rejections
 fortrea_folder = os.path.dirname(os.path.realpath(__file__))
 fortrea_folder = os.path.abspath(os.path.join(fortrea_folder, os.pardir))
 known_rejections_df = pd.read_csv(f'{fortrea_folder}/reference_tables/rejections_fortrea.csv')
