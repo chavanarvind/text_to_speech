@@ -1,20 +1,8 @@
-if df_id.isin(['668080']).any():
-    print("[DEBUG] 668080 found in ERP dataset during off-spec check.")
+rejected_idx = collected.key_prediction.isin(known_rejections)
 
-if df_desc[df_id == '668080'].any():
-    print(f"[DEBUG] 668080 Description: {df_desc[df_id == '668080'].iloc[0]}")
-
-if df_id.isin(['668080']).any() and match_by_id[df_id == '668080'].any():
-    print("[DEBUG] 668080 was classified as off-spec by ID match.")
-elif df_id.isin(['668080']).any():
-    print("[DEBUG] 668080 was NOT classified as off-spec.")
-
-
-
-matches_per_id, erp_to_match, tru_to_match, previous_round = match_erp_part_vs_rm_spec(...)
-if '668080' in matches_per_id['ERP_PART_ID'].values and \
-   'PC-0000253' in matches_per_id['TRU_SPEC_ID'].values:
-    print("[DEBUG] Pair 668080 + PC-0000253 matched in main round (ID spec match).")
-else:
-    print("[DEBUG] Pair 668080 + PC-0000253 NOT found in main round (ID spec match).")
-
+if '668080_PC-0000253' in collected['key_prediction'].values:
+    print("[DEBUG] Pair 668080 + PC-0000253 found in matches BEFORE rejection check.")
+    if '668080_PC-0000253' in known_rejections:
+        print("[DEBUG] Pair 668080 + PC-0000253 IS in rejection file. Will be rejected.")
+    else:
+        print("[DEBUG] Pair 668080 + PC-0000253 NOT in rejection file. Will stay matched.")
