@@ -1,12 +1,6 @@
-# ✅ Filter erp_discarded and tru_discarded for rejections
-fortrea_folder = os.path.dirname(os.path.realpath(__file__))
-fortrea_folder = os.path.abspath(os.path.join(fortrea_folder, os.pardir))
-known_rejections_df = pd.read_csv(f'{fortrea_folder}/reference_tables/rejections_fortrea.csv')
-add_key_prediction(known_rejections_df)
-known_rejections = set(known_rejections_df['key_prediction'].unique())
-
-erp_discarded['key_prediction'] = erp_discarded['key_erp'] + '_' + erp_discarded['key_tru']
-tru_discarded['key_prediction'] = tru_discarded['key_tru'] + '_' + tru_discarded['key_erp']
-
-erp_discarded = erp_discarded[~erp_discarded['key_prediction'].isin(known_rejections)].copy()
-tru_discarded = tru_discarded[~tru_discarded['key_prediction'].isin(known_rejections)].copy()
+matched, unmatched = full_matching_routine(
+    data_version, db_style, device,
+    embeddings_save_dir, erp, model_type,
+    sentence_transformer_dir, tru, use_azure_dataset, bundles, output_dir
+)
+unmatched['Matching Reason'] = 'Not match in any round'
