@@ -1,16 +1,38 @@
-erp, tru, erp_discarded, tru_discarded, run_params, tru_no_erp, tru_off_specs_no_common, bundles = ingest_data_and_prepare_examples(
-    input_dir,
-    erp_im_dataset_name,
-    erp_em_dataset_name,
-    tru_dataset_name,
-    trade_names_dataset_name,
-    run_params,
-    output_dir
+matched_off_specs, unmatched_off_specs = full_matching_routine(
+    data_version, db_style, device,
+    embeddings_save_dir, erp_discarded_common, model_type,
+    sentence_transformer_dir, tru_discarded_common,
+    use_azure_dataset, bundles, output_dir
+)
+matched_off_specs['Matching Reason'] = 'Off Spec Match'
+unmatched_off_specs['Matching Reason'] = 'Off Spec Non Match'
+
+
+matched_off_specs, unmatched_off_specs = full_matching_routine(
+    data_version, db_style, device,
+    embeddings_save_dir, erp_discarded_common, model_type,
+    sentence_transformer_dir, tru_discarded_common,
+    use_azure_dataset, bundles, output_dir
 )
 
-# ✅ Load known rejections here (available for both main and off-spec matching)
-fortrea_folder = os.path.dirname(os.path.realpath(__file__))
-fortrea_folder = os.path.abspath(os.path.join(fortrea_folder, os.pardir))
-known_rejections_df = pd.read_csv(f'{fortrea_folder}/reference_tables/rejections_fortrea.csv')
-add_key_prediction(known_rejections_df)
-known_rejections = list(known_rejections_df['key_prediction'].unique())
+#  Apply rejection logic to off-spec matches
+add_key_prediction(matched_off_specs)  # Generate key_prediction for off-spec matches
+rejected_idx = matched_off_specs.key_prediction.isin(known_rejections)
+
+# Split matches into rejected and non-rejected
+rejected_off_specs = matched_off_specs[rejected_idx].copy()
+non_rejected_off_specs = matched_off_specs[~rejected_idx].copy()
+
+#  Mark rejected matches as Off Spec Non Match
+rejected_off_specs['Matching Reason'] = 'Off Spec Non Match (Rejected)'
+rejected_off_specs['is_matched'] = False
+
+#  Mark valid matches as Off Spec Match
+non_rejected_off_specs['Matching Reason'] = 'Off Spec Match'
+non_rejected_off_specs['is_matched'] = True
+
+# Add rejected matches to unmatched_off_specs
+unmatched_off_specs = pd.concat([unmatched_off_specs, rejected_off_specs], ignore_index=True)
+
+#  Update matched_off_specs to exclude rejected ones
+matched_off_specs = non_rejected_off_specs
