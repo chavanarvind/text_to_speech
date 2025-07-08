@@ -1,42 +1,24 @@
-    # ✅ Add keys to discarded datasets (merging ERP & TRU like in matching rounds)
-    print("\n[PATCH] Merging ERP_DISCARDED and TRU_DISCARDED to create keys")
+Traceback (most recent call last):
+  File "cross_hound/matcher.py", line 1368, in main
+    matched = pd.concat([matched, matched_off_specs], ignore_index=True)
+UnboundLocalError: local variable 'matched' referenced before assignment
 
-    # Merge discarded ERP and TRU to simulate matches
-    discarded_matches = (erp_discarded[ERP_COLS + ['key_erp']]
-                         .merge(tru_discarded[TRU_COLS + ['key_tru']],
-                                left_on=[ERP_MAT_NUM],
-                                right_on=[TRU_MAT_NUM],
-                                how='inner'))
+Cleaning up all outstanding Run operations, waiting 300.0 seconds
+1 items cleaning up...
+Cleanup took 0.1818535327911377 seconds
+Traceback (most recent call last):
+  File "cross_hound/matcher.py", line 1368, in main
+    matched = pd.concat([matched, matched_off_specs], ignore_index=True)
+UnboundLocalError: local variable 'matched' referenced before assignment
 
-    if not discarded_matches.empty:
-        discarded_matches['key_prediction'] = discarded_matches['key_erp'] + '_' + discarded_matches['key_tru']
-        print(f"[INFO] Created {len(discarded_matches)} ERP–TRU pairs in discarded data")
-    else:
-        print("[INFO] No ERP–TRU pairs found in discarded data")
+During handling of the above exception, another exception occurred:
 
-    # Add dummy key_prediction for rows with no match
-    erp_discarded = erp_discarded.copy()
-    tru_discarded = tru_discarded.copy()
+Traceback (most recent call last):
+  File "cross_hound/matcher.py", line 1487, in <module>
+    main(input_dir=args.get('input_dir'),
+  File "cross_hound/matcher.py", line 1411, in main
+    exit(1)
+  File "/opt/conda/envs/ptca/lib/python3.8/_sitebuiltins.py", line 26, in __call__
+    raise SystemExit(code)
+SystemExit: 1
 
-    if 'key_tru' not in erp_discarded.columns:
-        erp_discarded['key_tru'] = 'NO_TRU'
-    if 'key_erp' not in tru_discarded.columns:
-        tru_discarded['key_erp'] = 'NO_ERP'
-
-    erp_discarded['key_prediction'] = erp_discarded['key_erp'] + '_' + erp_discarded['key_tru']
-    tru_discarded['key_prediction'] = tru_discarded['key_erp'] + '_' + tru_discarded['key_tru']
-
-    # ✅ Filter out known rejections from discarded data
-    fortrea_folder = os.path.dirname(os.path.realpath(__file__))
-    fortrea_folder = os.path.abspath(os.path.join(fortrea_folder, os.pardir))
-    known_rejections_df = pd.read_csv(f'{fortrea_folder}/reference_tables/rejections_fortrea.csv')
-    add_key_prediction(known_rejections_df)
-    known_rejections = set(known_rejections_df['key_prediction'].unique())
-
-    erp_discarded = erp_discarded[~erp_discarded['key_prediction'].isin(known_rejections)].copy()
-    tru_discarded = tru_discarded[~tru_discarded['key_prediction'].isin(known_rejections)].copy()
-
-    print(f"[INFO] ERP_DISCARDED size after rejection filter: {len(erp_discarded)}")
-    print(f"[INFO] TRU_DISCARDED size after rejection filter: {len(tru_discarded)}")
-
-    return erp, tru, erp_discarded, tru_discarded, run_params, tru_no_common, tru_off_specs_no_common, bundles
