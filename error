@@ -1,27 +1,16 @@
-if round_name == 'matches_NLP_list_ERP suggested X-match':
-    # Print ERP for this component
-    print("\n=== ERP BEFORE MERGE ===")
-    print(erp.query("CMPNT_MATL_NUM == '30055433'"))
+full_matching_routine()
+erp, tru = format_raw_material_id(erp, tru)
+erp, tru = preprocessed_text_description(erp, tru)
+# ✅ Load known rejections
+fortrea_folder = os.path.dirname(os.path.realpath(__file__))
+fortrea_folder = os.path.abspath(os.path.join(fortrea_folder, os.pardir))
+known_rejections_df = pd.read_csv(f'{fortrea_folder}/reference_tables/rejections_fortrea.csv')
+add_key_prediction(known_rejections_df)
+known_rejections = set(known_rejections_df['key_prediction'].unique())
 
-    # Print Reference Table for this component
-    print("\n=== REFERENCE TABLE BEFORE MERGE ===")
-    print(reference_table.query("CMPNT_MATL_NUM == '30055433' and CHILD_NM == 'PC-008694'"))
+# ✅ Filter ERP and TRU discarded records BEFORE off-spec matching
+erp_discarded['key_prediction'] = erp_discarded['key_erp'] + '_' + erp_discarded['key_tru']
+tru_discarded['key_prediction'] = tru_discarded['key_tru'] + '_' + tru_discarded['key_erp']
 
-    # First Merge: ERP + Reference Table
-    merged_erp_ref = erp.merge(reference_table, on=["CMPNT_MATL_NUM"], how="left")
-    print("\n=== AFTER ERP + REFERENCE MERGE ===")
-    print(merged_erp_ref.query("CMPNT_MATL_NUM == '30055433'"))
-
-    # Print TRU for this child
-    print("\n=== TRU BEFORE MERGE ===")
-    print(tru.query("CHILD_NM == 'PC-008694'"))
-
-    # Second Merge: Merged ERP + TRU
-    merged_all = merged_erp_ref.merge(tru, on=["CHILD_NM"], how="left")
-    print("\n=== AFTER MERGE WITH TRU ===")
-    print(merged_all.query("CMPNT_MATL_NUM == '30055433'"))
-
-    # Optional: If any filtering happens after merge
-    filtered = merged_all  # (replace this with the actual filtering step in your code)
-    print("\n=== AFTER FILTERING (IF ANY) ===")
-    print(filtered.query("CMPNT_MATL_NUM == '30055433'"))
+erp_discarded = erp_discarded[~erp_discarded['key_prediction'].isin(known_rejections)].copy()
+tru_discarded = tru_discarded[~tru_discarded['key_prediction'].isin(known_rejections)].copy()
