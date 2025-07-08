@@ -1,38 +1,60 @@
-matched_off_specs, unmatched_off_specs = full_matching_routine(
-    data_version, db_style, device,
-    embeddings_save_dir, erp_discarded_common, model_type,
-    sentence_transformer_dir, tru_discarded_common,
-    use_azure_dataset, bundles, output_dir
-)
-matched_off_specs['Matching Reason'] = 'Off Spec Match'
-unmatched_off_specs['Matching Reason'] = 'Off Spec Non Match'
+# Match off-specs
+    
+    try:
+        print('')
+        print('#' * 60)
+        print('Starting off spec matching')
+        print('#' * 60)
+        # STEP 1: Calculate all ERP-only codes BEFORE filtering
+        all_erp_codes = set(erp_discarded[ERP_MAT_NUM])
+        all_tru_codes = set(tru_discarded[TRU_MAT_NUM])
+        common_codes = all_erp_codes.intersection(all_tru_codes)
+        erp_only_codes = all_erp_codes - all_tru_codes
+        print('Common number of codes in both sources off-specs:', len(common_codes))
+        print('ERP-only codes:', erp_only_codes)
+        erp_discarded_common = erp_discarded[erp_discarded[ERP_MAT_NUM].isin(common_codes)].reset_index(drop=True)
+        tru_discarded_common = tru_discarded[tru_discarded[TRU_MAT_NUM].isin(common_codes)].reset_index(drop=True)
+        tru_no_common = tru_off_specs_no_common
+        #new missing combination
+        # 
+        #
+        # Step 3: Include extra TRU specs not in tru_discarded
+        tru_mat_ids_full = set(tru[TRU_MAT_NUM])
+        extra_common_ids = all_erp_codes.intersection(tru_mat_ids_full)
+        extra_tru_candidates = tru[tru[TRU_MAT_NUM].isin(extra_common_ids) & ~tru[TRU_SPEC_ID].isin(tru_discarded[TRU_SPEC_ID])].copy()
+        if not extra_tru_candidates.empty:
+            print(f'Adding {len(extra_tru_candidates)} extra TRU specs to tru_discarded_common for off-spec match')
+            #tru_discarded_common = pd.concat([tru_discarded_common, extra_tru_candidates], ignore_index=True)
+            #tru_discarded_common.drop_duplicates(subset=[TRU_SPEC_ID], inplace=True)
+        # STEP 4: Perform full matching routine
+        matched_off_specs, unmatched_off_specs = full_matching_routine(
+        data_version, db_style, device,
+        embeddings_save_dir, erp_discarded_common, model_type,
+        sentence_transformer_dir, tru_discarded_common,
+        use_azure_dataset, bundles, output_dir)
 
+        #  Apply rejection logic to off-spec matches
+        add_key_prediction(matched_off_specs)  # Generate key_prediction for off-spec matches
+        rejected_idx = matched_off_specs.key_prediction.isin(known_rejections)
 
-matched_off_specs, unmatched_off_specs = full_matching_routine(
-    data_version, db_style, device,
-    embeddings_save_dir, erp_discarded_common, model_type,
-    sentence_transformer_dir, tru_discarded_common,
-    use_azure_dataset, bundles, output_dir
-)
+        # Split matches into rejected and non-rejected
+        rejected_off_specs = matched_off_specs[rejected_idx].copy()
+        non_rejected_off_specs = matched_off_specs[~rejected_idx].copy()
 
-#  Apply rejection logic to off-spec matches
-add_key_prediction(matched_off_specs)  # Generate key_prediction for off-spec matches
-rejected_idx = matched_off_specs.key_prediction.isin(known_rejections)
+       #  Mark rejected matches as Off Spec Non Match
+        rejected_off_specs['Matching Reason'] = 'Off Spec Non Match (Rejected)'
+        rejected_off_specs['is_matched'] = False
 
-# Split matches into rejected and non-rejected
-rejected_off_specs = matched_off_specs[rejected_idx].copy()
-non_rejected_off_specs = matched_off_specs[~rejected_idx].copy()
+       #  Mark valid matches as Off Spec Match
+        non_rejected_off_specs['Matching Reason'] = 'Off Spec Match'
+        non_rejected_off_specs['is_matched'] = True
 
-#  Mark rejected matches as Off Spec Non Match
-rejected_off_specs['Matching Reason'] = 'Off Spec Non Match (Rejected)'
-rejected_off_specs['is_matched'] = False
+       # Add rejected matches to unmatched_off_specs
+        unmatched_off_specs = pd.concat([unmatched_off_specs, rejected_off_specs], ignore_index=True)
 
-#  Mark valid matches as Off Spec Match
-non_rejected_off_specs['Matching Reason'] = 'Off Spec Match'
-non_rejected_off_specs['is_matched'] = True
+       #  Update matched_off_specs to exclude rejected ones
+        matched_off_specs = non_rejected_off_specs
 
-# Add rejected matches to unmatched_off_specs
-unmatched_off_specs = pd.concat([unmatched_off_specs, rejected_off_specs], ignore_index=True)
-
-#  Update matched_off_specs to exclude rejected ones
-matched_off_specs = non_rejected_off_specs
+        matched = pd.concat([matched, matched_off_specs], ignore_index=True)
+        print('matched_off_specs_dataset',matched_off_specs)
+        unmatched = pd.concat([unmatched, unmatched_off_specs], ignore_index=True)
