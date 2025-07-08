@@ -1,24 +1,8 @@
-Traceback (most recent call last):
-  File "cross_hound/matcher.py", line 1368, in main
-    matched = pd.concat([matched, matched_off_specs], ignore_index=True)
-UnboundLocalError: local variable 'matched' referenced before assignment
+# matched, unmatched = full_matching_routine(data_version, db_style, device,
+#                                            embeddings_save_dir, erp, model_type,
+#                                            sentence_transformer_dir, tru, use_azure_dataset, bundles, output_dir)
+# unmatched['Matching Reason'] = 'Not match in any round'
 
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.1818535327911377 seconds
-Traceback (most recent call last):
-  File "cross_hound/matcher.py", line 1368, in main
-    matched = pd.concat([matched, matched_off_specs], ignore_index=True)
-UnboundLocalError: local variable 'matched' referenced before assignment
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "cross_hound/matcher.py", line 1487, in <module>
-    main(input_dir=args.get('input_dir'),
-  File "cross_hound/matcher.py", line 1411, in main
-    exit(1)
-  File "/opt/conda/envs/ptca/lib/python3.8/_sitebuiltins.py", line 26, in __call__
-    raise SystemExit(code)
-SystemExit: 1
-
+# ✅ Patch: Initialize matched and unmatched to empty DataFrames if full_matching_routine is skipped
+matched = pd.DataFrame()
+unmatched = pd.DataFrame()
