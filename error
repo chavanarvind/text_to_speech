@@ -1,34 +1,17 @@
-def handle_off_spec_rejections(matched_df: pd.DataFrame, rejection_df: pd.DataFrame, debug_cmpnt_num=None, debug_child_nm=None) -> pd.DataFrame:
+matched, unmatched = full_matching_routine(
+    data_version, db_style, device,
+    embeddings_save_dir, erp, model_type,
+    sentence_transformer_dir, tru,
+    use_azure_dataset, bundles, output_dir
+)
 
-    print("Running Off Spec Rejection Check...")
+#  Adjust Off Spec Matches that are in Rejection List
+matched = handle_off_spec_rejections(
+    matched,
+    rejection_df,
+    debug_cmpnt_num="665880",
+    debug_child_nm="PC-0000249"  # Add debug tracing for this record
+)
 
-    # Create a key for easy lookup
-    matched_df['MATCH_KEY'] = matched_df['CMPNT_MATL_NUM'].astype(str) + "_" + matched_df['CHILD_NM'].astype(str)
-    rejection_df['REJECTION_KEY'] = rejection_df['CMPNT_MATL_NUM'].astype(str) + "_" + rejection_df['CHILD_NM'].astype(str)
-
-    # Build rejection set
-    rejection_set = set(rejection_df['REJECTION_KEY'].unique())
-
-    # Apply logic to update rows
-    def update_row(row):
-        if row['MATCHING_REASON'] == "Off Spec Match" and row['MATCH_KEY'] in rejection_set:
-            print(f"❗ Record Rejected: {row['CMPNT_MATL_NUM']} / {row['CHILD_NM']} → Off Spec Non Match")
-            row['IS_MATCHED'] = False
-            row['MATCHING_REASON'] = "Off Spec Non Match (Rejected)"
-        else:
-            if (
-                debug_cmpnt_num is not None and debug_child_nm is not None
-                and row['CMPNT_MATL_NUM'] == debug_cmpnt_num
-                and row['CHILD_NM'] == debug_child_nm
-            ):
-                print(f"🔍 Debug Record Trace: {row['CMPNT_MATL_NUM']} / {row['CHILD_NM']} → "
-                      f"Matched={row['IS_MATCHED']}, Reason={row['MATCHING_REASON']}")
-        return row
-
-    matched_df = matched_df.apply(update_row, axis=1)
-
-    # Drop helper column
-    matched_df.drop(columns=['MATCH_KEY'], inplace=True)
-
-    print("✅ Off Spec Rejection Check Completed.")
-    return matched_df
+# Continue with unmatched tagging
+unmatched['Matching Reason'] = 'Not match in any round'
