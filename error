@@ -1,19 +1,2 @@
-    matched, unmatched = full_matching_routine(data_version, db_style, device,
-                                               embeddings_save_dir, erp, model_type,
-                                               sentence_transformer_dir, tru, use_azure_dataset, bundles, output_dir)
-    unmatched['Matching Reason'] = 'Not match in any round'
-
-    print('#' * 60)
-    print('Main matching routine finished. Will append tru not common')
-    print('#' * 60)
-    unmatched_by_default = tru_no_erp.copy()
-    missing_cols = list(set(unmatched.columns) - set(unmatched_by_default.columns))
-    for col in missing_cols:
-        unmatched_by_default[col] = None
-    unmatched_by_default = unmatched_by_default[unmatched.columns]
-    unmatched_by_default['is_matched'] = False
-    unmatched_by_default['PLNT_CD'] = 'Not Found in ERP'
-    unmatched_by_default['SRC_SYS_CD'] = 'Not Found in ERP'
-    unmatched_by_default[UNIFIED_MC_COL] = unmatched_by_default[TRU_MAT_NUM]
-    unmatched_by_default['Matching Reason'] = 'Code not found in ERP'
-    unmatched = pd.concat([unmatched, unmatched_by_default], ignore_index=True)
+matched = pd.DataFrame()
+unmatched = pd.DataFrame()
