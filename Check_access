@@ -1,19 +1,2 @@
-1 items cleaning up...
-Cleanup took 0.23434925079345703 seconds
-Traceback (most recent call last):
-  File "cross_hound/matcher.py", line 1444, in main
-    matched_off_specs = handle_off_spec_rejections(
-  File "cross_hound/matcher.py", line 123, in handle_off_spec_rejections
-    print("👉 Present in rejection file:", mask_in_rejection[debug_mask].values)
-AttributeError: 'numpy.ndarray' object has no attribute 'values'
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "cross_hound/matcher.py", line 1575, in <module>
-    main(input_dir=args.get('input_dir'),
-  File "cross_hound/matcher.py", line 1499, in main
-    exit(1)
-  File "/opt/conda/envs/ptca/lib/python3.8/_sitebuiltins.py", line 26, in __call__
-    raise SystemExit(code)
-SystemExit: 1
+👉 Was Off Spec Match: ['Off Spec Match' 'Off Spec Match']
+Matching off-specs did not work
