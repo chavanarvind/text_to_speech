@@ -1,140 +1,24 @@
-import time
-import os
-from typing import Union, Any
-
-import numpy as np
-import pandas as pd
-
-from cross_hound.config import ERP_COLS, TRU_COLS
-from cross_hound.constants import DATA_DIR, TRU_MAT_NUM_ORIGINAL, TRU_MAT_NUM, ERP_MAT_NUM, ERP_PART_DESC, \
-    TRU_SPEC_DESC, TRU_SPEC_ID, ERP_PART_ID, TRU_MAT_DESC
-from cross_hound.off_specs_classifier import classify_as_off_spec
-
-# Toggle debug prints
-DEBUG = True
-
-# Target record for tracing
-TARGET_CMPNT_MATL_NUM = '665880'
-TARGET_TRU_SPEC_ID = 'PC-0000249'
-
-def debug_print(msg):
-    if DEBUG:
-        print(msg)
-
-
-def process_trend_data_from_azure(trend_df: pd.DataFrame) -> pd.DataFrame:
-    trend_df['TRD_NM'] = trend_df['TRD_NM'].str.replace(r'\s+', ' ', regex=True).str.strip().str.lower()
-    trend_df['RM_TITLE_DESC'] = trend_df['RM_TITLE_DESC'].str.lower()
-
-    trend_df = trend_df[trend_df['TRD_NM'] != trend_df['RM_TITLE_DESC']]
-    trend_df = trend_df.drop_duplicates(subset=['ERP_PART_NUM', 'TRD_NM', 'CHILD_NM', 'RM_TITLE_DESC'])
-    trend_df = trend_df[trend_df['TRD_NM'].notna()]
-
-    trade_names_wide = trend_df.groupby(['ERP_PART_NUM', 'CHILD_NM'])['TRD_NM'].apply(
-        lambda x: '||'.join(list(x))
-    ).reset_index().rename(columns={'TRD_NM': 'TRD_NM_CONCAT'})
-
-    def unify_trade_names(s: pd.Series) -> str:
-        words = set(" ".join(s).split())
-        return ' '.join(words)
-
-    trade_names_wide['TRD_NM_FULL'] = trend_df.groupby(['ERP_PART_NUM', 'CHILD_NM'])['TRD_NM'].apply(unify_trade_names).values
-    return trade_names_wide
-
-
-def get_data_from_local(data_dir: str = DATA_DIR):
-    erp = pd.read_excel(f"{data_dir}/IM_BOM_Extract.xlsx", dtype=str, keep_default_na=False, engine='openpyxl')
-    erp_em = pd.read_excel(f"{data_dir}/EM_BOM_Extract.xlsx", dtype=str, keep_default_na=False, engine='openpyxl')
-    tru = pd.read_excel(f"{data_dir}/TRU_BOM_Extract.xlsx", dtype=str, keep_default_na=False, engine='openpyxl')
-    trade_names = pd.read_csv('trade_names.csv')
-    return erp, erp_em, tru, trade_names
-
-
-def custom_cast(txt):
-    try:
-        return str(int(txt))
-    except:
-        return txt
-
-
-def pad_zeroes(txt, length=18):
-    txt = str(txt)
-    padded = '0' * length + txt
-    return padded[-length:]
-
-
-def inferred_tru_type(tru_spec_id: str):
-    if tru_spec_id.startswith('PC'):
-        return 'PC'
-    elif tru_spec_id.startswith('DC'):
-        return 'DC'
-    elif tru_spec_id.startswith('GC'):
-        return 'CG'
-    elif tru_spec_id.startswith('RM'):
-        return 'RM'
-    else:
-        return 'Unknown'
-
-
-def ingest_data_and_prepare_examples(data_dir: Union[str, None] = None,
-                                     erp_im_name: Union[str, None] = None,
-                                     erp_em_name: Union[str, None] = None,
-                                     tru_name: Union[str, None] = None,
-                                     trade_names_dataset_name: Union[str, None] = None,
-                                     run_params: dict = None,
-                                     output_dir: str = None) -> (pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame):
-
-    start = time.time()
-    if data_dir:
-        erp_im, erp_em, tru, trade_names = get_data_from_local(data_dir)
-    else:
-        from azureml.core import Run, Dataset, Workspace
-        debug_print('Getting Data from Azure Workspace')
-        ws = Workspace.from_config(path='../.azureml/dev_config.json')
-        erp_im = Dataset.get_by_name(ws, erp_im_name).to_pandas_dataframe()
-        erp_em = Dataset.get_by_name(ws, erp_em_name).to_pandas_dataframe()
-        tru = Dataset.get_by_name(ws, tru_name).to_pandas_dataframe()
-        trade_names = Dataset.get_by_name(ws, trade_names_dataset_name).to_pandas_dataframe()
-        trade_names = process_trend_data_from_azure(trade_names)
-
-    # Clean data
-    for df in [erp_im, erp_em, tru]:
-        df.replace(['NA', '', ' ', 'null', 'NULL'], np.nan, inplace=True)
-
-    debug_print(f"ERP IM rows: {len(erp_im)}, ERP EM rows: {len(erp_em)}, TRU rows: {len(tru)}")
-    debug_print(f"Checking if {TARGET_CMPNT_MATL_NUM} exists in ERP IM: {TARGET_CMPNT_MATL_NUM in erp_im[ERP_PART_ID].values}")
-    debug_print(f"Checking if {TARGET_TRU_SPEC_ID} exists in TRU: {TARGET_TRU_SPEC_ID in tru[TRU_SPEC_ID].values}")
-
-    # Drop leading zeroes
-    erp_im[ERP_PART_ID] = [custom_cast(x) for x in erp_im[ERP_PART_ID]]
-    erp_em[ERP_PART_ID] = [custom_cast(x) for x in erp_em[ERP_PART_ID]]
-    tru[TRU_SPEC_ID] = [custom_cast(x) for x in tru[TRU_SPEC_ID]]
-
-    # Merge ERP datasets
-    erp_em['PLNT_CD'] = 'External_' + erp_em['SRC_SYS_CD']
-    erp = pd.concat([erp_im, erp_em], ignore_index=True)
-    debug_print(f"ERP combined rows: {len(erp)}")
-    debug_print(f"Target CMPNT_MATL_NUM {TARGET_CMPNT_MATL_NUM} in merged ERP? {TARGET_CMPNT_MATL_NUM in erp[ERP_PART_ID].values}")
-
-    # Off-spec classification
-    erp['is_off_spec_erp'] = classify_as_off_spec(erp[[ERP_PART_ID, ERP_PART_DESC]])
-    tru['is_off_spec_tru'] = classify_as_off_spec(tru[[TRU_SPEC_ID, TRU_SPEC_DESC]])
-
-    debug_print(f"ERP Off-spec rows: {erp['is_off_spec_erp'].sum()}, TRU Off-spec rows: {tru['is_off_spec_tru'].sum()}")
-    debug_print(f"Target CMPNT_MATL_NUM {TARGET_CMPNT_MATL_NUM} off-spec? {erp.loc[erp[ERP_PART_ID] == TARGET_CMPNT_MATL_NUM, 'is_off_spec_erp'].any()}")
-    debug_print(f"Target TRU_SPEC_ID {TARGET_TRU_SPEC_ID} off-spec? {tru.loc[tru[TRU_SPEC_ID] == TARGET_TRU_SPEC_ID, 'is_off_spec_tru'].any()}")
-
-    # Filter off-specs
-    erp_discarded = erp.query('is_off_spec_erp').reset_index(drop=True)
-    tru_discarded = tru.query('is_off_spec_tru').reset_index(drop=True)
-    erp = erp.query('not is_off_spec_erp').reset_index(drop=True)
-    tru = tru.query('not is_off_spec_tru').reset_index(drop=True)
-
-    debug_print(f"ERP rows after off-spec removal: {len(erp)}, TRU rows after off-spec removal: {len(tru)}")
-
-    run_params['erp off specs'] = len(erp_discarded)
-    run_params['tru off specs'] = len(tru_discarded)
-
-    end = time.time()
-    debug_print(f"Data ingestion complete in {round(end - start, 2)} seconds")
-    return erp, tru, erp_discarded, tru_discarded, run_params, pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+(bomenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline> PY .\pipeline_driver.py
+Failure while loading azureml_run_type_providers. Failed to load entrypoint hyperdrive = azureml.train.hyperdrive:HyperDriveRun._from_run_dto with exception (packaging 24.1 (c:\users\achava05\onedrive - kenvue\achava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages), Requirement.parse('packaging<=24.0,>=20.0'), {'azureml-core'}).
+Failure while loading azureml_run_type_providers. Failed to load entrypoint automl = azureml.train.automl.run:AutoMLRun._from_run_dto with exception (packaging 24.1 (c:\users\achava05\onedrive - kenvue\achava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages), Requirement.parse('packaging<=24.0,>=20.0'), {'azureml-core'}).
+Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.PipelineRun = azureml.pipeline.core.run:PipelineRun._from_dto with exception (packaging 24.1 (c:\users\achava05\onedrive - kenvue\achava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages), Requirement.parse('packaging<=24.0,>=20.0'), {'azureml-core'}).
+Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.ReusedStepRun = azureml.pipeline.core.run:StepRun._from_reused_dto with exception (packaging 24.1 (c:\users\achava05\onedrive - kenvue\achava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages), Requirement.parse('packaging<=24.0,>=20.0'), {'azureml-core'}).
+Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.StepRun = azureml.pipeline.core.run:StepRun._from_dto with exception (packaging 24.1 (c:\users\achava05\onedrive - kenvue\achava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages), Requirement.parse('packaging<=24.0,>=20.0'), {'azureml-core'}).
+Failure while loading azureml_run_type_providers. Failed to load entrypoint azureml.scriptrun = azureml.core.script_run:ScriptRun._from_run_dto with exception (packaging 24.1 (c:\users\achava05\onedrive - kenvue\achava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages), Requirement.parse('packaging<=24.0,>=20.0')).
+Reading workspace from local config file
+Traceback (most recent call last):
+  File ".\pipeline_driver.py", line 76, in <module>
+    aml_config = set_aml_config_for_training(workspace, compute_name=compute_name)
+  File ".\pipeline_driver.py", line 15, in set_aml_config_for_training
+    env = Environment.get(workspace=ws,
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\core\environment.py", line 1158, in get
+    environment_dict = environment_client._get_environment_definition(name=name, version=version)
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\azureml_bom_work\run_pipeline\bomenv\lib\site-packages\azureml\_restclient\environment_client.py", line 43, in _get_environment_definition
+    raise Exception(message)
+Exception: Error retrieving the environment definition. Code: 500
+: <html>
+<head><title>500 Internal Server Error</title></head>
+<body>
+<center><h1>500 Internal Server Error</h1></center>
+<hr><center>nginx</center>
+</body>
