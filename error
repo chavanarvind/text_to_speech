@@ -1,1 +1,3 @@
-full_matching_routine
+SRC_SYS_CD	MATL_SHRT_DESC	PLNT_CD	CMPNT_MATL_TYPE_CD	CMPNT_MATL_NUM	CMPNT_MATL_DESC	FG_NM	FG_SPEC_NM	FD_SPEC	CHILD_NM	CHILD_TITLE_DESC	CHILD_TYPE_CD	TEMPL_TYPE_CD	TEMPL_TYPE_CD_AI_SUGGESTED	MATL_NUM	IS_MATCHED	CONFIDENCE	MATCHING_REASON
+BPI	sh 200 turchia	IT01	B	665880	et.fr.sh 200 turchia	FG-0022533	4725400       JOHNSON'S baby shampoo  200	None	PC-0000249	LABEL Front and Back - 87.66x47.77mm - PE - for Megarestage Wash - 200ml	Packaging Component	Labels / Leaflets / Booklets	Labels / Leaflets / Booklets	4725400	TRUE	high	Off Spec Match
+BPI	sh 200 turchia	IT01	B	665880	et.fr.sh 200 turchia	FG-0005697	9431200         JH BABY SHMP 200 ML	None	PC-0000249	LABEL Front and Back - 87.66x47.77mm - PE - for Megarestage Wash - 200ml	Packaging Component	Labels / Leaflets / Booklets	Labels / Leaflets / Booklets	9431200	TRUE	high	Off Spec Match
