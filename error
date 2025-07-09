@@ -1,2 +1,45 @@
-CMPNT_MATL_NUM	CMPNT_MATL_DESC	FG_NM	FG_SPEC_NM	FD_SPEC	CHILD_NM	CHILD_TITLE_DESC
-665880	et.fr.sh 200 turchia	FG-0022533	4725400       JOHNSON'S baby shampoo  200	None	PC-0000249	LABEL Front and Back - 87.66x47.77mm - PE - for Megarestage Wash - 200ml
+📍 Where to Insert:
+Go to match_by_reference_table() (search for def match_by_reference_table).
+👉 Insert this block just after the matches DataFrame is created.
+
+# DEBUG BLOCK 1: Trace in Reference Table Matching
+debug_target_part_id = "PC-0000249"
+if not matches.empty and matches[ERP_PART_ID].eq(debug_target_part_id).any():
+    print(f"\n✅ [DEBUG] Found {debug_target_part_id} in Reference Table Matching ({round_name})")
+    print(matches[matches[ERP_PART_ID] == debug_target_part_id][[
+        ERP_PART_ID, TRU_SPEC_ID, 'Matching Reason', 'confidence'
+    ]])
+
+
+Where to Insert:
+In full_matching_routine(), look for this block:
+
+python
+Copy
+Edit
+matched_off_specs, unmatched_off_specs = full_matching_routine(...)
+
+
+# DEBUG BLOCK 2: Trace in matched_off_specs
+if not matched_off_specs.empty and (matched_off_specs[ERP_PART_ID] == "PC-0000249").any():
+    print("\n🟢 [DEBUG] Found in matched_off_specs (before rejection filtering):")
+    print(matched_off_specs[matched_off_specs[ERP_PART_ID] == "PC-0000249"][[
+        ERP_PART_ID, TRU_SPEC_ID, 'Matching Reason', 'confidence'
+    ]])
+
+
+known_rejections_df = pd.read_csv(f'{fortrea_folder}/reference_tables/rejections_fortrea.csv')
+
+# DEBUG BLOCK 3a: Check if target is in rejection file
+if "PC-0000249" in known_rejections_df[ERP_PART_ID].values:
+    print("\n❌ [DEBUG] Target PC-0000249 is present in rejection file!")
+else:
+    print("\n✅ [DEBUG] Target PC-0000249 NOT found in rejection file!")
+
+collected.loc[collected.key_prediction.isin(known_rejections), SCORE_COL] = 0
+# DEBUG BLOCK 3b: Check if rejection filtering affected target
+if not collected.empty and (collected[ERP_PART_ID] == "PC-0000249").any():
+    print("\n🟠 [DEBUG] Post-Rejection Filtering Check:")
+    print(collected[collected[ERP_PART_ID] == "PC-0000249"][[
+        ERP_PART_ID, TRU_SPEC_ID, 'Matching Reason', 'confidence', SCORE_COL
+    ]])
