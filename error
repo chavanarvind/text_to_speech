@@ -1,45 +1,19 @@
-📍 Where to Insert:
-Go to match_by_reference_table() (search for def match_by_reference_table).
-👉 Insert this block just after the matches DataFrame is created.
+    matched, unmatched = full_matching_routine(data_version, db_style, device,
+                                               embeddings_save_dir, erp, model_type,
+                                               sentence_transformer_dir, tru, use_azure_dataset, bundles, output_dir)
+    unmatched['Matching Reason'] = 'Not match in any round'
 
-# DEBUG BLOCK 1: Trace in Reference Table Matching
-debug_target_part_id = "PC-0000249"
-if not matches.empty and matches[ERP_PART_ID].eq(debug_target_part_id).any():
-    print(f"\n✅ [DEBUG] Found {debug_target_part_id} in Reference Table Matching ({round_name})")
-    print(matches[matches[ERP_PART_ID] == debug_target_part_id][[
-        ERP_PART_ID, TRU_SPEC_ID, 'Matching Reason', 'confidence'
-    ]])
-
-
-Where to Insert:
-In full_matching_routine(), look for this block:
-
-python
-Copy
-Edit
-matched_off_specs, unmatched_off_specs = full_matching_routine(...)
-
-
-# DEBUG BLOCK 2: Trace in matched_off_specs
-if not matched_off_specs.empty and (matched_off_specs[ERP_PART_ID] == "PC-0000249").any():
-    print("\n🟢 [DEBUG] Found in matched_off_specs (before rejection filtering):")
-    print(matched_off_specs[matched_off_specs[ERP_PART_ID] == "PC-0000249"][[
-        ERP_PART_ID, TRU_SPEC_ID, 'Matching Reason', 'confidence'
-    ]])
-
-
-known_rejections_df = pd.read_csv(f'{fortrea_folder}/reference_tables/rejections_fortrea.csv')
-
-# DEBUG BLOCK 3a: Check if target is in rejection file
-if "PC-0000249" in known_rejections_df[ERP_PART_ID].values:
-    print("\n❌ [DEBUG] Target PC-0000249 is present in rejection file!")
-else:
-    print("\n✅ [DEBUG] Target PC-0000249 NOT found in rejection file!")
-
-collected.loc[collected.key_prediction.isin(known_rejections), SCORE_COL] = 0
-# DEBUG BLOCK 3b: Check if rejection filtering affected target
-if not collected.empty and (collected[ERP_PART_ID] == "PC-0000249").any():
-    print("\n🟠 [DEBUG] Post-Rejection Filtering Check:")
-    print(collected[collected[ERP_PART_ID] == "PC-0000249"][[
-        ERP_PART_ID, TRU_SPEC_ID, 'Matching Reason', 'confidence', SCORE_COL
-    ]])
+    print('#' * 60)
+    print('Main matching routine finished. Will append tru not common')
+    print('#' * 60)
+    unmatched_by_default = tru_no_erp.copy()
+    missing_cols = list(set(unmatched.columns) - set(unmatched_by_default.columns))
+    for col in missing_cols:
+        unmatched_by_default[col] = None
+    unmatched_by_default = unmatched_by_default[unmatched.columns]
+    unmatched_by_default['is_matched'] = False
+    unmatched_by_default['PLNT_CD'] = 'Not Found in ERP'
+    unmatched_by_default['SRC_SYS_CD'] = 'Not Found in ERP'
+    unmatched_by_default[UNIFIED_MC_COL] = unmatched_by_default[TRU_MAT_NUM]
+    unmatched_by_default['Matching Reason'] = 'Code not found in ERP'
+    unmatched = pd.concat([unmatched, unmatched_by_default], ignore_index=True)
