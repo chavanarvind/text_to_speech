@@ -1,60 +1,7 @@
-def handle_off_spec_rejections(matched_df: pd.DataFrame,
-                               rejection_file_path: str,
-                               debug_cmpnt_num: str = None,
-                               debug_child_nm: str = None) -> pd.DataFrame:
-    """
-    Update Off Spec Matches: if a record is Off Spec Match but is also in rejection file,
-    downgrade it to Off Spec Non Match.
-    
-    Args:
-        matched_df (pd.DataFrame): DataFrame of matched records.
-        rejection_file_path (str): Path to the rejection file (CSV/Excel).
-        debug_cmpnt_num (str): Component Material Number for debug tracing.
-        debug_child_nm (str): Spec ID for debug tracing.
-    
-    Returns:
-        pd.DataFrame: Updated matched DataFrame.
-    """
-    print("📥 Reading rejection file from:", rejection_file_path)
-    if rejection_file_path.endswith(".csv"):
-        rejection_df = pd.read_csv(rejection_file_path, dtype=str)
-    elif rejection_file_path.endswith(".xlsx"):
-        rejection_df = pd.read_excel(rejection_file_path, dtype=str)
-    else:
-        raise ValueError("Unsupported rejection file format. Use CSV or Excel.")
-
-    print(f"✅ Loaded rejection file with {len(rejection_df)} rows")
-
-    # Clean up columns if necessary
-    rejection_df["CMPNT_MATL_NUM"] = rejection_df["CMPNT_MATL_NUM"].astype(str).str.strip()
-    rejection_df["CHILD_NM"] = rejection_df["CHILD_NM"].astype(str).str.strip()
-
-    # Flag Off Spec Matches also in rejection
-    mask_off_spec_match = matched_df["Matching Reason"] == "Off Spec Match"
-    mask_in_rejection = matched_df.set_index(["CMPNT_MATL_NUM", "CHILD_NM"]).index.isin(
-        rejection_df.set_index(["CMPNT_MATL_NUM", "CHILD_NM"]).index
-    )
-
-    # Combine masks
-    mask_to_downgrade = mask_off_spec_match & mask_in_rejection
-
-    # Debug print for your record
-    if debug_cmpnt_num and debug_child_nm:
-        debug_mask = (matched_df["CMPNT_MATL_NUM"] == debug_cmpnt_num) & \
-                     (matched_df["CHILD_NM"] == debug_child_nm)
-        print("\n🔎 DEBUG for CMPNT_MATL_NUM:", debug_cmpnt_num, 
-              "and CHILD_NM:", debug_child_nm)
-        print(matched_df.loc[debug_mask])
-
-        if debug_mask.any():
-            print("👉 Was Off Spec Match:", matched_df.loc[debug_mask, "Matching Reason"].values)
-            print("👉 Present in rejection file:", mask_in_rejection[debug_mask].values)
-        else:
-            print("⚠️ Debug record not found in matched_df.")
-
-    # Apply downgrade
-    matched_df.loc[mask_to_downgrade, "Matching Reason"] = "Off Spec Non Match"
-    matched_df.loc[mask_to_downgrade, "IS_MATCHED"] = False
-
-    print(f"⚡ Downgraded {mask_to_downgrade.sum()} Off Spec Match records to Off Spec Non Match.")
-    return matched_df
+rejection_file_path = "./data/rejection_file.xlsx"  # 👈 Path to your file
+matched = handle_off_spec_rejections(
+    matched_df=matched,
+    rejection_file_path=rejection_file_path,
+    debug_cmpnt_num="665880",  # 👈 Debug material number
+    debug_child_nm="PC-0000249"  # 👈 Debug spec ID
+)
