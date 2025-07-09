@@ -1,3 +1,34 @@
-SRC_SYS_CD	MATL_SHRT_DESC	PLNT_CD	CMPNT_MATL_TYPE_CD	CMPNT_MATL_NUM	CMPNT_MATL_DESC	FG_NM	FG_SPEC_NM	FD_SPEC	CHILD_NM	CHILD_TITLE_DESC	CHILD_TYPE_CD	TEMPL_TYPE_CD	TEMPL_TYPE_CD_AI_SUGGESTED	MATL_NUM	IS_MATCHED	CONFIDENCE	MATCHING_REASON
-BPI	sh 200 turchia	IT01	B	665880	et.fr.sh 200 turchia	FG-0022533	4725400       JOHNSON'S baby shampoo  200	None	PC-0000249	LABEL Front and Back - 87.66x47.77mm - PE - for Megarestage Wash - 200ml	Packaging Component	Labels / Leaflets / Booklets	Labels / Leaflets / Booklets	4725400	TRUE	high	Off Spec Match
-BPI	sh 200 turchia	IT01	B	665880	et.fr.sh 200 turchia	FG-0005697	9431200         JH BABY SHMP 200 ML	None	PC-0000249	LABEL Front and Back - 87.66x47.77mm - PE - for Megarestage Wash - 200ml	Packaging Component	Labels / Leaflets / Booklets	Labels / Leaflets / Booklets	9431200	TRUE	high	Off Spec Match
+def handle_off_spec_rejections(matched_df: pd.DataFrame, rejection_df: pd.DataFrame, debug_cmpnt_num=None, debug_child_nm=None) -> pd.DataFrame:
+
+    print("Running Off Spec Rejection Check...")
+
+    # Create a key for easy lookup
+    matched_df['MATCH_KEY'] = matched_df['CMPNT_MATL_NUM'].astype(str) + "_" + matched_df['CHILD_NM'].astype(str)
+    rejection_df['REJECTION_KEY'] = rejection_df['CMPNT_MATL_NUM'].astype(str) + "_" + rejection_df['CHILD_NM'].astype(str)
+
+    # Build rejection set
+    rejection_set = set(rejection_df['REJECTION_KEY'].unique())
+
+    # Apply logic to update rows
+    def update_row(row):
+        if row['MATCHING_REASON'] == "Off Spec Match" and row['MATCH_KEY'] in rejection_set:
+            print(f"❗ Record Rejected: {row['CMPNT_MATL_NUM']} / {row['CHILD_NM']} → Off Spec Non Match")
+            row['IS_MATCHED'] = False
+            row['MATCHING_REASON'] = "Off Spec Non Match (Rejected)"
+        else:
+            if (
+                debug_cmpnt_num is not None and debug_child_nm is not None
+                and row['CMPNT_MATL_NUM'] == debug_cmpnt_num
+                and row['CHILD_NM'] == debug_child_nm
+            ):
+                print(f"🔍 Debug Record Trace: {row['CMPNT_MATL_NUM']} / {row['CHILD_NM']} → "
+                      f"Matched={row['IS_MATCHED']}, Reason={row['MATCHING_REASON']}")
+        return row
+
+    matched_df = matched_df.apply(update_row, axis=1)
+
+    # Drop helper column
+    matched_df.drop(columns=['MATCH_KEY'], inplace=True)
+
+    print("✅ Off Spec Rejection Check Completed.")
+    return matched_df
