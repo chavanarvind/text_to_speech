@@ -1,24 +1,5 @@
-def verify_and_filter_valid_records(matches):
-    matched = matches.query('is_matched').copy()
-    matched['verification_matched'] = (matched[ERP_PART_ID].notna() & matched[TRU_SPEC_ID].notna())
-    print('All matches verified:', all(matched['verification_matched']))
-
-    unmatched = matches.query('not is_matched').copy()
-
-    # 🔎 Add this debug print to check for downgraded records
-    print("🔎 Downgraded records in unmatched")
-    print(unmatched.query('CMPNT_MATL_NUM=="665880" and CHILD_NM=="PC-0000249"'))
-
-    unmatched['verification_unmatched'] = (
-        (unmatched[ERP_PART_ID].isna() & unmatched[TRU_SPEC_ID].notna()) |
-        (unmatched[ERP_PART_ID].notna() & unmatched[TRU_SPEC_ID].isna())
-    )
-
-    print('All unmatched verified:', all(unmatched['verification_unmatched']))
-    print('% correct unmatched :', round(sum(unmatched['verification_unmatched']) / len(unmatched) * 100, 2))
-
-    ids_wrong_results = unmatched.query('not verification_unmatched').index
-    matches_to_save = matches[~matches.index.isin(ids_wrong_results)]
-    print(f'Saving {(len(matches_to_save) / len(matches)) * 100}% of all results generated.')
-    matches_to_save['mat_num'] = matches_to_save['mat_num'].astype(str)
-    return matches_to_save
+unmatched['verification_unmatched'] = (
+    (unmatched[ERP_PART_ID].isna() & unmatched[TRU_SPEC_ID].notna()) |
+    (unmatched[ERP_PART_ID].notna() & unmatched[TRU_SPEC_ID].isna()) |
+    (unmatched['Matching Reason'] == 'Off Spec Non Match')  # ✅ Allow downgraded rows
+)
