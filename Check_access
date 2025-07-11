@@ -1,14 +1,27 @@
-SELECT 
+WITH input_pairs AS (
+    SELECT * FROM (
+        VALUES
+            ('000000000006139668', 'PC-0000457'),
+            ('000000000006139669', 'PC-0000458'),
+            ('000000000006139670', 'PC-0000459')
+    ) AS t(CMPNT_MATL_NUM, CHILD_NM)
+)
+SELECT
+    ip.CMPNT_MATL_NUM,
+    ip.CHILD_NM,
     CASE 
-        WHEN COUNT(*) > 0 THEN 'YES'
+        WHEN COUNT(p360.ERP_PART_NUM) > 0 THEN 'YES'
         ELSE 'NO'
     END AS MATCH_EXISTS
-FROM 
+FROM
+    input_pairs ip
+LEFT JOIN
     hive_metastore.bom_rstr.nlp_input_bom_hier_dtls bhd
-JOIN 
+    ON ip.CMPNT_MATL_NUM = bhd.CMPNT_MATL_NUM
+LEFT JOIN
     hive_metastore.bom_rstr.nlp_input_p360_bom p360
-ON 
-    bhd.NEW_MATCH_MATL_NUM = p360.ERP_PART_NUM
-WHERE 
-    bhd.CMPNT_MATL_NUM = '000000000006139668'
-    AND p360.CHILD_NM = 'PC-0000457';
+    ON bhd.NEW_MATCH_MATL_NUM = p360.ERP_PART_NUM
+    AND ip.CHILD_NM = p360.CHILD_NM
+GROUP BY
+    ip.CMPNT_MATL_NUM,
+    ip.CHILD_NM;
