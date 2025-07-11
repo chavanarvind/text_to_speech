@@ -1,5 +1,10 @@
-unmatched['verification_unmatched'] = (
-    (unmatched[ERP_PART_ID].isna() & unmatched[TRU_SPEC_ID].notna()) |
-    (unmatched[ERP_PART_ID].notna() & unmatched[TRU_SPEC_ID].isna()) |
-    (unmatched['Matching Reason'] == 'Off Spec Non Match')  # ✅ Allow downgraded rows
-)
+select distinct * from hive_metastore.bom_rstr.nlp_input_bom_hier_dtls WHERE CMPNT_MATL_NUM= '000000000006139668' 
+
+output---SRC_SYS_CD	MATL_NUM	NEW_MATCH_MATL_NUM	BOM_USG_CD	BOM_CAT_CD	BOM_NUM
+CAP	000000000079633381	000000000079633381	1	M	00091823
+CAP	000000000079633377	000000000079633377	1	M	00091816
+
+select distinct ERP_PART_NUM,CHILD_NM from hive_metastore.bom_rstr.nlp_input_p360_bom  where CHILD_NM = 'PC-0000457' 
+and ERP_PART_NUM in ('000000000079633381','000000000079633377')
+output---ERP_PART_NUM	CHILD_NM
+000000000079633381	PC-0000457
