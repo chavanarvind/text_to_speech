@@ -1,12 +1,1 @@
-SELECT
-    CMPNT_MATL_NUM,
-    'YES' AS EXISTS_IN_TABLE
-FROM
-    hive_metastore.bom_rstr.nlp_input_bom_hier_dtls
-WHERE
-    CMPNT_MATL_NUM IN (
-        '000000000006139668',
-        '000000000006139669',
-        '000000000006139670'
-        -- add all your IDs here
-    )
+time.strftime("%m%d%Y", time.localtime())
