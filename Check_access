@@ -1,29 +1,55 @@
-WITH input_pairs AS (
-    SELECT * FROM (
-        VALUES
-            ('000000000006112041','PC-0021087'),
-            ('000000000006008676','PC-0001164'),
-            ('000000000000571819','PC-0003479'),
-            ('000000000006112041','')  -- example with empty CHILD_NM
-    ) AS t(CMPNT_MATL_NUM, CHILD_NM)
-)
-SELECT
-    ip.CMPNT_MATL_NUM,
-    ip.CHILD_NM,
-    p360.ERP_PART_NUM,
-    CASE 
-        WHEN p360.ERP_PART_NUM IS NOT NULL THEN 'YES'
-        ELSE 'NO'
-    END AS MATCH_EXISTS
-FROM
-    input_pairs ip
-LEFT JOIN
-    hive_metastore.bom_rstr.nlp_input_bom_hier_dtls bhd
-    ON ip.CMPNT_MATL_NUM = bhd.CMPNT_MATL_NUM
-LEFT JOIN
-    hive_metastore.bom_rstr.nlp_input_p360_bom p360
-    ON bhd.NEW_MATCH_MATL_NUM = p360.ERP_PART_NUM
-    AND (ip.CHILD_NM = '' OR ip.CHILD_NM = p360.CHILD_NM)
-WHERE
-    p360.ERP_PART_NUM IS NOT NULL
-    AND p360.ERP_PART_NUM <> ''; -- Exclude blank ERP_PART_NUM
+def handle_off_spec_rejections(matched_df: pd.DataFrame,
+                               rejection_file_path: str,
+                               debug_cmpnt_num: str = None,
+                               debug_child_nm: str = None) -> pd.DataFrame:
+
+    
+    print(" Reading rejection file from:", rejection_file_path)
+    if rejection_file_path.endswith(".csv"):
+        rejection_df = pd.read_csv(rejection_file_path, dtype=str)
+    elif rejection_file_path.endswith(".xlsx"):
+        rejection_df = pd.read_excel(rejection_file_path, dtype=str)
+    else:
+        raise ValueError("Unsupported rejection file format. Use CSV or Excel.")
+
+    print(f" Loaded rejection file with {len(rejection_df)} rows")
+
+    # Clean up columns if necessary
+    rejection_df["CMPNT_MATL_NUM"] = rejection_df["CMPNT_MATL_NUM"].astype(str).str.strip()
+    rejection_df["CHILD_NM"] = rejection_df["CHILD_NM"].astype(str).str.strip()
+
+    # Flag Off Spec Matches also in rejection
+    mask_off_spec_match = matched_df["Matching Reason"] == "Off Spec Match"
+    mask_in_rejection = matched_df.set_index(["CMPNT_MATL_NUM", "CHILD_NM"]).index.isin(
+        rejection_df.set_index(["CMPNT_MATL_NUM", "CHILD_NM"]).index
+    )
+
+    # Combine masks
+    mask_to_downgrade = mask_off_spec_match & mask_in_rejection
+
+    # Debug print for your record
+    if debug_cmpnt_num and debug_child_nm:
+        debug_mask = (matched_df["CMPNT_MATL_NUM"] == debug_cmpnt_num) & (matched_df["CHILD_NM"] == debug_child_nm)
+        print("\n🔎 DEBUG for CMPNT_MATL_NUM:", debug_cmpnt_num, 
+              "and CHILD_NM:", debug_child_nm)
+        print(matched_df.loc[debug_mask])
+
+        if debug_mask.any():
+            print(" Was Off Spec Match:", matched_df.loc[debug_mask, "Matching Reason"].values)
+            print(" Present in rejection file:", mask_in_rejection[debug_mask])
+        else:
+            print(" Debug record not found in matched_df.")
+
+    # Apply downgrade
+    matched_df.loc[mask_to_downgrade, "Matching Reason"] = "Off Spec Non Match"
+    matched_df.loc[mask_to_downgrade, "is_matched"] = False
+    matched_df.loc[mask_to_downgrade, "confidence"] = ""
+
+    print(f" Downgraded {mask_to_downgrade.sum()} Off Spec Match records to Off Spec Non Match.")
+    return matched_df
+
+
+
+
+ERP_PART_NUM	CMPNT_MATL_NUM	CHILD_NM
+000000000009423500	668080	PC-0000253
