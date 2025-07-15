@@ -1,20 +1,33 @@
+Subject: Summary of Analysis on Off Spec Matches
+
 Hi Niharika,
 
-Below is summary of analysis.
-There are some components which are fall under the off specs match records and for that we build new logic to change them as off spec non matches
+Below is the summary of the analysis:
 
-HBOM Check for Off Spec	Count of CMPNT_MATL_NUM
+We identified certain components that fall under the Off Spec Match category. To address this, we have implemented new logic to classify them as Off Spec Non Matches.
+
+HBOM Check for Off Spec
+
+Description	Count of CMPNT_MATL_NUM
 NLP did not match because component is missing in NLP Input BOM_HIER_DTLS	9
 NLP did not match because material is missing in NLP Input BOM_HIER_DTLS	6
 Off Spec Match	10
 Off Spec Non Match	108
 Grand Total	133
 
-We are using mat num and comp id as a matching criteria.
-HBOM Check for PC & DC spec	Count of CMPNT_MATL_NUM
-NLP did not match because component is missing in NLP input BOM_HIER_DTLS	161
+We are using Material Number and Component ID as the matching criteria.
+
+HBOM Check for PC & DC Spec
+
+Description	Count of CMPNT_MATL_NUM
+NLP did not match because component is missing in NLP Input BOM_HIER_DTLS	161
 NLP matched	521
-Not match in any round	22
+Not matched in any round	22
 Off Spec Match	8
 Off Spec Non Match	10
 Grand Total	722
+
+Let’s discuss this further in tomorrow’s call.
+
+Best regards,
+Arvind
