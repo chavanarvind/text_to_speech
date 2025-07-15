@@ -10,7 +10,7 @@ WITH input_pairs AS (
 SELECT
     ip.CMPNT_MATL_NUM,
     ip.CHILD_NM,
-    COALESCE(p360.ERP_PART_NUM, 'N/A') AS ERP_PART_NUM,
+    p360.ERP_PART_NUM,
     CASE 
         WHEN p360.ERP_PART_NUM IS NOT NULL THEN 'YES'
         ELSE 'NO'
@@ -24,3 +24,6 @@ LEFT JOIN
     hive_metastore.bom_rstr.nlp_input_p360_bom p360
     ON bhd.NEW_MATCH_MATL_NUM = p360.ERP_PART_NUM
     AND (ip.CHILD_NM = '' OR ip.CHILD_NM = p360.CHILD_NM)
+WHERE
+    p360.ERP_PART_NUM IS NOT NULL
+    AND p360.ERP_PART_NUM <> ''; -- Exclude blank ERP_PART_NUM
