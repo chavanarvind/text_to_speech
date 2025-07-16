@@ -1,71 +1,127 @@
-# 🟢 Step 0: Filter out reference pairs missing Child Num
-valid_pairs = forced_pairs[forced_pairs[TRU_SPEC_ID].notna()].copy()
-skipped_count = len(forced_pairs) - len(valid_pairs)
+def match_by_reference_table(erp: pd.DataFrame,  
+                             tru: pd.DataFrame,  
+                             reference_table: pd.DataFrame,  
+                             last_match_round: int,  
+                             round_name: str,  
+                             bundles):  
+    '''  
+    Match ERP and TRU using a reference table with ERP_PART_ID and TRU_SPEC_ID mappings.  
+    First do normal matching, then force-add any missing pairs.  
+    '''  
 
-if skipped_count > 0:
-    print("=" * 60)
-    print(f"⚠️ Skipping {skipped_count} reference pairs because TRU_SPEC_ID (Child Num) is missing in the reference table.")
-    print("=" * 60)
-    print("🔍 Skipped reference pairs (first 5 shown):")
-    print(forced_pairs[forced_pairs[TRU_SPEC_ID].isna()].head())
-    print("=" * 60)
+    match_round_name = f'{last_match_round + 1}: {round_name}'  
+    print(f'MATCH ROUND {match_round_name}')  
+    start = time.time()  
 
-# 🟢 Step 1: Merge valid reference pairs with ERP and TRU
-print(f"🔄 Processing {len(valid_pairs)} reference pairs with non-null Child Num...")
-forced_matches = erp_to_match[ERP_MATCH_COLS].merge(
-    valid_pairs, on=ERP_PART_ID, how='inner'
-).merge(
-    tru_to_match[TRU_MATCH_COLS],
-    left_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
-    right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
-    how='inner'
-)
+    # 🟢 Step 1: Normal matching logic
+    df_erp_with_additional_id = erp[ERP_MATCH_COLS].merge(  
+        reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),  
+        on=ERP_PART_ID,  
+        how='inner'  
+    )  
 
-# 🟢 Step 2: Handle matches found in ERP/TRU
-if not forced_matches.empty:
-    print(f"✅ Found {len(forced_matches)} reference pairs in ERP/TRU. Adding as forced matches.")
-    print("🔍 Example forced matches (first 5 shown):")
-    print(forced_matches[[ERP_PART_ID, TRU_SPEC_ID]].head())
-    forced_matches[SCORE_COL] = 1
-    forced_matches[UNIFIED_MC_COL] = forced_matches[f'{ERP_MAT_NUM}_original'].copy()
-    forced_matches['is_matched'] = True
-    forced_matches['Matching Reason'] = round_name + ' (forced pair)'
-    forced_matches['confidence'] = 'high'
-    forced_matches['is_forced_match'] = True
-    forced_matches = forced_matches[matches.columns]
-else:
-    print(f"⚠️ No ERP/TRU rows found for {len(valid_pairs)} reference pairs.")
-    forced_matches = pd.DataFrame(columns=matches.columns)
+    matched_per_id = df_erp_with_additional_id.merge(  
+        tru[TRU_MATCH_COLS],  
+        left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, TRU_SPEC_ID],  
+        right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, TRU_SPEC_ID],  
+        how='inner'  
+    )  
 
-# 🟢 Step 3: Handle valid reference pairs missing in ERP/TRU
-missing_pairs = valid_pairs.merge(
-    forced_matches[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
-    on=[ERP_PART_ID, TRU_SPEC_ID],
-    how='left',
-    indicator=True
-).query('_merge == "left_only"').drop(columns=['_merge'])
+    if not matched_per_id.empty:  
+        matched_per_id[SCORE_COL] = 1  
+        matched_per_id[UNIFIED_MC_COL] = matched_per_id[f'{ERP_MAT_NUM}_original'].copy()  
+        matched_per_id['is_matched'] = True  
+        matched_per_id['Matching Reason'] = round_name  
+        matched_per_id['confidence'] = 'high'  
 
-if not missing_pairs.empty:
-    print(f"⚠️ {len(missing_pairs)} reference pairs not found in ERP/TRU. Marking as unmatched.")
-    print("🔍 Example unmatched pairs (first 5 shown):")
-    print(missing_pairs.head())
-    dummy_missing = missing_pairs.copy()
-    dummy_missing[SCORE_COL] = 0
-    dummy_missing['is_matched'] = False
-    dummy_missing['Matching Reason'] = "Reference pair not found in ERP/TRU"
-    dummy_missing['confidence'] = 'low'
-    dummy_missing['is_forced_match'] = True
-    # Fill in expected columns
-    for col in matches.columns:
-        if col not in dummy_missing.columns:
-            dummy_missing[col] = None
-    dummy_missing = dummy_missing[matches.columns]
-else:
-    dummy_missing = pd.DataFrame(columns=matches.columns)
+    matches = matched_per_id.copy()  
+    matches = add_matches_bundles(matches, bundles, tru)  
+    matches.drop_duplicates(subset=NON_DUPLICATES_SET, inplace=True)  
 
-# 🟢 Step 4: Combine real matches and unmatched pairs
-forced_matches = pd.concat([forced_matches, dummy_missing], ignore_index=True)
+    print(f"✅ Normal matching found {len(matches)} pairs.")  
 
-# 🟢 Step 5: Append to main matches
-matches = pd.concat([matches, forced_matches], ignore_index=True)
-print(f"✅ Total added to matches: {len(forced_matches)} (real: {len(forced_matches.query('is_matched==True'))}, unmatched: {len(forced_matches.query('is_matched==False'))})")
+    # 🟢 Step 2: Forced pairs logic for unmatched reference pairs
+    print("-" * 60)
+    print("🔄 Checking for any unmatched reference pairs...")
+    forced_pairs = reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates()
+
+    # Filter out pairs already matched
+    unmatched_pairs = forced_pairs.merge(
+        matches[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
+        on=[ERP_PART_ID, TRU_SPEC_ID],
+        how='left',
+        indicator=True
+    ).query('_merge == "left_only"').drop(columns=['_merge'])
+
+    if unmatched_pairs.empty:
+        print("✅ All reference pairs were matched in previous logic.")
+    else:
+        print(f"⚠️ {len(unmatched_pairs)} reference pairs were NOT matched earlier. Applying forced pairs logic...")
+
+        # 🔥 Filter out reference pairs missing Child Num
+        valid_pairs = unmatched_pairs[unmatched_pairs[TRU_SPEC_ID].notna()].copy()
+        skipped_count = len(unmatched_pairs) - len(valid_pairs)
+
+        if skipped_count > 0:
+            print(f"⚠️ Skipping {skipped_count} reference pairs because TRU_SPEC_ID (Child Num) is missing in the reference table.")
+            print("🔍 Skipped reference pairs (first 5 shown):")
+            print(unmatched_pairs[unmatched_pairs[TRU_SPEC_ID].isna()].head())
+
+        # 🟢 Merge valid reference pairs with ERP and TRU
+        forced_matches = erp[ERP_MATCH_COLS].merge(
+            valid_pairs, on=ERP_PART_ID, how='inner'
+        ).merge(
+            tru[TRU_MATCH_COLS],
+            left_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
+            right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
+            how='inner'
+        )
+
+        # 🟢 Handle matches found in ERP/TRU
+        if not forced_matches.empty:
+            print(f"✅ Found {len(forced_matches)} reference pairs in ERP/TRU. Adding as forced matches.")
+            forced_matches[SCORE_COL] = 1
+            forced_matches[UNIFIED_MC_COL] = forced_matches[f'{ERP_MAT_NUM}_original'].copy()
+            forced_matches['is_matched'] = True
+            forced_matches['Matching Reason'] = round_name + ' (forced pair)'
+            forced_matches['confidence'] = 'high'
+            forced_matches['is_forced_match'] = True
+            forced_matches = forced_matches[matches.columns]
+        else:
+            forced_matches = pd.DataFrame(columns=matches.columns)
+
+        # 🟢 Handle valid reference pairs missing in ERP/TRU
+        missing_pairs = valid_pairs.merge(
+            forced_matches[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
+            on=[ERP_PART_ID, TRU_SPEC_ID],
+            how='left',
+            indicator=True
+        ).query('_merge == "left_only"').drop(columns=['_merge'])
+
+        if not missing_pairs.empty:
+            print(f"⚠️ {len(missing_pairs)} reference pairs not found in ERP/TRU. Marking as unmatched.")
+            dummy_missing = missing_pairs.copy()
+            dummy_missing[SCORE_COL] = 0
+            dummy_missing['is_matched'] = False
+            dummy_missing['Matching Reason'] = "Reference pair not found in ERP/TRU"
+            dummy_missing['confidence'] = 'low'
+            dummy_missing['is_forced_match'] = True
+            # Fill in expected columns
+            for col in matches.columns:
+                if col not in dummy_missing.columns:
+                    dummy_missing[col] = None
+            dummy_missing = dummy_missing[matches.columns]
+        else:
+            dummy_missing = pd.DataFrame(columns=matches.columns)
+
+        # 🟢 Combine real matches and unmatched pairs
+        forced_matches = pd.concat([forced_matches, dummy_missing], ignore_index=True)
+
+        # 🟢 Append forced matches to main matches
+        matches = pd.concat([matches, forced_matches], ignore_index=True)
+        print(f"✅ Total forced pairs added: {len(forced_matches)} (real: {len(forced_matches.query('is_matched==True'))}, unmatched: {len(forced_matches.query('is_matched==False'))})")
+
+    # 🟢 Finalize
+    assign_round_name_and_report_time(matches, match_round_name, start)
+    df_erp_to_match, df_tru_to_match = get_data_yet_to_match(matches, erp, tru)
+    return matches, df_erp_to_match, df_tru_to_match, last_match_round + 1
