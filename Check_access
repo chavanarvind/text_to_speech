@@ -1,91 +1,16 @@
-def match_by_reference_table(erp: pd.DataFrame,  
-                             tru: pd.DataFrame,  
-                             reference_table: pd.DataFrame,  
-                             last_match_round: int,  
-                             round_name: str,  
-                             bundles):  
-    '''  
-    Matches ERP and TRU data based on a reference table, and optionally forces pairs from the reference even if ERP_PART_ID is already matched elsewhere.
-    '''  
-    match_round_name = f'{last_match_round + 1}: {round_name}'  
-    print(f'MATCH ROUND {match_round_name}')  
-    start = time.time()  
-
-    # Step 1: Match by (ERP_PART_ID, TRU_SPEC_ID)
-    df_erp_with_additional_id = erp[ERP_MATCH_COLS].merge(  
-        reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),  
-        on=ERP_PART_ID,  
-        how='inner'  
-    )  
-    matched_per_id = df_erp_with_additional_id.merge(  
-        tru[TRU_MATCH_COLS],  
-        left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, TRU_SPEC_ID],  
-        right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, TRU_SPEC_ID],  
-        how='inner'  
-    )  
-
-    # Step 2: Fallback match by descriptions
-    reference_table_text = reference_table.dropna(subset=['text_for_matching_erp', 'text_for_matching_tru'])  
-    is_valid_ref = [min(len(x), len(y)) > 5 for x, y in   
-                    zip(reference_table_text['text_for_matching_erp'],   
-                        reference_table_text['text_for_matching_tru'])]  
-    reference_table_text = reference_table_text[is_valid_ref]  
-    df_erp_with_additional_desc = erp[ERP_MATCH_COLS].merge(  
-        reference_table_text[['text_for_matching_erp', 'text_for_matching_tru']].drop_duplicates(),  
-        on='text_for_matching_erp',  
-        how='inner'  
-    )  
-    matched_per_desc = df_erp_with_additional_desc.merge(  
-        tru[TRU_MATCH_COLS],  
-        left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, 'text_for_matching_tru'],  
-        right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, 'text_for_matching_tru'],  
-        how='inner'  
-    )  
-    matched_per_desc = matched_per_desc[matched_per_id.columns]  
-
-    # Step 3: Combine initial matches
-    matches = pd.concat([matched_per_id, matched_per_desc], ignore_index=True)  
-
-    # 🟢 NEW BLOCK: Force reference table pairs if not already matched
-    forced_pairs = reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates()
-    existing_pairs = matches[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates()
-    forced_pairs = forced_pairs.merge(
-        existing_pairs,
-        on=[ERP_PART_ID, TRU_SPEC_ID],
-        how='left',
-        indicator=True
-    ).query('_merge == "left_only"').drop(columns=['_merge'])
-
-    if not forced_pairs.empty:
-        print(f"✅ Found {len(forced_pairs)} missing pairs in reference table. Adding as forced matches.")
-        forced_matches = erp[ERP_MATCH_COLS].merge(
-            forced_pairs, on=ERP_PART_ID, how='inner'
-        ).merge(
-            tru[TRU_MATCH_COLS],
-            on=[TRU_SPEC_ID],
-            how='inner'
-        )
-        if not forced_matches.empty:
-            forced_matches[SCORE_COL] = 1
-            forced_matches[UNIFIED_MC_COL] = forced_matches[f'{ERP_MAT_NUM}_original'].copy()
-            forced_matches['is_matched'] = True
-            forced_matches['Matching Reason'] = round_name + ' (forced pair)'
-            forced_matches['confidence'] = 'high'
-            forced_matches['is_forced_match'] = True  #  optional flag column
-            forced_matches = forced_matches[matches.columns]
-            matches = pd.concat([matches, forced_matches], ignore_index=True)
-    else:
-        print(" No missing reference pairs. All accounted for.")
-
-    # Step 4: Add SPEC_FLOW bundles (if any)
-    matches = add_matches_bundles(matches, bundles, tru)  
-
-    # Step 5: Drop duplicates
-    matches.drop_duplicates(subset=NON_DUPLICATES_SET, inplace=True)  
-
-    assign_round_name_and_report_time(matches, match_round_name, start)  
-
-    # Step 6: Update ERP/TRU yet to match
-    df_erp_to_match, df_tru_to_match = get_data_yet_to_match(matches, erp, tru)  
-
-    return matches, df_erp_to_match, df_tru_to_match, last_match_round + 1  
+Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
+  File "cross_hound/matcher.py", line 1639, in <module>
+    main(input_dir=args.get('input_dir'),
+  File "cross_hound/matcher.py", line 1423, in main
+    matched, unmatched = full_matching_routine(data_version, db_style, device,
+  File "cross_hound/matcher.py", line 970, in full_matching_routine
+    matches_per_hfb, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
+  File "cross_hound/matcher.py", line 463, in match_by_reference_table
+    forced_matches = forced_matches[matches.columns]
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/frame.py", line 3766, in __getitem__
+    indexer = self.columns._get_indexer_strict(key, "columns")[1]
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 5876, in _get_indexer_strict
+    self._raise_if_missing(keyarr, indexer, axis_name)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 5938, in _raise_if_missing
+    raise KeyError(f"{not_found} not in index")
+KeyError: "['SRC_SYS_CD', 'PLNT_CD'] not in index"
