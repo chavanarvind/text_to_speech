@@ -1,1 +1,19 @@
-a
+Start
+│
+├─► Step 1: Take ERP data and join with reference table
+│         (Join only on ERP_PART_ID ✅)
+│
+│         🎯 Result: All ERP rows where ERP_PART_ID exists in reference table
+│
+├─► Step 2: Join with TRU data
+│         (Join on TRU_SPEC_ID from reference table)
+│
+│         ⚠️ BUT: Only considers ERP_PART_ID for filtering ERP rows
+│              - Does NOT enforce (ERP_PART_ID + TRU_SPEC_ID) as a unique pair
+│              - If ERP_PART_ID exists, it assumes any TRU_SPEC_ID match is valid
+│
+├─► Step 3: Combine matches
+│
+├─► Step 4: Drop duplicates (ERP_PART_ID already matched blocks further TRU_SPEC_ID checks)
+│
+└─► End
