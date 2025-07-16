@@ -1,14 +1,1 @@
-[318484 rows x 42 columns]
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.18092989921569824 seconds
-Traceback (most recent call last):
-  File "cross_hound/matcher.py", line 1690, in <module>
-    main(input_dir=args.get('input_dir'),
-  File "cross_hound/matcher.py", line 1474, in main
-    matched, unmatched = full_matching_routine(data_version, db_style, device,
-  File "cross_hound/matcher.py", line 1346, in full_matching_routine
-    reference_high_conf['length_desc'] = [min(len(x), len(y)) for x, y in
-  File "cross_hound/matcher.py", line 1346, in <listcomp>
-    reference_high_conf['length_desc'] = [min(len(x), len(y)) for x, y in
-TypeError: object of type 'NoneType' has no len()
+is_valid_ref = [min(len(str(x)), len(str(y))) > 5 for x, y in zip(reference_table_text['text_for_matching_erp'], reference_table_text['text_for_matching_tru'])]
