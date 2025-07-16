@@ -1,9 +1,50 @@
+# Merge reference pairs with unmatched ERP and TRU
+forced_matches = erp_to_match[ERP_MATCH_COLS].merge(
+    forced_pairs, on=ERP_PART_ID, how='inner'
+).merge(
+    tru_to_match[TRU_MATCH_COLS],
+    left_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
+    right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
+    how='inner'
+)
+
+# ✅ If ERP/TRU rows exist, add them as matches
 if not forced_matches.empty:
+    print(f"✅ Found {len(forced_matches)} reference pairs in ERP/TRU. Adding as forced matches.")
     forced_matches[SCORE_COL] = 1
-    forced_matches[UNIFIED_MC_COL] = forced_matches[f'{ERP_MAT_NUM}_original'].copy()  
+    forced_matches[UNIFIED_MC_COL] = forced_matches[f'{ERP_MAT_NUM}_original'].copy()
     forced_matches['is_matched'] = True
     forced_matches['Matching Reason'] = round_name + ' (forced pair)'
     forced_matches['confidence'] = 'high'
-    forced_matches['is_forced_match'] = True  # optional flag
+    forced_matches['is_forced_match'] = True
     forced_matches = forced_matches[matches.columns]
-    matches = pd.concat([matches, forced_matches], ignore_index=True)
+else:
+    forced_matches = pd.DataFrame(columns=matches.columns)
+
+# 🟡 Identify pairs missing from ERP/TRU
+missing_pairs = forced_pairs.merge(
+    forced_matches[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
+    on=[ERP_PART_ID, TRU_SPEC_ID],
+    how='left',
+    indicator=True
+).query('_merge == "left_only"').drop(columns=['_merge'])
+
+if not missing_pairs.empty:
+    print(f"⚠️ {len(missing_pairs)} reference pairs not found in ERP/TRU. Marking as unmatched.")
+    # Create dummy rows for missing pairs
+    dummy_matches = missing_pairs.copy()
+    dummy_matches[SCORE_COL] = 0
+    dummy_matches['is_matched'] = False
+    dummy_matches['Matching Reason'] = "Reference pair not found in ERP/TRU"
+    dummy_matches['confidence'] = 'low'
+    dummy_matches['is_forced_match'] = True
+    # Fill in columns expected by matches
+    for col in matches.columns:
+        if col not in dummy_matches.columns:
+            dummy_matches[col] = None
+    dummy_matches = dummy_matches[matches.columns]
+    # Combine dummy unmatched pairs
+    forced_matches = pd.concat([forced_matches, dummy_matches], ignore_index=True)
+
+# ✅ Append forced_matches (both real and dummy rows)
+matches = pd.concat([matches, forced_matches], ignore_index=True)
