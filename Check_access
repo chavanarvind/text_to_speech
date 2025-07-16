@@ -1,18 +1,20 @@
-forced_matches = erp[ERP_MATCH_COLS].merge(
-    forced_pairs, on=ERP_PART_ID, how='inner'
-).merge(
-    tru[TRU_MATCH_COLS],
-    on=[TRU_SPEC_ID],
-    how='inner'
-)
-
-
-# Include plant/system info while joining
-forced_matches = erp[ERP_MATCH_COLS].merge(
-    forced_pairs, on=ERP_PART_ID, how='inner'
-).merge(
-    tru[TRU_MATCH_COLS],
-    left_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
-    right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
-    how='inner'
-)
+MATCH ROUND 4: Human Feedback
+✅ Found 190 missing pairs in reference table. Adding as forced matches.
+****** Adding 131 more matches based on SPEC_FLOW_CD
+Cleaning up all outstanding Run operations, waiting 300.0 seconds
+1 items cleaning up...
+Cleanup took 0.1557610034942627 seconds
+Traceback (most recent call last):
+  File "cross_hound/matcher.py", line 1637, in <module>
+    main(input_dir=args.get('input_dir'),
+  File "cross_hound/matcher.py", line 1421, in main
+    matched, unmatched = full_matching_routine(data_version, db_style, device,
+  File "cross_hound/matcher.py", line 968, in full_matching_routine
+    matches_per_hfb, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
+  File "cross_hound/matcher.py", line 470, in match_by_reference_table
+    matches.drop_duplicates(subset=NON_DUPLICATES_SET, inplace=True)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/frame.py", line 6530, in drop_duplicates
+    result = self[-self.duplicated(subset, keep=keep)]
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/frame.py", line 6662, in duplicated
+    raise KeyError(Index(diff))
+KeyError: Index(['unified_mat_code'], dtype='object')
