@@ -1,16 +1,18 @@
-Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
-  File "cross_hound/matcher.py", line 1639, in <module>
-    main(input_dir=args.get('input_dir'),
-  File "cross_hound/matcher.py", line 1423, in main
-    matched, unmatched = full_matching_routine(data_version, db_style, device,
-  File "cross_hound/matcher.py", line 970, in full_matching_routine
-    matches_per_hfb, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
-  File "cross_hound/matcher.py", line 463, in match_by_reference_table
-    forced_matches = forced_matches[matches.columns]
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/frame.py", line 3766, in __getitem__
-    indexer = self.columns._get_indexer_strict(key, "columns")[1]
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 5876, in _get_indexer_strict
-    self._raise_if_missing(keyarr, indexer, axis_name)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 5938, in _raise_if_missing
-    raise KeyError(f"{not_found} not in index")
-KeyError: "['SRC_SYS_CD', 'PLNT_CD'] not in index"
+forced_matches = erp[ERP_MATCH_COLS].merge(
+    forced_pairs, on=ERP_PART_ID, how='inner'
+).merge(
+    tru[TRU_MATCH_COLS],
+    on=[TRU_SPEC_ID],
+    how='inner'
+)
+
+
+# Include plant/system info while joining
+forced_matches = erp[ERP_MATCH_COLS].merge(
+    forced_pairs, on=ERP_PART_ID, how='inner'
+).merge(
+    tru[TRU_MATCH_COLS],
+    left_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
+    right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
+    how='inner'
+)
