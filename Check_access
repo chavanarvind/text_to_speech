@@ -1,6 +1,1 @@
-user_logs_path = os.path.join(os.getcwd(), "user_logs")
-os.makedirs(user_logs_path, exist_ok=True)  # create directory if it doesn't exist
-matches_per_hfb.to_csv(
-    os.path.join(user_logs_path, "matches_human_feedback.csv"), 
-    index=False
-)
+Hi Gabriel, I have a dentist appointment and will be away for about an hour and a half.
