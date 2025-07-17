@@ -1,3 +1,5 @@
+
+return current_full_matches, unmatched_alternate
 user_logs_path = os.path.join(os.getcwd(), "user_logs")
 os.makedirs(user_logs_path, exist_ok=True)
 
