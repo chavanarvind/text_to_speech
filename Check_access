@@ -1,3 +1,14 @@
-reference_high_conf['length_desc'] = [
-    min(len(str(x)), len(str(y))) for x, y in zip(reference_high_conf[ERP_PART_DESC], reference_high_conf[TRU_SPEC_DESC])
-]
+20: Alternates matching took 1885.7144033908844 seconds
+Cleaning up all outstanding Run operations, waiting 300.0 seconds
+1 items cleaning up...
+Cleanup took 0.1224215030670166 seconds
+Traceback (most recent call last):
+  File "cross_hound/matcher.py", line 1688, in <module>
+    main(input_dir=args.get('input_dir'),
+  File "cross_hound/matcher.py", line 1472, in main
+    matched, unmatched = full_matching_routine(data_version, db_style, device,
+  File "cross_hound/matcher.py", line 1433, in full_matching_routine
+    current_full_matches, unmatched_alternate = check_for_alternates_tru(erp_to_match,
+  File "cross_hound/matcher.py", line 918, in check_for_alternates_tru
+    assert current_matches[UNIFIED_MC_COL].isna().sum() == 0
+AssertionError
