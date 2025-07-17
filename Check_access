@@ -1,1 +1,14 @@
+forced_matches = pd.concat(dummy_missing, ignore_index=True)
+forced_matches[SCORE_COL] = 0
+forced_matches[UNIFIED_MC_COL] = forced_matches[f'{ERP_MAT_NUM}_original'].copy()
+forced_matches['is_matched'] = False
+forced_matches['confidence'] = None
+forced_matches['Matching Reason'] = f'{round_name} - Forced mapping due to missing ERP/TRU'
+forced_matches['is_forced_match'] = True
+
+# 🛡️ Filter out rows with missing ERP_MAT_NUM (avoid partial records later)
+forced_matches = forced_matches[forced_matches[ERP_MAT_NUM].notna()]
+
+
+
 forced_matches = forced_matches[forced_matches[ERP_MAT_NUM].notna()]
