@@ -1,6 +1,12 @@
-matches['ERP_PART_ID_no_pad'] = matches[ERP_PART_ID].str.lstrip('0')
-
-# Filter for our pair
-pair_in_matches = matches.query(
-    'ERP_PART_ID_no_pad == "528926" and TRU_SPEC_ID == "PC-0014319"'
+# Filter directly without adding a new column
+pair_in_matches = matches[
+    matches[ERP_PART_ID].str.lstrip('0') == "528926"
+].query(
+    'TRU_SPEC_ID == "PC-0014319"'
 )
+
+if not pair_in_matches.empty:
+    print("✅ Pair FOUND in matches 🎯")
+    print(pair_in_matches[[ERP_PART_ID, TRU_SPEC_ID, 'Matching Reason', 'confidence']])
+else:
+    print("❌ Pair NOT found in matches")
