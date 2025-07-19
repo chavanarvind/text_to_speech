@@ -1,8 +1,13 @@
+match_round_name = f'{last_match_round + 1}: {round_name}'
+print(f'MATCH ROUND {match_round_name}')
+start = time.time()
+
+# 🔥 DEBUG: Check if the specific pair exists in reference/ERP/TRU
 erp_part_to_check = "528926"
 tru_spec_to_check = "PC-0014319"
 
 print("=" * 60)
-print(f"🔍 DEBUG: Checking specific pair ({erp_part_to_check}, {tru_spec_to_check}) in round: {round_name}")
+print(f"🔍 DEBUG: Checking pair ({erp_part_to_check}, {tru_spec_to_check}) in round: {round_name}")
 
 # Clean IDs
 reference_table['ERP_PART_ID'] = reference_table['ERP_PART_ID'].astype(str).str.strip()
