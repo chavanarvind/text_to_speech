@@ -1,4 +1,5 @@
 erp, tru = format_raw_material_id(erp, tru)
+erp = erp.dropna(subset=['key_erp', 'PLNT_CD', 'SRC_SYS_CD'])
 # DEBUG: Check if ERP_PART_ID exists in raw ERP data
 erp['ERP_PART_ID'] = erp['ERP_PART_ID'].astype(str).str.strip()
 erp_id_to_check = "000000000000528926"
