@@ -1,6 +1,72 @@
-erp = erp.dropna(subset=['key_erp', 'PLNT_CD', 'SRC_SYS_CD'])
-tru = tru.dropna(subset=['key_tru', 'PLNT_CD', 'SRC_SYS_CD'])
+def force_pair_matching(
+    erp_full: pd.DataFrame,
+    tru_full: pd.DataFrame,
+    reference_table: pd.DataFrame,
+    round_name: str,
+    bundles: pd.DataFrame,
+    debug_comp_id: str = None,
+    debug_child_num: str = None
+) -> pd.DataFrame:
+    """
+    Dedicated matching round for force pair mappings using full ERP and TRU,
+    with debug checks for specific COMP ID and CHILD NUM.
+    """
+    print(f"{'-'*60}\nFORCE PAIR MATCHING ROUND: {round_name}")
 
-# ✅ Full copies for force pairing
-erp_full_for_force_pair = erp.copy()
-tru_full_for_force_pair = tru.copy()
+    start_time = time.time()
+
+    # 🟢 Debug Step: Check if COMP ID and CHILD NUM exist in input data
+    if debug_comp_id:
+        erp_check = erp_full[erp_full[ERP_PART_ID].astype(str) == debug_comp_id]
+        if not erp_check.empty:
+            print(f"✅ COMP ID {debug_comp_id} FOUND in ERP data")
+        else:
+            print(f"❌ COMP ID {debug_comp_id} MISSING in ERP data")
+
+    if debug_child_num:
+        tru_check = tru_full[tru_full[TRU_SPEC_ID].astype(str) == debug_child_num]
+        if not tru_check.empty:
+            print(f"✅ CHILD NUM {debug_child_num} FOUND in TRU data")
+        else:
+            print(f"❌ CHILD NUM {debug_child_num} MISSING in TRU data")
+
+    if debug_comp_id and debug_child_num:
+        ref_check = reference_table[
+            (reference_table[ERP_PART_ID].astype(str) == debug_comp_id) &
+            (reference_table[TRU_SPEC_ID].astype(str) == debug_child_num)
+        ]
+        if not ref_check.empty:
+            print(f"✅ Pair ({debug_comp_id}, {debug_child_num}) FOUND in reference table")
+        else:
+            print(f"❌ Pair ({debug_comp_id}, {debug_child_num}) MISSING in reference table")
+
+    # Step 1: Force Pair Mapping
+    forced_matches = erp_full[ERP_MATCH_COLS].merge(
+        reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
+        on=ERP_PART_ID,
+        how='inner'
+    ).merge(
+        tru_full[TRU_MATCH_COLS],
+        left_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
+        right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
+        how='inner'
+    )
+
+    if forced_matches.empty:
+        print(f"⚠️ No force pair matches found in {round_name}")
+    else:
+        print(f"✅ {len(forced_matches)} force pair matches found in {round_name}")
+
+        # Add metadata for these matches
+        forced_matches[SCORE_COL] = 1
+        forced_matches[UNIFIED_MC_COL] = forced_matches[f'{ERP_MAT_NUM}_original'].copy()
+        forced_matches['is_matched'] = True
+        forced_matches['Matching Reason'] = f'{round_name} (forced pair)'
+        forced_matches['confidence'] = 'high'
+        forced_matches['is_forced_match'] = True
+
+        # Handle bundles if needed
+        forced_matches = add_matches_bundles(forced_matches, bundles, tru_full)
+
+    print(f"⏱️ Force pair matching completed in {round(time.time() - start_time, 2)} seconds")
+    return forced_matches
