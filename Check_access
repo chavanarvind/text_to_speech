@@ -1,22 +1,14 @@
-erp, tru = format_raw_material_id(erp, tru)
 erp = erp.dropna(subset=['key_erp', 'PLNT_CD', 'SRC_SYS_CD'])
-# DEBUG: Check if ERP_PART_ID exists in raw ERP data
+print("="*60)
+print("🔍 DEBUG: Checking ERP_PART_ID before dropna")
 erp['ERP_PART_ID'] = erp['ERP_PART_ID'].astype(str).str.strip()
 erp_id_to_check = "000000000000528926"
 erp_id_unpadded = "528926"
 
-found_padded = erp['ERP_PART_ID'].isin([erp_id_to_check]).any()
-found_unpadded = erp['ERP_PART_ID'].isin([erp_id_unpadded]).any()
-
-print("="*60)
-print("🔍 ERP_PART_ID Presence Check")
-if found_padded:
-    print(f"✅ Found ERP_PART_ID {erp_id_to_check} in ERP data")
+debug_row = erp[erp['ERP_PART_ID'].isin([erp_id_to_check, erp_id_unpadded])]
+if debug_row.empty:
+    print(f"❌ ERP_PART_ID {erp_id_to_check} or {erp_id_unpadded} NOT found in ERP before dropna")
 else:
-    print(f"❌ DID NOT find ERP_PART_ID {erp_id_to_check} in ERP data")
-
-if found_unpadded:
-    print(f"✅ Found ERP_PART_ID {erp_id_unpadded} in ERP data")
-else:
-    print(f"❌ DID NOT find ERP_PART_ID {erp_id_unpadded} in ERP data")
+    print(f"✅ ERP_PART_ID {erp_id_to_check} or {erp_id_unpadded} FOUND in ERP before dropna")
+    print(debug_row[['ERP_PART_ID', 'key_erp', 'PLNT_CD', 'SRC_SYS_CD']])
 print("="*60)
