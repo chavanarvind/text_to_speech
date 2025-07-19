@@ -1,40 +1,6 @@
-match_round_name = f'{last_match_round + 1}: {round_name}'
-print(f'MATCH ROUND {match_round_name}')
-start = time.time()
+erp = erp.dropna(subset=['key_erp', 'PLNT_CD', 'SRC_SYS_CD'])
+tru = tru.dropna(subset=['key_tru', 'PLNT_CD', 'SRC_SYS_CD'])
 
-# 🔥 DEBUG: Check if the specific pair exists in reference/ERP/TRU
-erp_part_to_check = "528926"
-tru_spec_to_check = "PC-0014319"
-
-print("=" * 60)
-print(f"🔍 DEBUG: Checking pair ({erp_part_to_check}, {tru_spec_to_check}) in round: {round_name}")
-
-# Clean IDs
-reference_table['ERP_PART_ID'] = reference_table['ERP_PART_ID'].astype(str).str.strip()
-reference_table['TRU_SPEC_ID'] = reference_table['TRU_SPEC_ID'].astype(str).str.strip()
-erp['ERP_PART_ID'] = erp['ERP_PART_ID'].astype(str).str.strip()
-tru['TRU_SPEC_ID'] = tru['TRU_SPEC_ID'].astype(str).str.strip()
-
-# ✅ Check if pair exists in reference table
-pair_in_ref = reference_table[
-    (reference_table['ERP_PART_ID'] == erp_part_to_check) &
-    (reference_table['TRU_SPEC_ID'] == tru_spec_to_check)
-]
-if not pair_in_ref.empty:
-    print(f"✅ Found pair ({erp_part_to_check}, {tru_spec_to_check}) in reference table")
-else:
-    print(f"❌ Pair ({erp_part_to_check}, {tru_spec_to_check}) NOT found in reference table")
-
-# ✅ Check if ERP_PART_ID exists in ERP
-erp_row = erp[erp['ERP_PART_ID'] == erp_part_to_check]
-if not erp_row.empty:
-    print(f"✅ ERP_PART_ID {erp_part_to_check} found in ERP")
-else:
-    print(f"❌ ERP_PART_ID {erp_part_to_check} NOT found in ERP")
-
-# ✅ Check if TRU_SPEC_ID exists in TRU
-tru_row = tru[tru['TRU_SPEC_ID'] == tru_spec_to_check]
-if not tru_row.empty:
-    print(f"✅ TRU_SPEC_ID {tru_spec_to_check} found in TRU")
-else:
-    print(f"❌ TRU_SPEC_ID {tru_spec_to_check} NOT found in TRU")
+# ✅ Full copies for force pairing
+erp_full_for_force_pair = erp.copy()
+tru_full_for_force_pair = tru.copy()
