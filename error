@@ -1,2 +1,42 @@
+# 🟢 Step 3: Forced pair matching (only for specific reference tables)
+if "nlp_list_erp" in round_name.lower():
+    print(f"🚨 Running FORCE PAIR matching for {round_name} 🚨")
+
+    forced_pairs = reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates()
+    unmatched_pairs = forced_pairs.merge(
+        matches[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
+        on=[ERP_PART_ID, TRU_SPEC_ID],
+        how='left',
+        indicator=True
+    ).query('_merge == "left_only"').drop(columns=['_merge'])
+
+    if not unmatched_pairs.empty:
+        print(f"⚠️ {len(unmatched_pairs)} unmatched reference pairs for forced pair logic.")
+
+        forced_matches = erp_full[ERP_MATCH_COLS].merge(
+            unmatched_pairs, on=ERP_PART_ID, how='inner'
+        ).merge(
+            tru_full[TRU_MATCH_COLS],
+            left_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
+            right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
+            how='inner'
+        )
+
+        if not forced_matches.empty:
+            print(f"✅ Found {len(forced_matches)} forced pair matches in {round_name}")
+
+            forced_matches[SCORE_COL] = 1
+            forced_matches[UNIFIED_MC_COL] = forced_matches[f'{ERP_MAT_NUM}_original'].copy()
+            forced_matches['is_matched'] = True
+            forced_matches['Matching Reason'] = round_name + ' (forced pair)'
+            forced_matches['confidence'] = 'high'
+
+            # Add to matches
+            matches = pd.concat([matches, forced_matches], ignore_index=True)
+            matches.drop_duplicates(subset=NON_DUPLICATES_SET, inplace=True)
+    else:
+        print("✅ All reference pairs matched during normal logic.")
+else:
+    print(f"🚫 Skipping FORCE PAIR matching for {round_name}")
 forced_matches['is_forced_match'] = True
 is_matched
