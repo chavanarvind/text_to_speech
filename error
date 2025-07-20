@@ -1,62 +1,136 @@
-# 🟣 Step 3: Conditional Forced Pair Logic
-if "nlp_list_erp" in round_name.lower():
-    print(f"🚨 Running FORCE PAIR matching for {round_name} 🚨")
+def match_by_reference_table(erp: pd.DataFrame,
+                             tru: pd.DataFrame,
+                             reference_table: pd.DataFrame,
+                             last_match_round: int,
+                             round_name: str,
+                             bundles,
+                             erp_full: pd.DataFrame,
+                             tru_full: pd.DataFrame):
+    """
+    Match records using a reference table. Includes forced pair matching logic.
+    """
+    match_round_name = f'{last_match_round + 1}: {round_name}'
+    print(f'🚀 MATCH ROUND {match_round_name}')
+    start = time.time()
 
-    # ✅ Filter only unmatched reference pairs
-    forced_pairs = reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates()
-    unmatched_pairs = forced_pairs.merge(
-        matches[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
-        on=[ERP_PART_ID, TRU_SPEC_ID],
-        how='left',
-        indicator=True
-    ).query('_merge == "left_only"').drop(columns=['_merge'])
+    # 🟢 Step 1: Normal matching logic
+    df_erp_with_additional_id = erp[ERP_MATCH_COLS].merge(
+        reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
+        on=ERP_PART_ID,
+        how='inner'
+    )
 
-    print(f"⚠️ {len(unmatched_pairs)} unmatched reference pairs for forced pair logic.")
+    matched_per_id = df_erp_with_additional_id.merge(
+        tru[TRU_MATCH_COLS],
+        left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, TRU_SPEC_ID],
+        right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, TRU_SPEC_ID],
+        how='inner'
+    )
 
-    # ✅ 🔥 FILTER pairs not present in ERP/TRU FULL datasets
-    erp_ids_in_full = set(erp_full[ERP_PART_ID])
-    tru_ids_in_full = set(tru_full[TRU_SPEC_ID])
+    # 🟢 Step 2: Match per description
+    if not (reference_table['text_for_matching_erp'].isnull().all() or
+            reference_table['text_for_matching_tru'].isnull().all()):
+        reference_table_text = reference_table.dropna(subset=['text_for_matching_erp', 'text_for_matching_tru'])
+        is_valid_ref = [min(len(str(x)), len(str(y))) > 5
+                        for x, y in zip(reference_table_text['text_for_matching_erp'],
+                                        reference_table_text['text_for_matching_tru'])]
+        reference_table_text = reference_table_text[is_valid_ref]
 
-    valid_pairs = unmatched_pairs[
-        unmatched_pairs[ERP_PART_ID].isin(erp_ids_in_full) &
-        unmatched_pairs[TRU_SPEC_ID].isin(tru_ids_in_full)
-    ].copy()
-
-    missing_pairs = unmatched_pairs[
-        ~unmatched_pairs[ERP_PART_ID].isin(erp_ids_in_full) |
-        ~unmatched_pairs[TRU_SPEC_ID].isin(tru_ids_in_full)
-    ]
-
-    if not missing_pairs.empty:
-        print(f"⚠️ {len(missing_pairs)} pairs missing in ERP/TRU. Skipping these for force pair logic.")
-        print(missing_pairs.head(10))  # Debug first few rows
-        missing_pairs.to_csv("missing_reference_pairs.csv", index=False)
-
-    # ✅ Only process valid pairs
-    if not valid_pairs.empty:
-        forced_matches = erp_full[ERP_MATCH_COLS].merge(
-            valid_pairs, on=ERP_PART_ID, how='inner'
-        ).merge(
-            tru_full[TRU_MATCH_COLS],
-            left_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
-            right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
+        df_erp_with_additional_desc = erp[ERP_MATCH_COLS].merge(
+            reference_table_text[['text_for_matching_erp', 'text_for_matching_tru']].drop_duplicates(),
+            on='text_for_matching_erp',
             how='inner'
         )
 
-        print(f"✅ Found {len(forced_matches)} forced pair matches in {round_name}")
+        matched_per_desc = df_erp_with_additional_desc.merge(
+            tru[TRU_MATCH_COLS],
+            left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, 'text_for_matching_tru'],
+            right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, 'text_for_matching_tru'],
+            how='inner'
+        )
 
-        forced_matches[SCORE_COL] = 1
-        forced_matches[UNIFIED_MC_COL] = forced_matches[f'{ERP_MAT_NUM}_original'].copy()
-        forced_matches['is_matched'] = True
-        forced_matches['Matching Reason'] = round_name + ' (forced pair)'
-        forced_matches['confidence'] = 'high'
-
-        forced_matches = add_matches_bundles(forced_matches, bundles, tru_full)
-
-        # Append forced matches to main matches
-        matches = pd.concat([matches, forced_matches], ignore_index=True)
-        matches.drop_duplicates(subset=NON_DUPLICATES_SET, inplace=True)
+        matched_per_desc = matched_per_desc[matched_per_id.columns]
     else:
-        print("🚫 No valid forced pairs to process.")
-else:
-    print(f"🚫 Skipping FORCE PAIR matching for {round_name}")
+        matched_per_desc = pd.DataFrame(columns=matched_per_id.columns)
+
+    # Combine ID and Description matches
+    matches = pd.concat([matched_per_id, matched_per_desc], ignore_index=True)
+
+    if not matches.empty:
+        matches[SCORE_COL] = 1
+        matches[UNIFIED_MC_COL] = matches[f'{ERP_MAT_NUM}_original'].copy()
+        matches['is_matched'] = True
+        matches['Matching Reason'] = round_name
+        matches['confidence'] = 'high'
+        matches = add_matches_bundles(matches, bundles, tru)
+        matches.drop_duplicates(subset=NON_DUPLICATES_SET, inplace=True)
+
+    # 🟣 Step 3: Conditional Forced Pair Logic (only for NLP_LIST_ERP)
+    if "nlp_list_erp" in round_name.lower():
+        print("-" * 60)
+        print(f"🔄 FORCE PAIR LOGIC FOR UNMATCHED REFERENCE PAIRS in {round_name}")
+
+        # Get unmatched reference pairs
+        forced_pairs = reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates()
+        unmatched_pairs = forced_pairs.merge(
+            matches[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
+            on=[ERP_PART_ID, TRU_SPEC_ID],
+            how='left',
+            indicator=True
+        ).query('_merge == "left_only"').drop(columns=['_merge'])
+
+        print(f"⚠️ {len(unmatched_pairs)} unmatched reference pairs for forced pair logic.")
+
+        # ✅ Filter pairs missing in ERP/TRU full datasets
+        erp_ids_in_full = set(erp_full[ERP_PART_ID])
+        tru_ids_in_full = set(tru_full[TRU_SPEC_ID])
+
+        valid_pairs = unmatched_pairs[
+            unmatched_pairs[ERP_PART_ID].isin(erp_ids_in_full) &
+            unmatched_pairs[TRU_SPEC_ID].isin(tru_ids_in_full)
+        ].copy()
+
+        missing_pairs = unmatched_pairs[
+            ~unmatched_pairs[ERP_PART_ID].isin(erp_ids_in_full) |
+            ~unmatched_pairs[TRU_SPEC_ID].isin(tru_ids_in_full)
+        ]
+
+        if not missing_pairs.empty:
+            print(f"🚫 {len(missing_pairs)} pairs missing in ERP/TRU. Skipping these for force pair logic.")
+            print("🔍 First few missing pairs:\n", missing_pairs.head())
+            missing_pairs.to_csv("missing_reference_pairs.csv", index=False)
+
+        # 🚀 Process only valid pairs
+        if not valid_pairs.empty:
+            forced_matches = erp_full[ERP_MATCH_COLS].merge(
+                valid_pairs, on=ERP_PART_ID, how='inner'
+            ).merge(
+                tru_full[TRU_MATCH_COLS],
+                left_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
+                right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
+                how='inner'
+            )
+
+            print(f"✅ Found {len(forced_matches)} forced pair matches in {round_name}")
+
+            forced_matches[SCORE_COL] = 1
+            forced_matches[UNIFIED_MC_COL] = forced_matches[f'{ERP_MAT_NUM}_original'].copy()
+            forced_matches['is_matched'] = True
+            forced_matches['Matching Reason'] = round_name + ' (forced pair)'
+            forced_matches['confidence'] = 'high'
+
+            forced_matches = add_matches_bundles(forced_matches, bundles, tru_full)
+
+            # Add forced matches to main matches
+            matches = pd.concat([matches, forced_matches], ignore_index=True)
+            matches.drop_duplicates(subset=NON_DUPLICATES_SET, inplace=True)
+        else:
+            print("🚫 No valid forced pairs to process.")
+    else:
+        print(f"⏭ Skipping FORCE PAIR matching for {round_name}")
+
+    # 🕓 Report time and return
+    assign_round_name_and_report_time(matches, match_round_name, start)
+    df_erp_to_match, df_tru_to_match = get_data_yet_to_match(matches, erp, tru)
+
+    return matches, df_erp_to_match, df_tru_to_match, last_match_round + 1
