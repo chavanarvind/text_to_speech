@@ -1,27 +1,62 @@
-🔄 FORCE PAIR LOGIC FOR UNMATCHED REFERENCE PAIRS
-✅ COMP ID 528926 FOUND in full ERP (erp_full)
-✅ CHILD NUM PC-0014319 FOUND in full TRU (tru_full)
-🚨 Running FORCE PAIR matching for matches_NLP_list_ERP suggested X-match 🚨
-⚠️ 1493 unmatched reference pairs for forced pair logic.
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.17124080657958984 seconds
-Traceback (most recent call last):
-  File "cross_hound/matcher.py", line 1730, in <module>
-    main(input_dir=args.get('input_dir'),
-  File "cross_hound/matcher.py", line 1514, in main
-    matched, unmatched = full_matching_routine(data_version, db_style, device,
-  File "cross_hound/matcher.py", line 1332, in full_matching_routine
-    matches_NLP_list_ERP, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
-  File "cross_hound/matcher.py", line 497, in match_by_reference_table
-    forced_matches = erp_full[ERP_MATCH_COLS].merge(
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/frame.py", line 9843, in merge
-    return merge(
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/reshape/merge.py", line 142, in merge
-    op = _MergeOperation(
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/reshape/merge.py", line 713, in __init__
-    self.left_on, self.right_on = self._validate_left_right_on(left_on, right_on)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/reshape/merge.py", line 1536, in _validate_left_right_on
-    raise ValueError("len(right_on) must equal len(left_on)")
-ValueError: len(right_on) must equal len(left_on)
+# 🟣 Step 3: Conditional Forced Pair Logic
+if "nlp_list_erp" in round_name.lower():
+    print(f"🚨 Running FORCE PAIR matching for {round_name} 🚨")
 
+    # ✅ Filter only unmatched reference pairs
+    forced_pairs = reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates()
+    unmatched_pairs = forced_pairs.merge(
+        matches[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
+        on=[ERP_PART_ID, TRU_SPEC_ID],
+        how='left',
+        indicator=True
+    ).query('_merge == "left_only"').drop(columns=['_merge'])
+
+    print(f"⚠️ {len(unmatched_pairs)} unmatched reference pairs for forced pair logic.")
+
+    # ✅ 🔥 FILTER pairs not present in ERP/TRU FULL datasets
+    erp_ids_in_full = set(erp_full[ERP_PART_ID])
+    tru_ids_in_full = set(tru_full[TRU_SPEC_ID])
+
+    valid_pairs = unmatched_pairs[
+        unmatched_pairs[ERP_PART_ID].isin(erp_ids_in_full) &
+        unmatched_pairs[TRU_SPEC_ID].isin(tru_ids_in_full)
+    ].copy()
+
+    missing_pairs = unmatched_pairs[
+        ~unmatched_pairs[ERP_PART_ID].isin(erp_ids_in_full) |
+        ~unmatched_pairs[TRU_SPEC_ID].isin(tru_ids_in_full)
+    ]
+
+    if not missing_pairs.empty:
+        print(f"⚠️ {len(missing_pairs)} pairs missing in ERP/TRU. Skipping these for force pair logic.")
+        print(missing_pairs.head(10))  # Debug first few rows
+        missing_pairs.to_csv("missing_reference_pairs.csv", index=False)
+
+    # ✅ Only process valid pairs
+    if not valid_pairs.empty:
+        forced_matches = erp_full[ERP_MATCH_COLS].merge(
+            valid_pairs, on=ERP_PART_ID, how='inner'
+        ).merge(
+            tru_full[TRU_MATCH_COLS],
+            left_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
+            right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
+            how='inner'
+        )
+
+        print(f"✅ Found {len(forced_matches)} forced pair matches in {round_name}")
+
+        forced_matches[SCORE_COL] = 1
+        forced_matches[UNIFIED_MC_COL] = forced_matches[f'{ERP_MAT_NUM}_original'].copy()
+        forced_matches['is_matched'] = True
+        forced_matches['Matching Reason'] = round_name + ' (forced pair)'
+        forced_matches['confidence'] = 'high'
+
+        forced_matches = add_matches_bundles(forced_matches, bundles, tru_full)
+
+        # Append forced matches to main matches
+        matches = pd.concat([matches, forced_matches], ignore_index=True)
+        matches.drop_duplicates(subset=NON_DUPLICATES_SET, inplace=True)
+    else:
+        print("🚫 No valid forced pairs to process.")
+else:
+    print(f"🚫 Skipping FORCE PAIR matching for {round_name}")
