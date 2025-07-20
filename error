@@ -13,6 +13,19 @@ def match_by_reference_table(erp: pd.DataFrame,
     print(f'🚀 MATCH ROUND {match_round_name}')
     start = time.time()
 
+    # 🟢 Clean key columns: trim leading/trailing spaces
+    def clean_keys(df, cols):
+        for col in cols:
+            df[col] = df[col].astype(str).str.strip()
+        return df
+
+    # Clean keys in ERP, TRU, reference_table, erp_full, and tru_full
+    erp = clean_keys(erp, [ERP_PART_ID, ERP_MAT_NUM])
+    tru = clean_keys(tru, [TRU_SPEC_ID, TRU_MAT_NUM])
+    reference_table = clean_keys(reference_table, [ERP_PART_ID, TRU_SPEC_ID])
+    erp_full = clean_keys(erp_full, [ERP_PART_ID, ERP_MAT_NUM])
+    tru_full = clean_keys(tru_full, [TRU_SPEC_ID, TRU_MAT_NUM])
+
     # 🟢 Step 1: Normal matching logic
     df_erp_with_additional_id = erp[ERP_MATCH_COLS].merge(
         reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
