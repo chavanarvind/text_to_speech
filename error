@@ -1,10 +1,17 @@
-matches_per_hfb, erp_to_match, tru_to_match, previous_round = match_by_reference_table(
-    erp_to_match,
-    tru_to_match,
-    human_feedback_with_text,
-    previous_round,
-    'Human Feedback',
-    bundles,
-    erp_full_for_force_pair,  # ✅ Pass full ERP
-    tru_full_for_force_pair   # ✅ Pass full TRU
-)
+Cleaning up all outstanding Run operations, waiting 300.0 seconds
+1 items cleaning up...
+Cleanup took 0.18838286399841309 seconds
+Traceback (most recent call last):
+  File "cross_hound/matcher.py", line 1745, in <module>
+    main(input_dir=args.get('input_dir'),
+  File "cross_hound/matcher.py", line 1529, in main
+    matched, unmatched = full_matching_routine(data_version, db_style, device,
+  File "cross_hound/matcher.py", line 1070, in full_matching_routine
+    matches_per_hfb, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
+  File "cross_hound/matcher.py", line 542, in match_by_reference_table
+    matches.drop_duplicates(subset=NON_DUPLICATES_SET, inplace=True)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/frame.py", line 6530, in drop_duplicates
+    result = self[-self.duplicated(subset, keep=keep)]
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/frame.py", line 6662, in duplicated
+    raise KeyError(Index(diff))
+KeyError: Index(['unified_mat_code'], dtype='object')
