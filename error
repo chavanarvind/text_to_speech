@@ -1,27 +1,6 @@
-if not valid_pairs.empty:
-    forced_matches = erp_full[ERP_MATCH_COLS].merge(
-        valid_pairs, on=ERP_PART_ID, how='inner'
-    ).merge(
-        tru_full[TRU_MATCH_COLS],
-        left_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
-        right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
-        how='inner'
-    )
-
-    print(f"✅ Found {len(forced_matches)} forced pair matches in {round_name}")
-
-    forced_matches[SCORE_COL] = 1
-    forced_matches[UNIFIED_MC_COL] = forced_matches[f'{ERP_MAT_NUM}_original'].copy()
-    forced_matches['is_matched'] = True
-    forced_matches['Matching Reason'] = round_name + ' (forced pair)'
-    forced_matches['confidence'] = 'high'
-
-    forced_matches = add_matches_bundles(forced_matches, bundles, tru_full)
-
-    # 📝 Save forced matches for debugging
-    forced_matches.to_csv(f"forced_matches_{round_name.replace(' ', '_')}.csv", index=False)
-    print(f"📄 Saved forced matches to forced_matches_{round_name.replace(' ', '_')}.csv")
-
-    # Add forced matches to main matches
-    matches = pd.concat([matches, forced_matches], ignore_index=True)
-    matches.drop_duplicates(subset=NON_DUPLICATES_SET, inplace=True)
+unmatched_pairs = forced_pairs.merge(
+    matches[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
+    on=[ERP_PART_ID, TRU_SPEC_ID],
+    how='left',
+    indicator=True
+).query('_merge == "left_only"')
