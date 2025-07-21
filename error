@@ -1,70 +1,27 @@
-✅ STEP 1: Loaded NLP_list_ERP.csv
-  source CMPNT_MATL_NUM                 CMPNT_MATL_DESC       CHILD_NM   
-0    NaN           1231  POLYETHYLENE BULK BAGS 36 X 60            NaN  \
-1    NaN           2467   MAT - BENADRYL ULTRA TAB 24'S     DC-0066084   
-2    NaN          12026  FITA ADES.BOPP (APLIC. AUTOM.)  MAE-BR-004679   
-3    NaN          13807         CX.PAPELAO OND NUMERO 5  MAE-BR-004836   
-4    NaN          14600  FILM POLY TRANSP 50 MM X 1000M            NaN   
+if not valid_pairs.empty:
+    forced_matches = erp_full[ERP_MATCH_COLS].merge(
+        valid_pairs, on=ERP_PART_ID, how='inner'
+    ).merge(
+        tru_full[TRU_MATCH_COLS],
+        left_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
+        right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
+        how='inner'
+    )
 
-                                    CHILD_TITLE_DESC  
-0                                                NaN  
-1   30054373, Print Mat, Benadryl Ultra Tablet, 24ct  
-2           FITA ADESIVA BOPP - APLICAÇAO AUTOMÁTICA  
-3  Shipper/Corrugado - CAIXA DE PAPELAO ONDULADO ...  
-4                                                NaN  
-🔍 Is target pair in reference table? True
-✅ STEP 2: After merging ERP text
-  source CMPNT_MATL_NUM                 CMPNT_MATL_DESC       CHILD_NM   
-0    NaN           1231  POLYETHYLENE BULK BAGS 36 X 60            NaN  \
-1    NaN           2467   MAT - BENADRYL ULTRA TAB 24'S     DC-0066084   
-2    NaN          12026  FITA ADES.BOPP (APLIC. AUTOM.)  MAE-BR-004679   
-3    NaN          13807         CX.PAPELAO OND NUMERO 5  MAE-BR-004836   
-4    NaN          14600  FILM POLY TRANSP 50 MM X 1000M            NaN   
+    print(f"✅ Found {len(forced_matches)} forced pair matches in {round_name}")
 
-                                    CHILD_TITLE_DESC  text_for_matching_erp  
-0                                                NaN                    NaN  
-1   30054373, Print Mat, Benadryl Ultra Tablet, 24ct             mat tab 24  
-2           FITA ADESIVA BOPP - APLICAÇAO AUTOMÁTICA                    NaN  
-3  Shipper/Corrugado - CAIXA DE PAPELAO ONDULADO ...  cx papelao ond numero  
-4                                                NaN                    NaN  
-🔍 Is target pair present after ERP merge? True
-✅ STEP 3: After merging TRU text
-  source CMPNT_MATL_NUM                 CMPNT_MATL_DESC       CHILD_NM   
-0    NaN           1231  POLYETHYLENE BULK BAGS 36 X 60            NaN  \
-1    NaN           2467   MAT - BENADRYL ULTRA TAB 24'S     DC-0066084   
-2    NaN           2467   MAT - BENADRYL ULTRA TAB 24'S     DC-0066084   
-3    NaN          12026  FITA ADES.BOPP (APLIC. AUTOM.)  MAE-BR-004679   
-4    NaN          13807         CX.PAPELAO OND NUMERO 5  MAE-BR-004836   
+    forced_matches[SCORE_COL] = 1
+    forced_matches[UNIFIED_MC_COL] = forced_matches[f'{ERP_MAT_NUM}_original'].copy()
+    forced_matches['is_matched'] = True
+    forced_matches['Matching Reason'] = round_name + ' (forced pair)'
+    forced_matches['confidence'] = 'high'
 
-                                    CHILD_TITLE_DESC  text_for_matching_erp   
-0                                                NaN                    NaN  \
-1   30054373, Print Mat, Benadryl Ultra Tablet, 24ct             mat tab 24   
-2   30054373, Print Mat, Benadryl Ultra Tablet, 24ct             mat tab 24   
-3           FITA ADESIVA BOPP - APLICAÇAO AUTOMÁTICA                    NaN   
-4  Shipper/Corrugado - CAIXA DE PAPELAO ONDULADO ...  cx papelao ond numero   
+    forced_matches = add_matches_bundles(forced_matches, bundles, tru_full)
 
-                               text_for_matching_tru  
-0                                                NaN  
-1                                       print mat ct  
-2                          print mat ultra tablet ct  
-3                                                NaN  
-4  shipper corrugado caixa de papelao ondulado nº...  
-🔍 Is target pair present after TRU merge? True
-✅ STEP 4: After selecting relevant columns
-🔍 Is target pair still present after column filtering? True
-✅ STEP 5: After dropping duplicates
-🔍 Is target pair still present after dropping duplicates? True
-🚀 MATCH ROUND 2: matches_NLP_list_ERP suggested X-match
-------------------------------------------------------------
-🔄 FORCE PAIR LOGIC FOR ALL REFERENCE PAIRS in matches_NLP_list_ERP suggested X-match
-✅ Found 1485024 forced matches in matches_NLP_list_ERP suggested X-match
-****** Adding 31614 more matches based on SPEC_FLOW_CD
-------------------------------------------------------------
-🔄 Running NORMAL matching logic
-✅ Found 12950 normal matches
-****** Adding 1381 more matches based on SPEC_FLOW_CD
-⚠️ 1520596 duplicates found. Deduplicating...
-2: matches_NLP_list_ERP suggested X-match round matched: 10373 (14.11 seconds)
-df_erp_to_match cases:  351182
-df_tru_to_match cases:  357219
-Amount of current matches:  10373
+    # 📝 Save forced matches for debugging
+    forced_matches.to_csv(f"forced_matches_{round_name.replace(' ', '_')}.csv", index=False)
+    print(f"📄 Saved forced matches to forced_matches_{round_name.replace(' ', '_')}.csv")
+
+    # Add forced matches to main matches
+    matches = pd.concat([matches, forced_matches], ignore_index=True)
+    matches.drop_duplicates(subset=NON_DUPLICATES_SET, inplace=True)
