@@ -1,5 +1,10 @@
-# Ensure SRC_SYS_CD and PLNT_CD exist in forced_matches
-for col, placeholder in [('SRC_SYS_CD', 'UNKNOWN_SYS'), ('PLNT_CD', 'UNKNOWN_PLANT')]:
-    if col not in forced_matches.columns:
-        print(f"⚠️ {col} missing in forced_matches. Adding placeholder: {placeholder}")
-        forced_matches[col] = placeholder
+FORCE PAIR LOGIC FOR ALL REFERENCE PAIRS in matches_NLP_list_ERP suggested X-match
+✅ Total forced pairs in reference table: 1612
+🔍 Is target pair in reference table? True
+✅ ERP records found for forced pairs: 14916
+⚠️ SRC_SYS_CD missing in forced_matches. Adding placeholder: UNKNOWN_SYS
+✅ Forced matches found after joining TRU: 5625
+⚠️ PLNT_CD missing in forced_matches. Adding placeholder: UNKNOWN_PLANT
+✅ Forced matches found after joining TRU: 5625
+🔍 Is target pair present in forced matches? False
+📄 Saved all forced matches to user_logs/forced_match_debug.csv
