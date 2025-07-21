@@ -1,66 +1,70 @@
-print('-' * 60)
-NLP_list_ERP_folder = os.path.dirname(os.path.realpath(__file__))
-NLP_list_ERP_folder = os.path.abspath(os.path.join(NLP_list_ERP_folder, os.pardir))
-xmatches_NLP_list_ERP = pd.read_csv(f'{NLP_list_ERP_folder}/reference_tables/NLP_list_ERP.csv', encoding='latin1', dtype='str')
+✅ STEP 1: Loaded NLP_list_ERP.csv
+  source CMPNT_MATL_NUM                 CMPNT_MATL_DESC       CHILD_NM   
+0    NaN           1231  POLYETHYLENE BULK BAGS 36 X 60            NaN  \
+1    NaN           2467   MAT - BENADRYL ULTRA TAB 24'S     DC-0066084   
+2    NaN          12026  FITA ADES.BOPP (APLIC. AUTOM.)  MAE-BR-004679   
+3    NaN          13807         CX.PAPELAO OND NUMERO 5  MAE-BR-004836   
+4    NaN          14600  FILM POLY TRANSP 50 MM X 1000M            NaN   
 
-print('✅ STEP 1: Loaded NLP_list_ERP.csv')
-print(xmatches_NLP_list_ERP.head())
-# Debug: Check for target pair in reference table
-check_pair = xmatches_NLP_list_ERP[
-    (xmatches_NLP_list_ERP[ERP_PART_ID] == "6115990") &
-    (xmatches_NLP_list_ERP[TRU_SPEC_ID] == "PC-046458")
-]
-print(f"🔍 Is target pair in reference table? {not check_pair.empty}")
+                                    CHILD_TITLE_DESC  
+0                                                NaN  
+1   30054373, Print Mat, Benadryl Ultra Tablet, 24ct  
+2           FITA ADESIVA BOPP - APLICAÇAO AUTOMÁTICA  
+3  Shipper/Corrugado - CAIXA DE PAPELAO ONDULADO ...  
+4                                                NaN  
+🔍 Is target pair in reference table? True
+✅ STEP 2: After merging ERP text
+  source CMPNT_MATL_NUM                 CMPNT_MATL_DESC       CHILD_NM   
+0    NaN           1231  POLYETHYLENE BULK BAGS 36 X 60            NaN  \
+1    NaN           2467   MAT - BENADRYL ULTRA TAB 24'S     DC-0066084   
+2    NaN          12026  FITA ADES.BOPP (APLIC. AUTOM.)  MAE-BR-004679   
+3    NaN          13807         CX.PAPELAO OND NUMERO 5  MAE-BR-004836   
+4    NaN          14600  FILM POLY TRANSP 50 MM X 1000M            NaN   
 
-# Merge ERP text
-xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP.merge(
-    erp_full[['text_for_matching_erp', ERP_PART_ID]].drop_duplicates(),
-    how='left',
-    on=ERP_PART_ID
-)
-print('✅ STEP 2: After merging ERP text')
-print(xmatches_NLP_list_ERP_with_text.head())
-# Debug: Check for target pair
-check_pair = xmatches_NLP_list_ERP_with_text[
-    (xmatches_NLP_list_ERP_with_text[ERP_PART_ID] == "6115990") &
-    (xmatches_NLP_list_ERP_with_text[TRU_SPEC_ID] == "PC-046458")
-]
-print(f"🔍 Is target pair present after ERP merge? {not check_pair.empty}")
+                                    CHILD_TITLE_DESC  text_for_matching_erp  
+0                                                NaN                    NaN  
+1   30054373, Print Mat, Benadryl Ultra Tablet, 24ct             mat tab 24  
+2           FITA ADESIVA BOPP - APLICAÇAO AUTOMÁTICA                    NaN  
+3  Shipper/Corrugado - CAIXA DE PAPELAO ONDULADO ...  cx papelao ond numero  
+4                                                NaN                    NaN  
+🔍 Is target pair present after ERP merge? True
+✅ STEP 3: After merging TRU text
+  source CMPNT_MATL_NUM                 CMPNT_MATL_DESC       CHILD_NM   
+0    NaN           1231  POLYETHYLENE BULK BAGS 36 X 60            NaN  \
+1    NaN           2467   MAT - BENADRYL ULTRA TAB 24'S     DC-0066084   
+2    NaN           2467   MAT - BENADRYL ULTRA TAB 24'S     DC-0066084   
+3    NaN          12026  FITA ADES.BOPP (APLIC. AUTOM.)  MAE-BR-004679   
+4    NaN          13807         CX.PAPELAO OND NUMERO 5  MAE-BR-004836   
 
-# Merge TRU text
-xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text.merge(
-    tru_full[['text_for_matching_tru', TRU_SPEC_ID]].drop_duplicates(),
-    how='left',
-    on=TRU_SPEC_ID
-)
-print('✅ STEP 3: After merging TRU text')
-print(xmatches_NLP_list_ERP_with_text.head())
-# Debug: Check for target pair
-check_pair = xmatches_NLP_list_ERP_with_text[
-    (xmatches_NLP_list_ERP_with_text[ERP_PART_ID] == "6115990") &
-    (xmatches_NLP_list_ERP_with_text[TRU_SPEC_ID] == "PC-046458")
-]
-print(f"🔍 Is target pair present after TRU merge? {not check_pair.empty}")
+                                    CHILD_TITLE_DESC  text_for_matching_erp   
+0                                                NaN                    NaN  \
+1   30054373, Print Mat, Benadryl Ultra Tablet, 24ct             mat tab 24   
+2   30054373, Print Mat, Benadryl Ultra Tablet, 24ct             mat tab 24   
+3           FITA ADESIVA BOPP - APLICAÇAO AUTOMÁTICA                    NaN   
+4  Shipper/Corrugado - CAIXA DE PAPELAO ONDULADO ...  cx papelao ond numero   
 
-# Select required columns
-xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text[[ERP_PART_ID,
-                                                                   TRU_SPEC_ID,
-                                                                   'text_for_matching_erp',
-                                                                   'text_for_matching_tru']]
-print('✅ STEP 4: After selecting relevant columns')
-# Debug: Check for target pair
-check_pair = xmatches_NLP_list_ERP_with_text[
-    (xmatches_NLP_list_ERP_with_text[ERP_PART_ID] == "6115990") &
-    (xmatches_NLP_list_ERP_with_text[TRU_SPEC_ID] == "PC-046458")
-]
-print(f"🔍 Is target pair still present after column filtering? {not check_pair.empty}")
-
-# Drop duplicates
-xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text.drop_duplicates()
-print('✅ STEP 5: After dropping duplicates')
-# Debug: Check for target pair
-check_pair = xmatches_NLP_list_ERP_with_text[
-    (xmatches_NLP_list_ERP_with_text[ERP_PART_ID] == "6115990") &
-    (xmatches_NLP_list_ERP_with_text[TRU_SPEC_ID] == "PC-046458")
-]
-print(f"🔍 Is target pair still present after dropping duplicates? {not check_pair.empty}")
+                               text_for_matching_tru  
+0                                                NaN  
+1                                       print mat ct  
+2                          print mat ultra tablet ct  
+3                                                NaN  
+4  shipper corrugado caixa de papelao ondulado nº...  
+🔍 Is target pair present after TRU merge? True
+✅ STEP 4: After selecting relevant columns
+🔍 Is target pair still present after column filtering? True
+✅ STEP 5: After dropping duplicates
+🔍 Is target pair still present after dropping duplicates? True
+🚀 MATCH ROUND 2: matches_NLP_list_ERP suggested X-match
+------------------------------------------------------------
+🔄 FORCE PAIR LOGIC FOR ALL REFERENCE PAIRS in matches_NLP_list_ERP suggested X-match
+✅ Found 1485024 forced matches in matches_NLP_list_ERP suggested X-match
+****** Adding 31614 more matches based on SPEC_FLOW_CD
+------------------------------------------------------------
+🔄 Running NORMAL matching logic
+✅ Found 12950 normal matches
+****** Adding 1381 more matches based on SPEC_FLOW_CD
+⚠️ 1520596 duplicates found. Deduplicating...
+2: matches_NLP_list_ERP suggested X-match round matched: 10373 (14.11 seconds)
+df_erp_to_match cases:  351182
+df_tru_to_match cases:  357219
+Amount of current matches:  10373
