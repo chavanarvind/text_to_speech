@@ -1,78 +1,157 @@
-# 🟣 STEP 1: FORCE PAIR LOGIC FIRST for NLP_LIST_ERP
-if "nlp_list_erp" in round_name.lower():
-    print("-" * 60)
-    print(f"🔄 FORCE PAIR LOGIC FOR ALL REFERENCE PAIRS in {round_name}")
+def match_by_reference_table(erp: pd.DataFrame,
+                             tru: pd.DataFrame,
+                             reference_table: pd.DataFrame,
+                             last_match_round: int,
+                             round_name: str,
+                             bundles,
+                             erp_full: pd.DataFrame,
+                             tru_full: pd.DataFrame):
+    """
+    Match records using a reference table.
+    For NLP_LIST_ERP, run FORCE PAIR matching first (on all pairs),
+    then run normal matching logic.
+    """
+    match_round_name = f'{last_match_round + 1}: {round_name}'
+    print(f'🚀 MATCH ROUND {match_round_name}')
+    start = time.time()
 
-    # Strip spaces from reference keys
+    matches = pd.DataFrame()
+
+    # 🟣 STEP 1: FORCE PAIR LOGIC FIRST for NLP_LIST_ERP
+    if "nlp_list_erp" in round_name.lower():
+        print("-" * 60)
+        print(f"🔄 FORCE PAIR LOGIC FOR ALL REFERENCE PAIRS in {round_name}")
+
+        # Strip spaces from key columns
+        reference_table[ERP_PART_ID] = reference_table[ERP_PART_ID].astype(str).str.strip()
+        reference_table[TRU_SPEC_ID] = reference_table[TRU_SPEC_ID].astype(str).str.strip()
+        erp_full[ERP_PART_ID] = erp_full[ERP_PART_ID].astype(str).str.strip()
+        tru_full[TRU_SPEC_ID] = tru_full[TRU_SPEC_ID].astype(str).str.strip()
+
+        forced_pairs = reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates()
+        print(f"✅ Total forced pairs in reference table: {len(forced_pairs)}")
+
+        # DEBUG: Check if target pair exists
+        target_pair = forced_pairs[
+            (forced_pairs[ERP_PART_ID] == '6115990') & 
+            (forced_pairs[TRU_SPEC_ID] == 'PC-046458')
+        ]
+        print(f"🔍 Is target pair in reference table? {not target_pair.empty}")
+
+        # Merge forced pairs
+        erp_forced = erp_full[ERP_MATCH_COLS].merge(
+            forced_pairs, on=ERP_PART_ID, how='inner'
+        )
+        print(f"✅ ERP records found for forced pairs: {len(erp_forced)}")
+
+        forced_matches = erp_forced.merge(
+            tru_full[TRU_MATCH_COLS],
+            left_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
+            right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
+            how='inner'
+        )
+        print(f"✅ Forced matches found after joining TRU: {len(forced_matches)}")
+
+        # DEBUG: Check if target pair survived
+        target_forced_match = forced_matches[
+            (forced_matches[ERP_PART_ID] == '6115990') & 
+            (forced_matches[TRU_SPEC_ID] == 'PC-046458')
+        ]
+        print(f"🔍 Is target pair present in forced matches? {not target_forced_match.empty}")
+
+        if not forced_matches.empty:
+            forced_matches[SCORE_COL] = 1
+            forced_matches[UNIFIED_MC_COL] = forced_matches[f'{ERP_MAT_NUM}_original'].copy()
+            forced_matches['is_matched'] = True
+            forced_matches['Matching Reason'] = round_name + ' (forced pair)'
+            forced_matches['confidence'] = 'high'
+            forced_matches = add_matches_bundles(forced_matches, bundles, tru_full)
+
+            # Save forced matches to debug file
+            user_logs_path = os.path.join(os.getcwd(), "user_logs")
+            os.makedirs(user_logs_path, exist_ok=True)
+            forced_matches.to_csv(
+                os.path.join(user_logs_path, "forced_match_debug.csv"),
+                index=False
+            )
+            print(f"📄 Saved all forced matches to user_logs/forced_match_debug.csv")
+
+            matches = pd.concat([matches, forced_matches], ignore_index=True)
+        else:
+            print("🚫 No forced matches found in ERP/TRU full datasets")
+
+    # 🟢 STEP 2: NORMAL MATCHING (ID + description)
+    print("-" * 60)
+    print("🔄 Running NORMAL matching logic")
+
+    # Strip spaces in current ERP/TRU keys
+    erp[ERP_PART_ID] = erp[ERP_PART_ID].astype(str).str.strip()
+    tru[TRU_SPEC_ID] = tru[TRU_SPEC_ID].astype(str).str.strip()
     reference_table[ERP_PART_ID] = reference_table[ERP_PART_ID].astype(str).str.strip()
     reference_table[TRU_SPEC_ID] = reference_table[TRU_SPEC_ID].astype(str).str.strip()
-    erp_full[ERP_PART_ID] = erp_full[ERP_PART_ID].astype(str).str.strip()
-    tru_full[TRU_SPEC_ID] = tru_full[TRU_SPEC_ID].astype(str).str.strip()
 
-    forced_pairs = reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates()
-    print(f"✅ Total forced pairs in reference table: {len(forced_pairs)}")
-
-    # DEBUG: Check if target pair is in reference table
-    target_pair = forced_pairs[
-        (forced_pairs[ERP_PART_ID] == '6115990') & 
-        (forced_pairs[TRU_SPEC_ID] == 'PC-046458')
-    ]
-    print(f"🔍 Is target pair in reference table? {not target_pair.empty}")
-
-    # 🚀 Process all pairs directly from erp_full and tru_full
-    erp_full[ERP_PART_ID] = erp_full[ERP_PART_ID].astype(str).str.strip()
-    tru_full[TRU_SPEC_ID] = tru_full[TRU_SPEC_ID].astype(str).str.strip()
-
-    erp_forced = erp_full[ERP_MATCH_COLS].merge(
-        forced_pairs, on=ERP_PART_ID, how='inner'
-    )
-    print(f"✅ ERP records found for forced pairs: {len(erp_forced)}")
-    if not erp_forced.empty:
-        print(erp_forced[erp_forced[ERP_PART_ID] == '6115990'])
-
-    forced_matches = erp_forced.merge(
-        tru_full[TRU_MATCH_COLS],
-        left_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
-        right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
+    df_erp_with_additional_id = erp[ERP_MATCH_COLS].merge(
+        reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
+        on=ERP_PART_ID,
         how='inner'
     )
-    print(f"✅ Forced matches found after joining TRU: {len(forced_matches)}")
 
-    # DEBUG: Check if target pair survived
-    target_forced_match = forced_matches[
-        (forced_matches[ERP_PART_ID] == '6115990') & 
-        (forced_matches[TRU_SPEC_ID] == 'PC-046458')
-    ]
-    print(f"🔍 Is target pair present in forced matches? {not target_forced_match.empty}")
+    matched_per_id = df_erp_with_additional_id.merge(
+        tru[TRU_MATCH_COLS],
+        left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, TRU_SPEC_ID],
+        right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, TRU_SPEC_ID],
+        how='inner'
+    )
 
-    # DEBUG: If missing, log why
-    if target_forced_match.empty:
-        missing_erp = forced_pairs[~forced_pairs[ERP_PART_ID].isin(erp_forced[ERP_PART_ID])]
-        if not missing_erp.empty:
-            print(f"⚠️ ERP_PART_IDs missing in erp_full:\n{missing_erp}")
+    # Match per description
+    if not (reference_table['text_for_matching_erp'].isnull().all() or
+            reference_table['text_for_matching_tru'].isnull().all()):
+        reference_table_text = reference_table.dropna(subset=['text_for_matching_erp', 'text_for_matching_tru'])
+        is_valid_ref = [min(len(str(x)), len(str(y))) > 5
+                        for x, y in zip(reference_table_text['text_for_matching_erp'],
+                                        reference_table_text['text_for_matching_tru'])]
+        reference_table_text = reference_table_text[is_valid_ref]
 
-        missing_tru = forced_pairs[~forced_pairs[TRU_SPEC_ID].isin(tru_full[TRU_SPEC_ID])]
-        if not missing_tru.empty:
-            print(f"⚠️ TRU_SPEC_IDs missing in tru_full:\n{missing_tru}")
-
-    # ✅ Process forced matches
-    if not forced_matches.empty:
-        forced_matches[SCORE_COL] = 1
-        forced_matches[UNIFIED_MC_COL] = forced_matches[f'{ERP_MAT_NUM}_original'].copy()
-        forced_matches['is_matched'] = True
-        forced_matches['Matching Reason'] = round_name + ' (forced pair)'
-        forced_matches['confidence'] = 'high'
-        forced_matches = add_matches_bundles(forced_matches, bundles, tru_full)
-
-        # Save forced matches for inspection
-        user_logs_path = os.path.join(os.getcwd(), "user_logs")
-        os.makedirs(user_logs_path, exist_ok=True)  # create directory if it doesn't exist
-        forced_matches.to_csv(
-            os.path.join(user_logs_path, "forced_match_debug.csv"), 
-            index=False
+        df_erp_with_additional_desc = erp[ERP_MATCH_COLS].merge(
+            reference_table_text[['text_for_matching_erp', 'text_for_matching_tru']].drop_duplicates(),
+            on='text_for_matching_erp',
+            how='inner'
         )
-        print(f"📄 Saved all forced matches to user_logs/forced_match_debug.csv")
 
-        matches = pd.concat([matches, forced_matches], ignore_index=True)
+        matched_per_desc = df_erp_with_additional_desc.merge(
+            tru[TRU_MATCH_COLS],
+            left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, 'text_for_matching_tru'],
+            right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, 'text_for_matching_tru'],
+            how='inner'
+        )
+
+        matched_per_desc = matched_per_desc[matched_per_id.columns]
     else:
-        print("🚫 No forced matches found in ERP/TRU full datasets")
+        matched_per_desc = pd.DataFrame(columns=matched_per_id.columns)
+
+    # Combine ID and description matches
+    normal_matches = pd.concat([matched_per_id, matched_per_desc], ignore_index=True)
+
+    if not normal_matches.empty:
+        print(f"✅ Found {len(normal_matches)} normal matches")
+        normal_matches[SCORE_COL] = 1
+        normal_matches[UNIFIED_MC_COL] = normal_matches[f'{ERP_MAT_NUM}_original'].copy()
+        normal_matches['is_matched'] = True
+        normal_matches['Matching Reason'] = round_name
+        normal_matches['confidence'] = 'high'
+        normal_matches = add_matches_bundles(normal_matches, bundles, tru)
+
+        matches = pd.concat([matches, normal_matches], ignore_index=True)
+
+    # ✅ Deduplicate
+    nd = matches.duplicated(subset=NON_DUPLICATES_SET).sum()
+    if nd > 0:
+        print(f"⚠️ {nd} duplicates found. Deduplicating...")
+        matches.drop_duplicates(subset=NON_DUPLICATES_SET, inplace=True)
+
+    # 🕓 Report time and return
+    assign_round_name_and_report_time(matches, match_round_name, start)
+
+    df_erp_to_match, df_tru_to_match = get_data_yet_to_match(matches, erp, tru)
+
+    return matches, df_erp_to_match, df_tru_to_match, last_match_round + 1
