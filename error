@@ -1,17 +1,43 @@
-Cleaning up all outstanding Run operations, waiting 300.0 seconds
-1 items cleaning up...
-Cleanup took 0.18838286399841309 seconds
-Traceback (most recent call last):
-  File "cross_hound/matcher.py", line 1745, in <module>
-    main(input_dir=args.get('input_dir'),
-  File "cross_hound/matcher.py", line 1529, in main
-    matched, unmatched = full_matching_routine(data_version, db_style, device,
-  File "cross_hound/matcher.py", line 1070, in full_matching_routine
-    matches_per_hfb, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
-  File "cross_hound/matcher.py", line 542, in match_by_reference_table
-    matches.drop_duplicates(subset=NON_DUPLICATES_SET, inplace=True)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/frame.py", line 6530, in drop_duplicates
-    result = self[-self.duplicated(subset, keep=keep)]
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/frame.py", line 6662, in duplicated
-    raise KeyError(Index(diff))
-KeyError: Index(['unified_mat_code'], dtype='object')
+##############NLP_LIST_ERP########
+    print('-' * 60)
+    NLP_list_ERP_folder = os.path.dirname(os.path.realpath(__file__))
+    NLP_list_ERP_folder = os.path.abspath(os.path.join(NLP_list_ERP_folder, os.pardir))
+    xmatches_NLP_list_ERP = pd.read_csv(f'{NLP_list_ERP_folder}/reference_tables/NLP_list_ERP.csv',encoding='latin1',dtype='str')
+    #xmatches_EPR_priority_confidence=xmatches_EPR_priority_confidence.astype(str)
+    print('reading xmatches_EPR_priority_confidence file from folder ')
+    print(xmatches_NLP_list_ERP)
+    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP.merge(
+        erp[['text_for_matching_erp', ERP_PART_ID]].drop_duplicates(),
+        how='left',
+        on=ERP_PART_ID)
+    print('mapping using ERP PART ID')
+    print(xmatches_NLP_list_ERP_with_text)
+    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text.merge(
+        tru[['text_for_matching_tru', TRU_SPEC_ID]].drop_duplicates(),
+        how='left',
+        on=TRU_SPEC_ID)
+    print('mapping using TRU_SPEC_ID')
+    print(xmatches_NLP_list_ERP_with_text)
+    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text[[ERP_PART_ID,
+                                                             TRU_SPEC_ID,
+                                                             'text_for_matching_erp',
+                                                             'text_for_matching_tru']]
+    print('xmatches_NLP_list_ERP_with_text s1',xmatches_NLP_list_ERP_with_text)
+    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text.drop_duplicates()
+    print('xmatches_NLP_list_ERP_with_text s2',xmatches_NLP_list_ERP_with_text)
+    matches_NLP_list_ERP, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
+                                                                                           tru_to_match,
+                                                                                           xmatches_NLP_list_ERP_with_text,
+                                                                                           previous_round,
+                                                                                           'matches_NLP_list_ERP suggested X-match',
+                                                                                           bundles,erp_full,tru_full)
+    check_duplicates(matches_NLP_list_ERP)
+    print(matches_NLP_list_ERP)
+
+
+
+    user_logs_path = os.path.join(os.getcwd(), "user_logs")
+    os.makedirs(user_logs_path, exist_ok=True)  # create directory if it doesn't exist
+    matches_NLP_list_ERP.to_csv(
+    os.path.join(user_logs_path, "matches_NLP_list_ERP.csv"), 
+    index=False)
