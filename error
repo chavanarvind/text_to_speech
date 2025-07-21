@@ -1,19 +1,159 @@
+def match_by_reference_table(erp: pd.DataFrame,
+                             tru: pd.DataFrame,
+                             reference_table: pd.DataFrame,
+                             last_match_round: int,
+                             round_name: str,
+                             bundles,
+                             erp_full: pd.DataFrame,
+                             tru_full: pd.DataFrame):
+    """
+    Match records using a reference table with fallback logic. Includes strict merge first and relaxed merge if needed.
+    Also adds detailed debug statements to help trace where pairs are getting lost.
+    """
+    match_round_name = f'{last_match_round + 1}: {round_name}'
+    print(f'🚀 MATCH ROUND {match_round_name}')
+    start = time.time()
 
-Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
-  File "cross_hound/matcher.py", line 1725, in <module>
-    main(input_dir=args.get('input_dir'),
-  File "cross_hound/matcher.py", line 1509, in main
-    matched, unmatched = full_matching_routine(data_version, db_style, device,
-  File "cross_hound/matcher.py", line 1331, in full_matching_routine
-    matches_NLP_list_ERP, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
-  File "cross_hound/matcher.py", line 501, in match_by_reference_table
-    forced_matches = add_matches_bundles(forced_matches, bundles, tru_full)
-  File "cross_hound/matcher.py", line 189, in add_matches_bundles
-    extra_matches = (matches_with_bundles[erp_match_cols + ['p2']]
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/frame.py", line 3766, in __getitem__
-    indexer = self.columns._get_indexer_strict(key, "columns")[1]
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 5876, in _get_indexer_strict
-    self._raise_if_missing(keyarr, indexer, axis_name)
-  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 5938, in _raise_if_missing
-    raise KeyError(f"{not_found} not in index")
-KeyError: "['SRC_SYS_CD', 'PLNT_CD'] not in index"
+    debug_cmpnt_num = "6115990"
+    debug_child_nm = "PC-046458"
+
+    # 🟢 Clean key columns: trim leading/trailing spaces
+    def clean_keys(df, cols):
+        for col in cols:
+            df[col] = df[col].astype(str).str.strip()
+        return df
+
+    erp = clean_keys(erp, [ERP_PART_ID, ERP_MAT_NUM])
+    tru = clean_keys(tru, [TRU_SPEC_ID, TRU_MAT_NUM])
+    reference_table = clean_keys(reference_table, [ERP_PART_ID, TRU_SPEC_ID])
+    erp_full = clean_keys(erp_full, [ERP_PART_ID, ERP_MAT_NUM])
+    tru_full = clean_keys(tru_full, [TRU_SPEC_ID, TRU_MAT_NUM])
+
+    # 🟢 Debug: Check if debug_cmpnt_num and debug_child_nm exist in full ERP and TRU
+    print("🔍 [DEBUG] Checking full ERP and TRU for debug IDs")
+    debug_in_erp = erp_full[erp_full[ERP_PART_ID] == debug_cmpnt_num]
+    debug_in_tru = tru_full[tru_full[TRU_SPEC_ID] == debug_child_nm]
+    if not debug_in_erp.empty:
+        print(f"✅ [DEBUG] Found {debug_cmpnt_num} in ERP full:")
+        print(debug_in_erp)
+    else:
+        print(f"❌ [DEBUG] {debug_cmpnt_num} not found in ERP full")
+    if not debug_in_tru.empty:
+        print(f"✅ [DEBUG] Found {debug_child_nm} in TRU full:")
+        print(debug_in_tru)
+    else:
+        print(f"❌ [DEBUG] {debug_child_nm} not found in TRU full")
+
+    # 🟢 Step 1: Normal matching logic
+    df_erp_with_additional_id = erp[ERP_MATCH_COLS].merge(
+        reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
+        on=ERP_PART_ID,
+        how='inner'
+    )
+
+    matched_per_id = df_erp_with_additional_id.merge(
+        tru[TRU_MATCH_COLS],
+        left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, TRU_SPEC_ID],
+        right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, TRU_SPEC_ID],
+        how='inner'
+    )
+
+    if not matched_per_id.empty:
+        print(f"✅ [DEBUG] Normal strict match rows: {len(matched_per_id)}")
+        if matched_per_id[(matched_per_id[ERP_PART_ID] == debug_cmpnt_num) & (matched_per_id[TRU_SPEC_ID] == debug_child_nm)].empty:
+            print(f"❌ [DEBUG] Debug pair {debug_cmpnt_num}/{debug_child_nm} not found in normal matches")
+        else:
+            print(f"✅ [DEBUG] Debug pair {debug_cmpnt_num}/{debug_child_nm} found in normal matches")
+    else:
+        print("❌ [DEBUG] No strict matches found in normal match step")
+
+    # 🟣 Step 2: Conditional Forced Pair Logic (Strict First, then Relaxed)
+    if "nlp_list_erp" in round_name.lower():
+        print("-" * 60)
+        print(f"🔄 FORCE PAIR LOGIC (Strict Merge) FOR {round_name}")
+
+        forced_pairs = reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates()
+
+        # 🚀 Strict merge
+        strict_forced_matches = erp_full[ERP_MATCH_COLS].merge(
+            forced_pairs, on=ERP_PART_ID, how='inner'
+        ).merge(
+            tru_full[TRU_MATCH_COLS],
+            left_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
+            right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
+            how='inner'
+        )
+        if not strict_forced_matches.empty:
+            print(f"✅ [DEBUG] Strict forced matches found: {len(strict_forced_matches)}")
+            if strict_forced_matches[(strict_forced_matches[ERP_PART_ID] == debug_cmpnt_num) & (strict_forced_matches[TRU_SPEC_ID] == debug_child_nm)].empty:
+                print(f"❌ [DEBUG] Debug pair {debug_cmpnt_num}/{debug_child_nm} not found in strict forced matches")
+            else:
+                print(f"✅ [DEBUG] Debug pair {debug_cmpnt_num}/{debug_child_nm} found in strict forced matches")
+        else:
+            print("❌ [DEBUG] No strict forced matches found; attempting relaxed merge")
+
+        # 🚀 Relaxed merge fallback (ensure SRC_SYS_CD and PLNT_CD are pulled back if missing)
+        relaxed_forced_matches = erp_full[ERP_MATCH_COLS].merge(
+            forced_pairs, on=ERP_PART_ID, how='inner'
+        ).merge(
+            tru_full.drop_duplicates(subset=[TRU_SPEC_ID])[TRU_MATCH_COLS],
+            left_on=[TRU_SPEC_ID],
+            right_on=[TRU_SPEC_ID],
+            how='inner'
+        )
+        if not relaxed_forced_matches.empty:
+            print(f"✅ [DEBUG] Relaxed forced matches found: {len(relaxed_forced_matches)}")
+            if relaxed_forced_matches[(relaxed_forced_matches[ERP_PART_ID] == debug_cmpnt_num) & (relaxed_forced_matches[TRU_SPEC_ID] == debug_child_nm)].empty:
+                print(f"❌ [DEBUG] Debug pair {debug_cmpnt_num}/{debug_child_nm} not found in relaxed forced matches")
+            else:
+                print(f"✅ [DEBUG] Debug pair {debug_cmpnt_num}/{debug_child_nm} found in relaxed forced matches")
+            relaxed_forced_matches['Matching Reason'] = round_name + ' (fallback)'
+        else:
+            print("❌ [DEBUG] No relaxed forced matches found")
+
+        # Combine strict and relaxed
+        forced_matches = pd.concat([strict_forced_matches, relaxed_forced_matches], ignore_index=True)
+
+        if not forced_matches.empty:
+            forced_matches[SCORE_COL] = 1
+            forced_matches[UNIFIED_MC_COL] = forced_matches[f'{ERP_MAT_NUM}_original'].copy()
+            forced_matches['is_matched'] = True
+            forced_matches['confidence'] = 'high'
+
+            # Ensure SRC_SYS_CD and PLNT_CD are in place for add_matches_bundles
+            missing_cols = set(['SRC_SYS_CD', 'PLNT_CD']) - set(forced_matches.columns)
+            if missing_cols:
+                print(f"⚠️ [DEBUG] Adding missing columns: {missing_cols} from tru_full")
+                forced_matches = forced_matches.merge(
+                    tru_full[['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID]].drop_duplicates(),
+                    on=TRU_SPEC_ID,
+                    how='left'
+                )
+
+            forced_matches = add_matches_bundles(forced_matches, bundles, tru_full)
+
+            print(f"✅ [DEBUG] Total forced matches (strict + fallback): {len(forced_matches)}")
+
+            matches = pd.concat([matched_per_id, forced_matches], ignore_index=True)
+        else:
+            matches = matched_per_id.copy()
+    else:
+        print(f"⏭ Skipping FORCE PAIR matching for {round_name}")
+        matches = matched_per_id.copy()
+
+    # 🟣 DEBUG: Final check for debug_cmpnt_num and debug_child_nm in combined matches
+    debug_mask = (matches[ERP_PART_ID] == debug_cmpnt_num) & (matches[TRU_SPEC_ID] == debug_child_nm)
+    if debug_mask.any():
+        print("🔍 [DEBUG FINAL] Found debug pair in combined matches:")
+        print(matches.loc[debug_mask, [ERP_PART_ID, TRU_SPEC_ID, 'Matching Reason', 'confidence']])
+    else:
+        print(f"❌ [DEBUG FINAL] Pair {debug_cmpnt_num} / {debug_child_nm} not found in combined matches")
+
+    # ✅ Deduplicate
+    matches.drop_duplicates(subset=NON_DUPLICATES_SET, inplace=True)
+
+    # 🕓 Report time and return
+    assign_round_name_and_report_time(matches, match_round_name, start)
+    df_erp_to_match, df_tru_to_match = get_data_yet_to_match(matches, erp, tru)
+
+    return matches, df_erp_to_match, df_tru_to_match, last_match_round + 1
