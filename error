@@ -1,6 +1,18 @@
-forced_matches = erp_forced.merge(
-    tru_full[TRU_MATCH_COLS],
-    left_on=[ERP_MAT_NUM, TRU_SPEC_ID],
-    right_on=[TRU_MAT_NUM, TRU_SPEC_ID],
-    how='inner'
-)
+Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
+  File "cross_hound/matcher.py", line 1824, in <module>
+    main(input_dir=args.get('input_dir'),
+  File "cross_hound/matcher.py", line 1608, in main
+    matched, unmatched = full_matching_routine(data_version, db_style, device,
+  File "cross_hound/matcher.py", line 1098, in full_matching_routine
+    matches_NLP_list_ERP, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
+  File "cross_hound/matcher.py", line 456, in match_by_reference_table
+    forced_matches = add_matches_bundles(forced_matches, bundles, tru_full)
+  File "cross_hound/matcher.py", line 189, in add_matches_bundles
+    extra_matches = (matches_with_bundles[erp_match_cols + ['p2']]
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/frame.py", line 3766, in __getitem__
+    indexer = self.columns._get_indexer_strict(key, "columns")[1]
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 5876, in _get_indexer_strict
+    self._raise_if_missing(keyarr, indexer, axis_name)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 5938, in _raise_if_missing
+    raise KeyError(f"{not_found} not in index")
+KeyError: "['SRC_SYS_CD', 'PLNT_CD'] not in index"
