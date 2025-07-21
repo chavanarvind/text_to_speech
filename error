@@ -1,10 +1,25 @@
-FORCE PAIR LOGIC FOR ALL REFERENCE PAIRS in matches_NLP_list_ERP suggested X-match
-✅ Total forced pairs in reference table: 1612
-🔍 Is target pair in reference table? True
-✅ ERP records found for forced pairs: 14916
-⚠️ SRC_SYS_CD missing in forced_matches. Adding placeholder: UNKNOWN_SYS
-✅ Forced matches found after joining TRU: 5625
-⚠️ PLNT_CD missing in forced_matches. Adding placeholder: UNKNOWN_PLANT
-✅ Forced matches found after joining TRU: 5625
-🔍 Is target pair present in forced matches? False
-📄 Saved all forced matches to user_logs/forced_match_debug.csv
+WITH input_pairs AS (
+    SELECT * FROM (
+        VALUES
+        ("000000000006115990","PC-046458")
+    ) AS t(CMPNT_MATL_NUM, CHILD_NM)
+)
+SELECT DISTINCT
+    ip.CMPNT_MATL_NUM,
+    ip.CHILD_NM,
+   COALESCE(p360.ERP_PART_NUM, 'N/A') AS ERP_PART_NUM,
+   CASE 
+       WHEN p360.ERP_PART_NUM IS NOT NULL THEN 'YES'
+        ELSE 'NO'
+    END AS MATCH_EXISTS
+FROM
+    input_pairs ip
+LEFT JOIN
+    hive_metastore.bom_rstr.nlp_input_bom_hier_dtls bhd
+    ON ip.CMPNT_MATL_NUM = bhd.CMPNT_MATL_NUM
+LEFT JOIN
+    hive_metastore.bom_rstr.nlp_input_p360_bom p360
+    ON bhd.NEW_MATCH_MATL_NUM = p360.ERP_PART_NUM
+WHERE
+    p360.ERP_PART_NUM IS NOT NULL
+    AND p360.ERP_PART_NUM <> ''; -- Exclude blank ERP_PART_NUM
