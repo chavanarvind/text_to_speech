@@ -1,5 +1,6 @@
-    ##############NLP_LIST_ERP########
-    print('-' * 60)
+6115990, PC-046458
+
+print('-' * 60)
     NLP_list_ERP_folder = os.path.dirname(os.path.realpath(__file__))
     NLP_list_ERP_folder = os.path.abspath(os.path.join(NLP_list_ERP_folder, os.pardir))
     xmatches_NLP_list_ERP = pd.read_csv(f'{NLP_list_ERP_folder}/reference_tables/NLP_list_ERP.csv',encoding='latin1',dtype='str')
