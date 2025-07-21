@@ -1,133 +1,19 @@
-def match_by_reference_table(erp: pd.DataFrame,
-                             tru: pd.DataFrame,
-                             reference_table: pd.DataFrame,
-                             last_match_round: int,
-                             round_name: str,
-                             bundles,
-                             erp_full: pd.DataFrame,
-                             tru_full: pd.DataFrame):
-    """
-    Match records using a reference table. Includes forced pair matching logic.
-    """
-    match_round_name = f'{last_match_round + 1}: {round_name}'
-    print(f'🚀 MATCH ROUND {match_round_name}')
-    start = time.time()
 
-    # 🟢 Clean key columns: trim leading/trailing spaces
-    def clean_keys(df, cols):
-        for col in cols:
-            df[col] = df[col].astype(str).str.strip()
-        return df
-
-    erp = clean_keys(erp, [ERP_PART_ID, ERP_MAT_NUM])
-    tru = clean_keys(tru, [TRU_SPEC_ID, TRU_MAT_NUM])
-    reference_table = clean_keys(reference_table, [ERP_PART_ID, TRU_SPEC_ID])
-    erp_full = clean_keys(erp_full, [ERP_PART_ID, ERP_MAT_NUM])
-    tru_full = clean_keys(tru_full, [TRU_SPEC_ID, TRU_MAT_NUM])
-
-    # 🟢 Step 1: Normal matching logic
-    df_erp_with_additional_id = erp[ERP_MATCH_COLS].merge(
-        reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
-        on=ERP_PART_ID,
-        how='inner'
-    )
-
-    matched_per_id = df_erp_with_additional_id.merge(
-        tru[TRU_MATCH_COLS],
-        left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, TRU_SPEC_ID],
-        right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, TRU_SPEC_ID],
-        how='inner'
-    )
-
-    # 🟢 Step 2: Match per description (if present)
-    if not (reference_table['text_for_matching_erp'].isnull().all() or
-            reference_table['text_for_matching_tru'].isnull().all()):
-        reference_table_text = reference_table.dropna(subset=['text_for_matching_erp', 'text_for_matching_tru'])
-        is_valid_ref = [min(len(str(x)), len(str(y))) > 5
-                        for x, y in zip(reference_table_text['text_for_matching_erp'],
-                                        reference_table_text['text_for_matching_tru'])]
-        reference_table_text = reference_table_text[is_valid_ref]
-
-        df_erp_with_additional_desc = erp[ERP_MATCH_COLS].merge(
-            reference_table_text[['text_for_matching_erp', 'text_for_matching_tru']].drop_duplicates(),
-            on='text_for_matching_erp',
-            how='inner'
-        )
-
-        matched_per_desc = df_erp_with_additional_desc.merge(
-            tru[TRU_MATCH_COLS],
-            left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, 'text_for_matching_tru'],
-            right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, 'text_for_matching_tru'],
-            how='inner'
-        )
-
-        matched_per_desc = matched_per_desc[matched_per_id.columns]
-    else:
-        matched_per_desc = pd.DataFrame(columns=matched_per_id.columns)
-
-    # Combine ID and Description matches
-    matches = pd.concat([matched_per_id, matched_per_desc], ignore_index=True)
-
-    if not matches.empty:
-        matches[SCORE_COL] = 1
-        matches[UNIFIED_MC_COL] = matches[f'{ERP_MAT_NUM}_original'].copy()
-        matches['is_matched'] = True
-        matches['Matching Reason'] = round_name
-        matches['confidence'] = 'high'
-        matches = add_matches_bundles(matches, bundles, tru)
-
-    # 🟣 DEBUG: Check for CMPNT_MATL_NUM=6115990 and CHILD_NM=PC-046458 before deduplication
-    debug_mask = (matches["CMPNT_MATL_NUM"] == "6115990") & (matches["CHILD_NM"] == "PC-046458")
-    if debug_mask.any():
-        print("🔍 [DEBUG BEFORE DEDUP] Found in normal/desc match:")
-        print(matches.loc[debug_mask, [ERP_PART_ID, TRU_SPEC_ID, 'Matching Reason', 'confidence']])
-    else:
-        print("❌ [DEBUG BEFORE DEDUP] Pair 6115990 / PC-046458 not found in normal/desc match")
-
-    # 🟣 Step 3: Conditional Forced Pair Logic (only for NLP_LIST_ERP)
-    if "nlp_list_erp" in round_name.lower():
-        print("-" * 60)
-        print(f"🔄 FORCE PAIR LOGIC FOR ALL REFERENCE PAIRS in {round_name}")
-
-        forced_pairs = reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates()
-
-        # 🚀 Process ALL pairs directly (skip check against normal matches)
-        forced_matches = erp_full[ERP_MATCH_COLS].merge(
-            forced_pairs, on=ERP_PART_ID, how='inner'
-        ).merge(
-            tru_full[TRU_MATCH_COLS],
-            left_on=[TRU_SPEC_ID],  # 🔥 Using only TRU_SPEC_ID (no SRC_SYS_CD, PLNT_CD)
-            right_on=[TRU_SPEC_ID],
-            how='inner'
-        )
-
-        print(f"✅ Found {len(forced_matches)} forced pair matches in {round_name}")
-
-        if not forced_matches.empty:
-            forced_matches[SCORE_COL] = 1
-            forced_matches[UNIFIED_MC_COL] = forced_matches[f'{ERP_MAT_NUM}_original'].copy()
-            forced_matches['is_matched'] = True
-            forced_matches['Matching Reason'] = round_name + ' (forced pair)'
-            forced_matches['confidence'] = 'high'
-
-            # Combine forced matches with earlier matches
-            matches = pd.concat([matches, forced_matches], ignore_index=True)
-    else:
-        print(f"⏭ Skipping FORCE PAIR matching for {round_name}")
-
-    # 🟣 DEBUG: Check for CMPNT_MATL_NUM=6115990 and CHILD_NM=PC-046458 after force pair logic
-    debug_mask = (matches["CMPNT_MATL_NUM"] == "6115990") & (matches["CHILD_NM"] == "PC-046458")
-    if debug_mask.any():
-        print("🔍 [DEBUG AFTER FORCE MATCH] Found:")
-        print(matches.loc[debug_mask, [ERP_PART_ID, TRU_SPEC_ID, 'Matching Reason', 'confidence']])
-    else:
-        print("❌ [DEBUG AFTER FORCE MATCH] Pair 6115990 / PC-046458 not found")
-
-    # ✅ Deduplicate
-    matches.drop_duplicates(subset=NON_DUPLICATES_SET, inplace=True)
-
-    # 🕓 Report time and return
-    assign_round_name_and_report_time(matches, match_round_name, start)
-    df_erp_to_match, df_tru_to_match = get_data_yet_to_match(matches, erp, tru)
-
-    return matches, df_erp_to_match, df_tru_to_match, last_match_round + 1
+Execution failed. User process 'python' exited with status code 1. Please check log file 'user_logs/std_log.txt' for error details. Error: Traceback (most recent call last):
+  File "cross_hound/matcher.py", line 1725, in <module>
+    main(input_dir=args.get('input_dir'),
+  File "cross_hound/matcher.py", line 1509, in main
+    matched, unmatched = full_matching_routine(data_version, db_style, device,
+  File "cross_hound/matcher.py", line 1331, in full_matching_routine
+    matches_NLP_list_ERP, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
+  File "cross_hound/matcher.py", line 501, in match_by_reference_table
+    forced_matches = add_matches_bundles(forced_matches, bundles, tru_full)
+  File "cross_hound/matcher.py", line 189, in add_matches_bundles
+    extra_matches = (matches_with_bundles[erp_match_cols + ['p2']]
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/frame.py", line 3766, in __getitem__
+    indexer = self.columns._get_indexer_strict(key, "columns")[1]
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 5876, in _get_indexer_strict
+    self._raise_if_missing(keyarr, indexer, axis_name)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 5938, in _raise_if_missing
+    raise KeyError(f"{not_found} not in index")
+KeyError: "['SRC_SYS_CD', 'PLNT_CD'] not in index"
