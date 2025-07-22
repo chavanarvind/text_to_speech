@@ -1,73 +1,20 @@
-##############NLP_LIST_ERP########
-    print('-' * 60)
-    print('-' * 60)
-    NLP_list_ERP_folder = os.path.dirname(os.path.realpath(__file__))
-    NLP_list_ERP_folder = os.path.abspath(os.path.join(NLP_list_ERP_folder, os.pardir))
-    xmatches_NLP_list_ERP = pd.read_csv(f'{NLP_list_ERP_folder}/reference_tables/NLP_list_ERP.csv', encoding='latin1', dtype='str')
+# 🟣 STEP 1: FORCE PAIR LOGIC FIRST for NLP_LIST_ERP
+if "nlp_list_erp" in round_name.lower():
+    print("-" * 60)
+    print(f"🔄 FORCE PAIR LOGIC FOR ALL REFERENCE PAIRS in {round_name}")
 
-    print('✅ STEP 1: Loaded NLP_list_ERP.csv')
-    print(xmatches_NLP_list_ERP.head())
-    # Debug: Check for target pair in reference table
-    check_pair = xmatches_NLP_list_ERP[
-    (xmatches_NLP_list_ERP[ERP_PART_ID] == "6115990") &
-    (xmatches_NLP_list_ERP[TRU_SPEC_ID] == "PC-046458")]
-    print(f"🔍 Is target pair in reference table? {not check_pair.empty}")
+    # 🔥 DEBUG: Check if target pair exists in ERP and TRU
+    target_erp_id = "6115990"
+    target_tru_id = "PC-046458"
 
-    # Merge ERP text
-    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP.merge(
-    erp_full[['text_for_matching_erp', ERP_PART_ID]].drop_duplicates(),
-    how='left',
-    on=ERP_PART_ID)
-    print('✅ STEP 2: After merging ERP text')
-    print(xmatches_NLP_list_ERP_with_text.head())
-    # Debug: Check for target pair
-    check_pair = xmatches_NLP_list_ERP_with_text[
-    (xmatches_NLP_list_ERP_with_text[ERP_PART_ID] == "6115990") &
-    (xmatches_NLP_list_ERP_with_text[TRU_SPEC_ID] == "PC-046458")]
-    print(f"🔍 Is target pair present after ERP merge? {not check_pair.empty}")
+    erp_debug = erp_full[erp_full[ERP_PART_ID] == target_erp_id]
+    tru_debug = tru_full[tru_full[TRU_SPEC_ID] == target_tru_id]
 
-    # Merge TRU text
-    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text.merge(
-    tru_full[['text_for_matching_tru', TRU_SPEC_ID]].drop_duplicates(),
-    how='left',
-    on=TRU_SPEC_ID)
-    print('✅ STEP 3: After merging TRU text')
-    print(xmatches_NLP_list_ERP_with_text.head())
-    # Debug: Check for target pair
-    check_pair = xmatches_NLP_list_ERP_with_text[
-    (xmatches_NLP_list_ERP_with_text[ERP_PART_ID] == "6115990") &
-    (xmatches_NLP_list_ERP_with_text[TRU_SPEC_ID] == "PC-046458")]
-    print(f"🔍 Is target pair present after TRU merge? {not check_pair.empty}")
+    print(f"🔍 ERP rows for {target_erp_id}: {len(erp_debug)}")
+    print(f"🔍 TRU rows for {target_tru_id}: {len(tru_debug)}")
 
-    # Select required columns
-    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text[[ERP_PART_ID,
-                                                                   TRU_SPEC_ID,
-                                                                   'text_for_matching_erp',
-                                                                   'text_for_matching_tru']]
-    print('✅ STEP 4: After selecting relevant columns')
-# Debug: Check for target pair
-    check_pair = xmatches_NLP_list_ERP_with_text[
-    (xmatches_NLP_list_ERP_with_text[ERP_PART_ID] == "6115990") &
-    (xmatches_NLP_list_ERP_with_text[TRU_SPEC_ID] == "PC-046458")
-]
-    print(f"🔍 Is target pair still present after column filtering? {not check_pair.empty}")
-
-# Drop duplicates
-    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text.drop_duplicates()
-    print('✅ STEP 5: After dropping duplicates')
-# Debug: Check for target pair
-    check_pair = xmatches_NLP_list_ERP_with_text[
-    (xmatches_NLP_list_ERP_with_text[ERP_PART_ID] == "6115990") &
-    (xmatches_NLP_list_ERP_with_text[TRU_SPEC_ID] == "PC-046458")
-]
-    print(f"🔍 Is target pair still present after dropping duplicates? {not check_pair.empty}")
-    matches_NLP_list_ERP, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
-                                                                                           tru_to_match,
-                                                                                           xmatches_NLP_list_ERP_with_text,
-                                                                                           previous_round,
-                                                                                           'matches_NLP_list_ERP suggested X-match',
-                                                                                           bundles,erp_full,tru_full)
-    check_duplicates(matches_NLP_list_ERP)
-    print(matches_NLP_list_ERP)
-
-
+    # Save to CSV for inspection
+    debug_folder = os.path.join(os.getcwd(), "user_logs")
+    os.makedirs(debug_folder, exist_ok=True)
+    erp_debug.to_csv(os.path.join(debug_folder, f"erp_debug_{target_erp_id}.csv"), index=False)
+    tru_debug.to_csv(os.path.join(debug_folder, f"tru_debug_{target_tru_id}.csv"), index=False)
