@@ -1,100 +1,65 @@
-try:
-        print('')
-        print('#' * 60)
-        print('Starting off spec matching')
-        print('#' * 60)
-        # STEP 1: Calculate all ERP-only codes BEFORE filtering
-        all_erp_codes = set(erp_discarded[ERP_MAT_NUM])
-        all_tru_codes = set(tru_discarded[TRU_MAT_NUM])
-        common_codes = all_erp_codes.intersection(all_tru_codes)
-        erp_only_codes = all_erp_codes - all_tru_codes
-        print('Common number of codes in both sources off-specs:', len(common_codes))
-        print('ERP-only codes:', erp_only_codes)
-        erp_discarded_common = erp_discarded[erp_discarded[ERP_MAT_NUM].isin(common_codes)].reset_index(drop=True)
-        tru_discarded_common = tru_discarded[tru_discarded[TRU_MAT_NUM].isin(common_codes)].reset_index(drop=True)
-        tru_no_common = tru_off_specs_no_common
-        #new missing combination
-        # 
-        #
-        # Step 3: Include extra TRU specs not in tru_discarded
-        tru_mat_ids_full = set(tru[TRU_MAT_NUM])
-        extra_common_ids = all_erp_codes.intersection(tru_mat_ids_full)
-        extra_tru_candidates = tru[tru[TRU_MAT_NUM].isin(extra_common_ids) & ~tru[TRU_SPEC_ID].isin(tru_discarded[TRU_SPEC_ID])].copy()
-        if not extra_tru_candidates.empty:
-            print(f'Adding {len(extra_tru_candidates)} extra TRU specs to tru_discarded_common for off-spec match')
-            #tru_discarded_common = pd.concat([tru_discarded_common, extra_tru_candidates], ignore_index=True)
-            #tru_discarded_common.drop_duplicates(subset=[TRU_SPEC_ID], inplace=True)
-        # STEP 4: Perform full matching routine
-        matched_off_specs, unmatched_off_specs = full_matching_routine(data_version, db_style, device,
-                                                                       embeddings_save_dir, erp_discarded_common, model_type,
-                                                                       sentence_transformer_dir, tru_discarded_common,
-                                                                       use_azure_dataset,
-                                                                       bundles, output_dir)
-        matched_off_specs['Matching Reason'] = 'Off Spec Match'
-        unmatched_off_specs['Matching Reason'] = 'Off Spec Non Match'
-        #  Adjust Off Spec Matches that are in Rejection List
-        fortrea_folder = os.path.dirname(os.path.realpath(__file__))
-        fortrea_folder = os.path.abspath(os.path.join(fortrea_folder, os.pardir))
-        rejection_file_path = f'{fortrea_folder}/reference_tables/rejections_fortrea.csv' 
-        erp_file_path = f'{fortrea_folder}/reference_tables/erp_off_spec.csv' # 👈 Path to your file
-       
-        matched_off_specs = handle_off_spec_rejections(
-        matched_df=matched_off_specs,
-        rejection_file_path=rejection_file_path,
-        erp_mapping_file_path=erp_file_path,
-        debug_cmpnt_num="665880",
-        debug_child_nm="PC-0000249") 
+def handle_off_spec_rejections(matched_df: pd.DataFrame,
+                               rejection_file_path: str,
+                               erp_mapping_file_path: str,
+                               debug_cmpnt_num: str = None,
+                               debug_child_nm: str = None) -> pd.DataFrame:
+    """
+    Adjust matches based on forced off-spec rejections.
 
-        matched = handle_off_spec_rejections(
-        matched_df=matched,
-        rejection_file_path=rejection_file_path,
-        erp_mapping_file_path=erp_file_path,
-        debug_cmpnt_num="6142376",
-        debug_child_nm="DC-0077398") 
+    - rejection_file_path: path to rejections_fortrea.csv (pairs to reject even if matched)
+    - erp_mapping_file_path: path to erp_off_spec.csv (pairs or comp-id to force as non-match)
+    """
 
-        matched = pd.concat([matched, matched_off_specs], ignore_index=True)
+    print("🔄 Applying off-spec rejection logic...")
 
-        debug_id = "665880"
-        debug_child = "PC-0000249"
+    # Load rejections_fortrea.csv
+    rejection_df = pd.read_csv(rejection_file_path, dtype=str).fillna('')
 
-        print(" CHECKPOINT 1: After handle_off_spec_rejections")
-        print(matched_off_specs.query('CMPNT_MATL_NUM==@debug_id and CHILD_NM==@debug_child'))
-        print(" CHECKPOINT 2: After concat")
-        print(matched.query('CMPNT_MATL_NUM==@debug_id and CHILD_NM==@debug_child'))
+    # Load erp_off_spec.csv
+    erp_mapping_df = pd.read_csv(erp_mapping_file_path, dtype=str).fillna('')
 
-        print('matched_off_specs_dataset',matched_off_specs)
-        unmatched = pd.concat([unmatched, unmatched_off_specs], ignore_index=True)
-        # DEBUG BLOCK 2: Trace in matched_off_specs
-        if not matched_off_specs.empty and (matched_off_specs[ERP_PART_ID] == "665880").any():
-         print("\n🟢 [DEBUG] Found in matched_off_specs (before rejection filtering):")
-         (matched_off_specs[matched_off_specs[ERP_PART_ID] == "665880"][[
-        ERP_PART_ID, TRU_SPEC_ID, 'Matching Reason', 'confidence']])
+    # --- STEP 1: Handle pairs in rejection file ---
+    if not rejection_df.empty:
+        merged_rejection = matched_df.merge(
+            rejection_df,
+            on=['CMPNT_MATL_NUM', 'CHILD_NM'],
+            how='left',
+            indicator=True
+        )
+        mask_rejection = merged_rejection['_merge'] == 'both'
+        matched_df.loc[mask_rejection, 'Matching Reason'] = 'Forced Rejection'
+        matched_df.loc[mask_rejection, 'is_matched'] = False
+        print(f"🚫 Forced rejection for {mask_rejection.sum()} rows from rejections_fortrea.csv")
 
+    # --- STEP 2: Handle comp-only and pair-based rejections in erp_off_spec.csv ---
+    if not erp_mapping_df.empty:
+        # Comp-ID only rejections (where CHILD_NM is blank or missing)
+        comp_only_ids = erp_mapping_df.loc[erp_mapping_df['CHILD_NM'].eq('') | erp_mapping_df['CHILD_NM'].isna(), 'CMPNT_MATL_NUM'].unique()
+        mask_comp_only = matched_df['CMPNT_MATL_NUM'].isin(comp_only_ids)
+        matched_df.loc[mask_comp_only, 'Matching Reason'] = 'Off Spec Non Match (Comp-ID only)'
+        matched_df.loc[mask_comp_only, 'is_matched'] = False
+        print(f"❌ Off Spec Non Match applied to {mask_comp_only.sum()} rows for Comp-ID only matches")
 
-        try:
-            # --- Tru records not found in ERP --
-            unmatched_by_default = tru_no_common.copy()
-            missing_cols = list(set(unmatched.columns) - set(unmatched_by_default.columns))
-            for col in missing_cols:
-                unmatched_by_default[col] = None
-            unmatched_by_default = unmatched_by_default[unmatched.columns]
-            unmatched_by_default['is_matched'] = False
-            unmatched_by_default['PLNT_CD'] = 'Not Found in ERP'
-            unmatched_by_default['SRC_SYS_CD'] = 'Not Found in ERP'
-            unmatched_by_default[UNIFIED_MC_COL] = unmatched_by_default[TRU_MAT_NUM]
-            unmatched_by_default['Matching Reason'] = 'Off Spec Code not found in ERP'
-            unmatched = pd.concat([unmatched, unmatched_by_default], ignore_index=True)
-            #updated for missing comp id issue
-            # --- ERP records not in TRU (all_erp_codes - all_tru_codes) ---
-            erp_only_codes = all_erp_codes - all_tru_codes
-            erp_only_df = erp_discarded[erp_discarded[ERP_MAT_NUM].isin(erp_only_codes)].copy()
-            missing_cols = list(set(unmatched.columns) - set(erp_only_df.columns))
-            for col in missing_cols:
-                erp_only_df[col] = None
-            erp_only_df = erp_only_df[unmatched.columns]
-            erp_only_df['is_matched'] = False
-            erp_only_df[UNIFIED_MC_COL] = erp_only_df[ERP_MAT_NUM]
-            erp_only_df['Matching Reason'] = 'Off Spec Non Match'
-            
-            unmatched = pd.concat([unmatched, erp_only_df], ignore_index=True)
+        # Pair-based rejections (where both CMPNT_MATL_NUM and CHILD_NM exist)
+        pair_rejections = erp_mapping_df.dropna(subset=['CHILD_NM']).copy()
+        if not pair_rejections.empty:
+            merged_erp = matched_df.merge(
+                pair_rejections,
+                on=['CMPNT_MATL_NUM', 'CHILD_NM'],
+                how='left',
+                indicator=True
+            )
+            mask_pair_rejection = merged_erp['_merge'] == 'both'
+            matched_df.loc[mask_pair_rejection, 'Matching Reason'] = 'Off Spec Non Match (Pair)'
+            matched_df.loc[mask_pair_rejection, 'is_matched'] = False
+            print(f"❌ Off Spec Non Match applied to {mask_pair_rejection.sum()} rows for Comp+Child pairs")
 
+    # --- Debugging ---
+    if debug_cmpnt_num:
+        debug_rows = matched_df[matched_df['CMPNT_MATL_NUM'] == debug_cmpnt_num]
+        if debug_child_nm:
+            debug_rows = debug_rows[debug_rows['CHILD_NM'] == debug_child_nm]
+        print(f"🔍 Debug rows for {debug_cmpnt_num}/{debug_child_nm or '*'}:")
+        print(debug_rows)
+
+    return matched_df
