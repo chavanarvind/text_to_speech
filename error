@@ -1,67 +1,73 @@
-# 🚀 STEP 1: Force Pair Matching for NLP_LIST_ERP
-if "nlp_list_erp" in round_name.lower():
-    print("-" * 60)
-    print(f"🔄 FORCE PAIR LOGIC FOR ALL REFERENCE PAIRS in {round_name}")
+##############NLP_LIST_ERP########
+    print('-' * 60)
+    print('-' * 60)
+    NLP_list_ERP_folder = os.path.dirname(os.path.realpath(__file__))
+    NLP_list_ERP_folder = os.path.abspath(os.path.join(NLP_list_ERP_folder, os.pardir))
+    xmatches_NLP_list_ERP = pd.read_csv(f'{NLP_list_ERP_folder}/reference_tables/NLP_list_ERP.csv', encoding='latin1', dtype='str')
 
-    # Load all forced pairs
-    forced_pairs = reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates()
-    print(f"✅ Total forced pairs in reference table: {len(forced_pairs)}")
+    print('✅ STEP 1: Loaded NLP_list_ERP.csv')
+    print(xmatches_NLP_list_ERP.head())
+    # Debug: Check for target pair in reference table
+    check_pair = xmatches_NLP_list_ERP[
+    (xmatches_NLP_list_ERP[ERP_PART_ID] == "6115990") &
+    (xmatches_NLP_list_ERP[TRU_SPEC_ID] == "PC-046458")]
+    print(f"🔍 Is target pair in reference table? {not check_pair.empty}")
 
-    # Filter ERP records for forced pairs
-    erp_forced = erp_full[ERP_MATCH_COLS].merge(
-        forced_pairs, on=ERP_PART_ID, how='inner'
-    )
-    print(f"✅ ERP records found for forced pairs: {len(erp_forced)}")
+    # Merge ERP text
+    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP.merge(
+    erp_full[['text_for_matching_erp', ERP_PART_ID]].drop_duplicates(),
+    how='left',
+    on=ERP_PART_ID)
+    print('✅ STEP 2: After merging ERP text')
+    print(xmatches_NLP_list_ERP_with_text.head())
+    # Debug: Check for target pair
+    check_pair = xmatches_NLP_list_ERP_with_text[
+    (xmatches_NLP_list_ERP_with_text[ERP_PART_ID] == "6115990") &
+    (xmatches_NLP_list_ERP_with_text[TRU_SPEC_ID] == "PC-046458")]
+    print(f"🔍 Is target pair present after ERP merge? {not check_pair.empty}")
 
-    # 📝 Save ERP records for target pair for debugging
-    target_erp = erp_forced[
-        erp_forced[ERP_PART_ID].astype(str).str.strip() == "6115990"
-    ]
-    if not target_erp.empty:
-        print(f"📄 Found {len(target_erp)} ERP rows for CMPNT_MATL_NUM=6115990")
-        target_erp.to_csv("user_logs/target_erp_debug.csv", index=False)
-    else:
-        print("⚠️ No ERP rows found for CMPNT_MATL_NUM=6115990")
+    # Merge TRU text
+    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text.merge(
+    tru_full[['text_for_matching_tru', TRU_SPEC_ID]].drop_duplicates(),
+    how='left',
+    on=TRU_SPEC_ID)
+    print('✅ STEP 3: After merging TRU text')
+    print(xmatches_NLP_list_ERP_with_text.head())
+    # Debug: Check for target pair
+    check_pair = xmatches_NLP_list_ERP_with_text[
+    (xmatches_NLP_list_ERP_with_text[ERP_PART_ID] == "6115990") &
+    (xmatches_NLP_list_ERP_with_text[TRU_SPEC_ID] == "PC-046458")]
+    print(f"🔍 Is target pair present after TRU merge? {not check_pair.empty}")
 
-    # Filter TRU records for forced pairs
-    tru_forced = tru_full[TRU_MATCH_COLS][
-        tru_full[TRU_SPEC_ID].isin(forced_pairs[TRU_SPEC_ID])
-    ]
-    print(f"✅ TRU records found for forced pairs: {len(tru_forced)}")
+    # Select required columns
+    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text[[ERP_PART_ID,
+                                                                   TRU_SPEC_ID,
+                                                                   'text_for_matching_erp',
+                                                                   'text_for_matching_tru']]
+    print('✅ STEP 4: After selecting relevant columns')
+# Debug: Check for target pair
+    check_pair = xmatches_NLP_list_ERP_with_text[
+    (xmatches_NLP_list_ERP_with_text[ERP_PART_ID] == "6115990") &
+    (xmatches_NLP_list_ERP_with_text[TRU_SPEC_ID] == "PC-046458")
+]
+    print(f"🔍 Is target pair still present after column filtering? {not check_pair.empty}")
 
-    # 📝 Save TRU records for target pair for debugging
-    target_tru = tru_forced[
-        tru_forced[TRU_SPEC_ID].astype(str).str.strip() == "PC-046458"
-    ]
-    if not target_tru.empty:
-        print(f"📄 Found {len(target_tru)} TRU rows for CHILD_NM=PC-046458")
-        target_tru.to_csv("user_logs/target_tru_debug.csv", index=False)
-    else:
-        print("⚠️ No TRU rows found for CHILD_NM=PC-046458")
+# Drop duplicates
+    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text.drop_duplicates()
+    print('✅ STEP 5: After dropping duplicates')
+# Debug: Check for target pair
+    check_pair = xmatches_NLP_list_ERP_with_text[
+    (xmatches_NLP_list_ERP_with_text[ERP_PART_ID] == "6115990") &
+    (xmatches_NLP_list_ERP_with_text[TRU_SPEC_ID] == "PC-046458")
+]
+    print(f"🔍 Is target pair still present after dropping duplicates? {not check_pair.empty}")
+    matches_NLP_list_ERP, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
+                                                                                           tru_to_match,
+                                                                                           xmatches_NLP_list_ERP_with_text,
+                                                                                           previous_round,
+                                                                                           'matches_NLP_list_ERP suggested X-match',
+                                                                                           bundles,erp_full,tru_full)
+    check_duplicates(matches_NLP_list_ERP)
+    print(matches_NLP_list_ERP)
 
-    # Normalize material numbers for join
-    erp_forced[ERP_MAT_NUM] = erp_forced[ERP_MAT_NUM].astype(str).str.strip().str.lstrip("0")
-    tru_forced[TRU_MAT_NUM] = tru_forced[TRU_MAT_NUM].astype(str).str.strip().str.lstrip("0")
 
-    # Perform the join
-    forced_matches = erp_forced.merge(
-        tru_forced,
-        left_on=[ERP_MAT_NUM, TRU_SPEC_ID],
-        right_on=[TRU_MAT_NUM, TRU_SPEC_ID],
-        how='inner'
-    )
-    print(f"✅ Forced matches found after joining ERP and TRU: {len(forced_matches)}")
-
-    # Check if target pair is in forced matches
-    target_forced = forced_matches[
-        (forced_matches[ERP_PART_ID].astype(str).str.strip() == "6115990") &
-        (forced_matches[TRU_SPEC_ID].astype(str).str.strip() == "PC-046458")
-    ]
-    if not target_forced.empty:
-        print(f"🎉 Target pair is present in forced matches!")
-        target_forced.to_csv("user_logs/target_forced_match_debug.csv", index=False)
-    else:
-        print("❌ Target pair is still missing in forced matches.")
-
-    # Save all forced matches for debugging
-    forced_matches.to_csv("user_logs/forced_matches_debug.csv", index=False)
