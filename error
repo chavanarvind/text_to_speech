@@ -1,14 +1,17 @@
 Hi Team,
 
-Below is final update for component list.
+Please find below the final update for the component list:
 
-HBOM Check for PC & DC spec	Count of key
-Fall as off spec due to desc	117
-NLP did not match because child spec is missing in NLP Input P360 BOM 	61
-NLP did not match because child spec is missing in NLP Input P360 BOM and component is missing in NLP input BOM_HIER_DTLS	2
-NLP did not match because component is missing in NLP input BOM_HIER_DTLS	131
-NLP did not match because material is missing in NLP Input P360 BOM	9
+HBOM Check for PC & DC Spec	Count of Key
+Falls under off spec due to description	117
+NLP did not match – child spec missing in NLP Input P360 BOM	61
+NLP did not match – child spec missing in NLP Input P360 BOM and component missing in NLP Input BOM_HIER_DTLS	2
+NLP did not match – component missing in NLP Input BOM_HIER_DTLS	131
+NLP did not match – material missing in NLP Input P360 BOM	9
 NLP matched	402
 Grand Total	722
 
-We have 117 records which are mapped to off spec category because description conatin words which are mapped to off spec.
+Notably, 117 records have been categorized as off spec because their descriptions contain terms mapped to off spec criteria.
+
+Regards,
+[Your Name]
