@@ -1,3 +1,41 @@
-print("\n[DEBUG] TRU:Check if PC-046458 is present in data ingestion step")
-    print(tru.query("CHILD_NM == 'PC-046458'"))-----is empty
-print("Is PC-046458 in TRU_SPEC_IDs? ", 'PC-046458' in tru[TRU_SPEC_ID].astype(str).values)---is true
+
+
+tru = tru.rename(columns={TRU_MAT_NUM_ORIGINAL: TRU_MAT_NUM})
+
+print("\n[DEBUG] Step 1: Is PC-046458 in TRU right after load?")
+print(tru.query("CHILD_NM == 'PC-046458'"))
+
+
+print("\n[DEBUG] Step 2: Is PC-046458 still in TRU before TRU_SPEC_DESC NA filter?")
+print(tru.query("CHILD_NM == 'PC-046458'"))
+
+tru = tru[tru[TRU_SPEC_DESC].notna()].copy()
+
+
+
+
+tru = tru.drop_duplicates(subset=[TRU_MAT_NUM, TRU_SPEC_ID])
+print("\n[DEBUG] Step 3: Is PC-046458 still in TRU after drop_duplicates?")
+print(tru.query("CHILD_NM == 'PC-046458'"))
+
+
+
+
+
+print("\n[DEBUG] Step 4: Is PC-046458 still in TRU before ERP–TRU merge?")
+print(tru.query("CHILD_NM == 'PC-046458'"))
+print("Parent TRU_MAT_NUM for PC-046458:", tru.loc[tru['CHILD_NM'] == 'PC-046458', TRU_MAT_NUM].unique())
+print("Is parent TRU_MAT_NUM in ERP?")
+print(tru.loc[tru['CHILD_NM'] == 'PC-046458', TRU_MAT_NUM].isin(erp[ERP_MAT_NUM]).any())
+
+common_codes = set(erp[ERP_MAT_NUM]).intersection(set(tru[TRU_MAT_NUM]))
+
+
+
+
+tru = tru.query('not is_off_spec_tru').reset_index(drop=True)
+
+print("\n[DEBUG] Step 5: Is PC-046458 still in TRU after off-spec filter?")
+print(tru.query("CHILD_NM == 'PC-046458'"))
+
+
