@@ -1,41 +1,76 @@
+import os
+from typing import List
+
+import pandas as pd
+
+from cross_hound.config import IRRELEVANT_MATERIALS
+
+xhound_folder = os.path.dirname(os.path.realpath(__file__))
+src_folder = os.path.abspath(os.path.join(xhound_folder, os.pardir))
+
+OFF_SPEC_LIST = pd.read_csv(f'{src_folder}/reference_tables/off_spec_items.csv', dtype=str)
 
 
-tru = tru.rename(columns={TRU_MAT_NUM_ORIGINAL: TRU_MAT_NUM})
+def classify_as_off_spec(df: pd.DataFrame) -> List[bool]:
+    '''
+    Classify rows as off-spec based on:
+    - Exact ID match
+    - Exact normalized description match
+    - Keyword match
 
-print("\n[DEBUG] Step 1: Is PC-046458 in TRU right after load?")
-print(tru.query("CHILD_NM == 'PC-046458'"))
+    Expects:
+    df.columns[0] = ID
+    df.columns[1] = Description
+    '''
+
+    col_id = df.columns[0]
+    col_desc = df.columns[1]
+
+    print(f"[DEBUG] Processing {len(df)} rows")
+    print(f"[DEBUG] Sample row: ID={df[col_id].iloc[0]}, DESC={df[col_desc].iloc[0]}")
+
+    # Normalize input
+    df_id = df[col_id].astype(str).str.strip()
+    df_desc = df[col_desc].astype(str).str.strip().str.lower()
+
+    # Normalize reference list
+    offspec_ids = OFF_SPEC_LIST['id'].astype(str).str.strip().unique()
+    offspec_descs = OFF_SPEC_LIST['description'].astype(str).str.strip().str.lower().unique()
+
+    # Match by ID
+    match_by_id = df_id.isin(offspec_ids)
+    if match_by_id.any():
+        #print(f"[DEBUG] Matched by ID: {df.loc[match_by_id, col_id].tolist()}")
+        print("ok")
+
+    # Match by description
+    match_by_desc = df_desc.isin(offspec_descs)
+    if match_by_desc.any():
+        #print(f"[DEBUG] Matched by Description: {df.loc[match_by_desc, col_desc].tolist()}")
+        print("ok")
+    # Keyword match
+    keyword_pattern = '|'.join(IRRELEVANT_MATERIALS)
+    match_by_keyword = (
+        df_desc.str.contains(keyword_pattern, case=False, na=False) |
+        df_desc.isin(['agua', 'aqua'])
+    )
+    if match_by_keyword.any():
+        #print(f"[DEBUG] Matched by Keyword: {df.loc[match_by_keyword, col_desc].tolist()}")
+        print("ok")
+    final_result = (match_by_id | match_by_desc | match_by_keyword)
+    if df_id.isin(['668080']).any():
+        print("[DEBUG] 668080 found in ERP dataset during off-spec check.")
+
+    if df_desc[df_id == '668080'].any():
+      print(f"[DEBUG] 668080 Description: {df_desc[df_id == '668080'].iloc[0]}")
+
+    if df_id.isin(['668080']).any() and match_by_id[df_id == '668080'].any():
+      print("[DEBUG] 668080 was classified as off-spec by ID match.")
+    elif df_id.isin(['668080']).any():
+     print("[DEBUG] 668080 was NOT classified as off-spec.")
 
 
-print("\n[DEBUG] Step 2: Is PC-046458 still in TRU before TRU_SPEC_DESC NA filter?")
-print(tru.query("CHILD_NM == 'PC-046458'"))
-
-tru = tru[tru[TRU_SPEC_DESC].notna()].copy()
-
-
-
-
-tru = tru.drop_duplicates(subset=[TRU_MAT_NUM, TRU_SPEC_ID])
-print("\n[DEBUG] Step 3: Is PC-046458 still in TRU after drop_duplicates?")
-print(tru.query("CHILD_NM == 'PC-046458'"))
-
-
-
-
-
-print("\n[DEBUG] Step 4: Is PC-046458 still in TRU before ERP–TRU merge?")
-print(tru.query("CHILD_NM == 'PC-046458'"))
-print("Parent TRU_MAT_NUM for PC-046458:", tru.loc[tru['CHILD_NM'] == 'PC-046458', TRU_MAT_NUM].unique())
-print("Is parent TRU_MAT_NUM in ERP?")
-print(tru.loc[tru['CHILD_NM'] == 'PC-046458', TRU_MAT_NUM].isin(erp[ERP_MAT_NUM]).any())
-
-common_codes = set(erp[ERP_MAT_NUM]).intersection(set(tru[TRU_MAT_NUM]))
-
-
-
-
-tru = tru.query('not is_off_spec_tru').reset_index(drop=True)
-
-print("\n[DEBUG] Step 5: Is PC-046458 still in TRU after off-spec filter?")
-print(tru.query("CHILD_NM == 'PC-046458'"))
+    #print(f"[DEBUG] Final result: {final_result.tolist()}")
+    return final_result.tolist()
 
 
