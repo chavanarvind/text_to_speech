@@ -1,8 +1,1 @@
-Hi Niharika,
-
-As discussed, I’m sharing the list of pairs with high confidence as well as the pairs that have been categorized as off-spec due to the child number description aligning with the off-spec criteria.
-
-Please note: the pairs falling under the off-spec category will not appear in the final results since the off-spec mapping logic is handled separately from the high-confidence mapping. To include these records in the final results, we would need to revisit and potentially update the off-spec logic, which will require further discussion.
-
-Best regards,
-[Your Name]
+Please note: in my test results, these pairs are not appearing because, although they were initially considered high-confidence records, the child number falls under the off-spec category based on its description. As a result, our current logic skips these records from the final output. To include them, we would need to revisit and potentially update the off-spec mapping logic, which will require further discussion.
