@@ -1,50 +1,67 @@
- Step-by-Step Flow for NLP_LIST_ERP Mapping
-🔹 STEP 1: Load Reference File
-Load NLP_LIST_ERP.csv containing ERP_PART_ID ↔ TRU_SPEC_ID pairs.
+Objective
+To integrate a curated list of ERP_PART_ID and TRU_SPEC_ID mappings (provided in NLP_LIST_ERP.csv) into the automated matching flow with two layers of logic:
 
-Clean up spaces and ensure columns are in correct format.
+Forced Mapping – Enforces predefined pairs.
 
-🔸 FORCED MAPPING LOGIC (Guaranteed match if both IDs exist)
-🔹 STEP 2: Extract ERP Records
-From erp_full, filter rows that match ERP_PART_IDs in the reference.
+Normal Mapping – Leverages the same file to detect additional potential matches using material ID and description alignment.
 
-🔹 STEP 3: Extract TRU Records
-From tru_full, filter rows that match TRU_SPEC_IDs in the reference.
+🔹 1. Forced Mapping Logic (High-Priority Match)
+Purpose: Ensures that all ERP–TRU pairs explicitly listed in the reference file are matched unconditionally if both records exist.
 
-🔹 STEP 4: Match Forced Pairs
-Match ERP and TRU records using:
+🧩 Key Features:
+Ignores description similarity or scoring.
 
-ERP_MAT_NUM = TRU_MAT_NUM
+Direct match using:
 
-TRU_SPEC_ID = TRU_SPEC_ID
+ERP_PART_ID → ERP dataset
 
-🔹 STEP 5: Label Forced Matches
-Tag these records with:
+TRU_SPEC_ID → TRU dataset
 
-high confidence
+Confirms ERP_MAT_NUM == TRU_MAT_NUM for alignment.
 
-forced pair reason
+Applied before any other logic (first step in match_by_reference_table).
 
-score = 1
+✅ Output:
+Matching Reason: "NLP_LIST_ERP suggested X-match (forced pair)"
 
-🔸 NORMAL MAPPING LOGIC (Conditional match)
-🔹 STEP 6: Match by ID
-Join ERP and TRU using ERP_PART_ID and TRU_SPEC_ID from reference.
+Confidence: "high"
 
-Check plant and system codes.
+Score: 1
 
-🔹 STEP 7: Match by Description (Optional)
-If text_for_matching_erp and text_for_matching_tru are available:
+Result: Stored in forced_match_debug.csv for audit purposes.
 
-Match using these cleaned descriptions.
+🔹 2. Normal Mapping Logic (Conditional Match)
+Purpose: Captures additional ERP–TRU matches from the same reference file if forced pair criteria are not met.
 
-🔹 STEP 8: Combine All Normal Matches
-Append all valid ID and text-based matches.
+🧩 Matching Conditions:
+By ID:
 
-Mark them as high confidence with reason as round name.
+ERP_PART_ID and TRU_SPEC_ID are joined with ERP and TRU datasets respectively.
 
-🔹 STEP 9: Deduplicate
-Remove duplicate ERP–TRU pairs from forced + normal matches.
+Merged on SRC_SYS_CD, PLNT_CD, ERP_MAT_NUM, TRU_SPEC_ID.
 
-🔹 STEP 10: Pass Remaining Records
-Any unmatched records proceed to the next matching round.
+By Description (if available):
+
+Matches are attempted using text_for_matching_erp and text_for_matching_tru.
+
+✅ Output:
+Matching Reason: "NLP_LIST_ERP suggested X-match"
+
+Confidence: "high"
+
+Score: 1
+
+🔄 Matching Flow Summary
+Step	Description
+1	Load NLP_LIST_ERP.csv and clean ID fields
+2	Perform forced matching using ERP_PART_ID and TRU_SPEC_ID
+3	If valid, match via ERP_MAT_NUM and assign as high-confidence
+4	Next, apply normal matching using ID and/or text fields
+5	Combine results, remove duplicates
+6	Pass remaining unmatched data to next rounds
+
+📁 Debug & Audit Artifacts
+✅ forced_match_debug.csv: All ERP–TRU pairs matched via forced logic.
+
+✅ matches_NLP_list_ERP.csv: All matches (forced + normal) derived from this reference table.
+
