@@ -8,18 +8,19 @@ def handle_off_spec_rejections(matched_df: pd.DataFrame,
 
     - If CMPNT_MATL_NUM + CHILD_NM pair exists in rejection_file_path → downgrade
     - If (MATL_NUM + CMPNT_MATL_NUM) or (MATL_NUM + CHILD_NM) exists in erp_mapping_file_path → downgrade
-    - NEW: If only CMPNT_MATL_NUM exists in erp_mapping_file_path → downgrade all rows for that comp-id
+    - NEW: If only CMPNT_MATL_NUM exists in erp_mapping_file_path (CHILD_NM blank) → downgrade all rows for that comp-id
+      → this comparison removes leading/trailing zeros for robustness
     """
 
     print("📥 Reading rejection file from:", rejection_file_path)
     rejection_df = pd.read_csv(rejection_file_path, dtype=str)
     print(f"✅ Loaded rejection file with {len(rejection_df)} rows")
 
-    # Clean up columns
+    # Clean rejection file columns
     rejection_df["CMPNT_MATL_NUM"] = rejection_df["CMPNT_MATL_NUM"].astype(str).str.strip()
     rejection_df["CHILD_NM"] = rejection_df["CHILD_NM"].astype(str).str.strip()
 
-    # Step 1: Off Spec Match downgrade from rejection file
+    # Step 1: Downgrade if (CMPNT_MATL_NUM, CHILD_NM) pair is in rejection file
     mask_off_spec_match = matched_df["Matching Reason"] == "Off Spec Match"
     mask_in_rejection = matched_df.set_index(["CMPNT_MATL_NUM", "CHILD_NM"]).index.isin(
         rejection_df.set_index(["CMPNT_MATL_NUM", "CHILD_NM"]).index
@@ -28,50 +29,63 @@ def handle_off_spec_rejections(matched_df: pd.DataFrame,
 
     print(f"🔄 Downgrading {mask_to_downgrade.sum()} rows based on rejections_fortrea.csv")
 
-    # Step 2: Off Spec downgrade from ERP mapping file
+    # Step 2: Read and clean ERP mapping file
     print("📥 Reading ERP mapping file from:", erp_mapping_file_path)
     erp_df = pd.read_csv(erp_mapping_file_path, dtype=str)
     print(f"✅ Loaded ERP mapping file with {len(erp_df)} rows")
 
     # Clean ERP file columns
     erp_df["CMPNT_MATL_NUM"] = erp_df["CMPNT_MATL_NUM"].astype(str).str.strip()
-    erp_df["CHILD_NM"] = erp_df["CHILD_NM"].astype(str).str.strip()
+    erp_df["CHILD_NM"] = erp_df["CHILD_NM"].astype(str).str.strip().replace("nan", "")
     erp_df["MATL_NUM"] = erp_df["MATL_NUM"].astype(str).str.strip()
 
-    # Step 2.1: Check if MATL_NUM exists in matched_df
+    # Create normalized (zero-stripped) version of CMPNT_MATL_NUM for comparison
+    erp_df["CMPNT_MATL_NUM_CLEAN"] = (
+        erp_df["CMPNT_MATL_NUM"]
+        .str.lstrip('0')
+        .str.rstrip('0')
+    )
+
+    matched_df["CMPNT_MATL_NUM_CLEAN"] = (
+        matched_df["CMPNT_MATL_NUM"]
+        .astype(str)
+        .str.strip()
+        .str.lstrip('0')
+        .str.rstrip('0')
+    )
+
+    # Step 2.1: MATL_NUM + CMPNT_MATL_NUM and MATL_NUM + CHILD_NM downgrade
     if "MATL_NUM" in matched_df.columns:
         print("📄 MATL_NUM column found in matched_df. Applying ERP mapping checks.")
-
-        # Check for (MATL_NUM, CMPNT_MATL_NUM)
         mask_matl_cmpnt = matched_df.set_index(["MATL_NUM", "CMPNT_MATL_NUM"]).index.isin(
             erp_df.set_index(["MATL_NUM", "CMPNT_MATL_NUM"]).index
         )
-
-        # Check for (MATL_NUM, CHILD_NM)
         mask_matl_child = matched_df.set_index(["MATL_NUM", "CHILD_NM"]).index.isin(
             erp_df.set_index(["MATL_NUM", "CHILD_NM"]).index
         )
-
-        # Combine masks: only downgrade "Off Spec Match" records
         mask_erp_to_downgrade = mask_off_spec_match & (mask_matl_cmpnt | mask_matl_child)
     else:
         print("⚠️ MATL_NUM column not found in matched_df. Skipping MATL_NUM-based ERP mapping checks.")
         mask_erp_to_downgrade = pd.Series([False] * len(matched_df), index=matched_df.index)
 
-    # Step 2.2: NEW – Check for Comp-ID only downgrades
-    comp_only_ids = erp_df.loc[erp_df["CHILD_NM"].eq('') | erp_df["CHILD_NM"].isna(), "CMPNT_MATL_NUM"].unique()
-    mask_comp_only_downgrade = mask_off_spec_match & matched_df["CMPNT_MATL_NUM"].isin(comp_only_ids)
+    # Step 2.2: NEW - Comp-ID-only downgrade (blank CHILD_NM in ERP file)
+    comp_only_ids_clean = erp_df[erp_df["CHILD_NM"] == ""]["CMPNT_MATL_NUM_CLEAN"].unique()
+    mask_comp_only_downgrade = (
+        mask_off_spec_match &
+        matched_df["CMPNT_MATL_NUM_CLEAN"].isin(comp_only_ids_clean)
+    )
 
     print(f"❌ Downgrading {mask_comp_only_downgrade.sum()} rows for Comp-ID only matches in erp_off_spec.csv")
 
     # Merge all downgrade masks
     total_mask_to_downgrade = mask_to_downgrade | mask_erp_to_downgrade | mask_comp_only_downgrade
 
-    # Debug print
+    # Debug logic
     if debug_cmpnt_num:
-        debug_mask = (matched_df["CMPNT_MATL_NUM"] == debug_cmpnt_num)
+        debug_mask = matched_df["CMPNT_MATL_NUM"] == debug_cmpnt_num
         if debug_child_nm:
-            debug_mask &= (matched_df["CHILD_NM"] == debug_child_nm)
+            debug_mask &= matched_df["CHILD_NM"] == debug_child_nm
+
         print("\n🔎 DEBUG for CMPNT_MATL_NUM:", debug_cmpnt_num,
               "and CHILD_NM:", debug_child_nm or '*')
         print(matched_df.loc[debug_mask])
@@ -86,10 +100,14 @@ def handle_off_spec_rejections(matched_df: pd.DataFrame,
         else:
             print("⚠️ Debug record not found in matched_df.")
 
-    # Apply downgrade
+    # Apply downgrade to matched_df
     matched_df.loc[total_mask_to_downgrade, "Matching Reason"] = "Off Spec Non Match"
     matched_df.loc[total_mask_to_downgrade, "is_matched"] = False
     matched_df.loc[total_mask_to_downgrade, "confidence"] = ""
 
     print(f"✅ Total downgraded rows: {total_mask_to_downgrade.sum()} (Off Spec Match → Off Spec Non Match)")
+
+    # Clean up temporary columns if desired (optional)
+    # matched_df.drop(columns=["CMPNT_MATL_NUM_CLEAN"], inplace=True)
+
     return matched_df
