@@ -1,67 +1,95 @@
-Objective
-To integrate a curated list of ERP_PART_ID and TRU_SPEC_ID mappings (provided in NLP_LIST_ERP.csv) into the automated matching flow with two layers of logic:
+def handle_off_spec_rejections(matched_df: pd.DataFrame,
+                               rejection_file_path: str,
+                               erp_mapping_file_path: str,
+                               debug_cmpnt_num: str = None,
+                               debug_child_nm: str = None) -> pd.DataFrame:
+    """
+    Adjust matches based on forced off-spec rejections.
 
-Forced Mapping – Enforces predefined pairs.
+    - If CMPNT_MATL_NUM + CHILD_NM pair exists in rejection_file_path → downgrade
+    - If (MATL_NUM + CMPNT_MATL_NUM) or (MATL_NUM + CHILD_NM) exists in erp_mapping_file_path → downgrade
+    - NEW: If only CMPNT_MATL_NUM exists in erp_mapping_file_path → downgrade all rows for that comp-id
+    """
 
-Normal Mapping – Leverages the same file to detect additional potential matches using material ID and description alignment.
+    print("📥 Reading rejection file from:", rejection_file_path)
+    rejection_df = pd.read_csv(rejection_file_path, dtype=str)
+    print(f"✅ Loaded rejection file with {len(rejection_df)} rows")
 
-🔹 1. Forced Mapping Logic (High-Priority Match)
-Purpose: Ensures that all ERP–TRU pairs explicitly listed in the reference file are matched unconditionally if both records exist.
+    # Clean up columns
+    rejection_df["CMPNT_MATL_NUM"] = rejection_df["CMPNT_MATL_NUM"].astype(str).str.strip()
+    rejection_df["CHILD_NM"] = rejection_df["CHILD_NM"].astype(str).str.strip()
 
-🧩 Key Features:
-Ignores description similarity or scoring.
+    # Step 1: Off Spec Match downgrade from rejection file
+    mask_off_spec_match = matched_df["Matching Reason"] == "Off Spec Match"
+    mask_in_rejection = matched_df.set_index(["CMPNT_MATL_NUM", "CHILD_NM"]).index.isin(
+        rejection_df.set_index(["CMPNT_MATL_NUM", "CHILD_NM"]).index
+    )
+    mask_to_downgrade = mask_off_spec_match & mask_in_rejection
 
-Direct match using:
+    print(f"🔄 Downgrading {mask_to_downgrade.sum()} rows based on rejections_fortrea.csv")
 
-ERP_PART_ID → ERP dataset
+    # Step 2: Off Spec downgrade from ERP mapping file
+    print("📥 Reading ERP mapping file from:", erp_mapping_file_path)
+    erp_df = pd.read_csv(erp_mapping_file_path, dtype=str)
+    print(f"✅ Loaded ERP mapping file with {len(erp_df)} rows")
 
-TRU_SPEC_ID → TRU dataset
+    # Clean ERP file columns
+    erp_df["CMPNT_MATL_NUM"] = erp_df["CMPNT_MATL_NUM"].astype(str).str.strip()
+    erp_df["CHILD_NM"] = erp_df["CHILD_NM"].astype(str).str.strip()
+    erp_df["MATL_NUM"] = erp_df["MATL_NUM"].astype(str).str.strip()
 
-Confirms ERP_MAT_NUM == TRU_MAT_NUM for alignment.
+    # Step 2.1: Check if MATL_NUM exists in matched_df
+    if "MATL_NUM" in matched_df.columns:
+        print("📄 MATL_NUM column found in matched_df. Applying ERP mapping checks.")
 
-Applied before any other logic (first step in match_by_reference_table).
+        # Check for (MATL_NUM, CMPNT_MATL_NUM)
+        mask_matl_cmpnt = matched_df.set_index(["MATL_NUM", "CMPNT_MATL_NUM"]).index.isin(
+            erp_df.set_index(["MATL_NUM", "CMPNT_MATL_NUM"]).index
+        )
 
-✅ Output:
-Matching Reason: "NLP_LIST_ERP suggested X-match (forced pair)"
+        # Check for (MATL_NUM, CHILD_NM)
+        mask_matl_child = matched_df.set_index(["MATL_NUM", "CHILD_NM"]).index.isin(
+            erp_df.set_index(["MATL_NUM", "CHILD_NM"]).index
+        )
 
-Confidence: "high"
+        # Combine masks: only downgrade "Off Spec Match" records
+        mask_erp_to_downgrade = mask_off_spec_match & (mask_matl_cmpnt | mask_matl_child)
+    else:
+        print("⚠️ MATL_NUM column not found in matched_df. Skipping MATL_NUM-based ERP mapping checks.")
+        mask_erp_to_downgrade = pd.Series([False] * len(matched_df), index=matched_df.index)
 
-Score: 1
+    # Step 2.2: NEW – Check for Comp-ID only downgrades
+    comp_only_ids = erp_df.loc[erp_df["CHILD_NM"].eq('') | erp_df["CHILD_NM"].isna(), "CMPNT_MATL_NUM"].unique()
+    mask_comp_only_downgrade = mask_off_spec_match & matched_df["CMPNT_MATL_NUM"].isin(comp_only_ids)
 
-Result: Stored in forced_match_debug.csv for audit purposes.
+    print(f"❌ Downgrading {mask_comp_only_downgrade.sum()} rows for Comp-ID only matches in erp_off_spec.csv")
 
-🔹 2. Normal Mapping Logic (Conditional Match)
-Purpose: Captures additional ERP–TRU matches from the same reference file if forced pair criteria are not met.
+    # Merge all downgrade masks
+    total_mask_to_downgrade = mask_to_downgrade | mask_erp_to_downgrade | mask_comp_only_downgrade
 
-🧩 Matching Conditions:
-By ID:
+    # Debug print
+    if debug_cmpnt_num:
+        debug_mask = (matched_df["CMPNT_MATL_NUM"] == debug_cmpnt_num)
+        if debug_child_nm:
+            debug_mask &= (matched_df["CHILD_NM"] == debug_child_nm)
+        print("\n🔎 DEBUG for CMPNT_MATL_NUM:", debug_cmpnt_num,
+              "and CHILD_NM:", debug_child_nm or '*')
+        print(matched_df.loc[debug_mask])
 
-ERP_PART_ID and TRU_SPEC_ID are joined with ERP and TRU datasets respectively.
+        if debug_mask.any():
+            print("Was Off Spec Match:", matched_df.loc[debug_mask, "Matching Reason"].values)
+            print("In rejection file:", mask_in_rejection[debug_mask].values)
+            if "MATL_NUM" in matched_df.columns:
+                print("In ERP MATL_CMPNT pair:", mask_matl_cmpnt[debug_mask].values)
+                print("In ERP MATL_CHILD pair:", mask_matl_child[debug_mask].values)
+            print("Comp-ID only downgrade:", mask_comp_only_downgrade[debug_mask].values)
+        else:
+            print("⚠️ Debug record not found in matched_df.")
 
-Merged on SRC_SYS_CD, PLNT_CD, ERP_MAT_NUM, TRU_SPEC_ID.
+    # Apply downgrade
+    matched_df.loc[total_mask_to_downgrade, "Matching Reason"] = "Off Spec Non Match"
+    matched_df.loc[total_mask_to_downgrade, "is_matched"] = False
+    matched_df.loc[total_mask_to_downgrade, "confidence"] = ""
 
-By Description (if available):
-
-Matches are attempted using text_for_matching_erp and text_for_matching_tru.
-
-✅ Output:
-Matching Reason: "NLP_LIST_ERP suggested X-match"
-
-Confidence: "high"
-
-Score: 1
-
-🔄 Matching Flow Summary
-Step	Description
-1	Load NLP_LIST_ERP.csv and clean ID fields
-2	Perform forced matching using ERP_PART_ID and TRU_SPEC_ID
-3	If valid, match via ERP_MAT_NUM and assign as high-confidence
-4	Next, apply normal matching using ID and/or text fields
-5	Combine results, remove duplicates
-6	Pass remaining unmatched data to next rounds
-
-📁 Debug & Audit Artifacts
-✅ forced_match_debug.csv: All ERP–TRU pairs matched via forced logic.
-
-✅ matches_NLP_list_ERP.csv: All matches (forced + normal) derived from this reference table.
-
+    print(f"✅ Total downgraded rows: {total_mask_to_downgrade.sum()} (Off Spec Match → Off Spec Non Match)")
+    return matched_df
