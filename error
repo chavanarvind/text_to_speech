@@ -1,3 +1,76 @@
+import argparse
+import os
+import random
+import traceback
+import time
+from datetime import datetime
+from typing import List, Union, Tuple
+
+import openai
+import pandas as pd
+from azureml.core import Run, Workspace
+from sklearn.metrics.pairwise import cosine_similarity
+
+from cross_hound.booster import boost_matches
+from cross_hound.config import NOT_MATCHED_ROUND_NAME, CLASSIFICATION_COL
+from cross_hound.constants import ERP_MAT_NUM, ERP_PART_ID, TRU_MAT_NUM, TRU_SPEC_ID, TRU_SPEC_DESC, \
+    ERP_PART_DESC, NON_DUPLICATES_SET, ERP_MAT_DESC, UNIFIED_MC_COL
+from cross_hound.data_ingestion import ingest_data_and_prepare_examples, create_key_column
+from cross_hound.data_preparation import preprocessed_text_description, format_raw_material_id, process_text_description
+from cross_hound.embeddings_handler import get_or_calculate_embeddings
+from cross_hound.evaluation import SCORE_COL, add_key_prediction
+from cross_hound.feature_engineering import create_features
+from cross_hound.inferencing import predict
+from cross_hound.save_results import save_results
+from cross_hound.text_similarity import jaccard_similarity, leven_similarity
+
+LLM_EMBEDDINGS = 'LLM Embeddings'
+
+random.seed(1987)
+pd.set_option("display.max_columns", None)
+
+ERP_MATCH_COLS = ['SRC_SYS_CD',
+                  ERP_MAT_NUM,
+                  f'{ERP_MAT_NUM}_original',
+                  ERP_MAT_DESC,
+                  'PLNT_CD',
+                  'CMPNT_MATL_TYPE_CD',
+                  ERP_PART_ID,
+                  f'{ERP_PART_ID}_original',
+                  ERP_PART_DESC,
+                  'text_for_matching_erp',
+                  'extracted_rm_erp',
+                  'perc_alpha_char_erp',
+                  'key_erp']
+
+TRU_MATCH_COLS = ['SRC_SYS_CD',
+                  'PLNT_CD',
+                  'RGN_CD',
+                  TRU_MAT_NUM,
+                  f'{ERP_MAT_NUM}_original_tru_ref',
+                  f'{TRU_MAT_NUM}_padded',
+                  f'{TRU_MAT_NUM}_original',
+                  'FG_NM',
+                  'FG_SPEC_NM',
+                  'FD_NM',
+                  'CHILD_NM',
+                  f'{TRU_SPEC_ID}_original',
+                  TRU_SPEC_DESC,
+                  'spec_type_inferred',
+                  'TEMPL_TYPE_CD',
+                  'CHILD_TYPE_CD',
+                  'ERP_DESC',
+                  'text_for_matching_tru',
+                  'text_for_matching_tru_trade_names',
+                  'extracted_rm_tru',
+                  'perc_alpha_char_tru',
+                  'key_tru',
+                  'SPEC_FLOW_CD',
+                  'TRD_NM_CONCAT',
+                  'TRD_NM_FULL'
+                  ]
+
+
 def handle_off_spec_rejections(matched_df: pd.DataFrame,
                                rejection_file_path: str,
                                erp_mapping_file_path: str,
@@ -111,3 +184,1752 @@ def handle_off_spec_rejections(matched_df: pd.DataFrame,
     # matched_df.drop(columns=["CMPNT_MATL_NUM_CLEAN"], inplace=True)
 
     return matched_df
+def calculate_confidence(score: float, similarity: Union[callable, str]):
+    """
+    The classification of the confidence depends on the similarity used.
+    The cutoffs used in this function were found by trial and error.
+    """
+    if similarity == jaccard_similarity:
+        if score < 0.05:
+            return 'medium'
+        else:
+            return 'high'
+    elif similarity == leven_similarity or similarity == LLM_EMBEDDINGS:
+        if score < 0.4:
+            return 'low'
+        elif score < 0.6:
+            return 'medium'
+        else:
+            return 'high'
+    else:
+        return None
+
+
+def assign_round_name_and_report_time(matches, match_round_name, start):
+    matches['match_round'] = match_round_name
+    print(f'{match_round_name} round matched: {len(matches)} ({round(time.time() - start, 2)} seconds)')
+
+
+def add_matches_bundles(matches, bundles, tru):
+    matches_with_bundles = matches.merge(bundles,
+                                         left_on=TRU_SPEC_ID,
+                                         right_on='p1',
+                                         how='inner')
+    if not matches_with_bundles.empty:
+        erp_match_cols = ERP_MATCH_COLS.copy()
+        tru_mach_cols = TRU_MATCH_COLS.copy()
+        # In case embeddings in columns, add them as well
+        if 'embedding_erp' in matches.columns:
+            erp_match_cols.append('embedding_erp')
+            tru_mach_cols.append('embedding_tru')
+        extra_matches = (matches_with_bundles[erp_match_cols + ['p2']]
+                         .merge(tru[tru_mach_cols],
+                                left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, 'p2'],
+                                right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, TRU_SPEC_ID],
+                                how='inner'))
+        if not extra_matches.empty:
+            print(f'****** Adding {len(extra_matches)} more matches based on SPEC_FLOW_CD')
+            extra_matches[SCORE_COL] = 1
+            extra_matches[UNIFIED_MC_COL] = extra_matches[f'{ERP_MAT_NUM}_original'].copy()
+            extra_matches['is_matched'] = True
+            extra_matches['Matching Reason'] = 'PC and DC mentioned in SPEC_FLOW_CD'
+            extra_matches['confidence'] = 'high'
+            extra_matches = extra_matches[matches.columns]
+            matches = pd.concat([matches, extra_matches], ignore_index=True)
+    return matches
+
+
+def get_data_yet_to_match(matches, erp, tru):
+    if matches.empty:
+        return erp, tru
+
+    matched_parts_erp = matches['key_erp'].unique()
+    df_erp_to_match = erp[~erp['key_erp'].isin(matched_parts_erp)].copy()
+
+    matched_parts_tru = matches['key_tru'].unique()
+    df_tru_to_match = tru[~tru['key_tru'].isin(matched_parts_tru)].copy()
+
+    print('df_erp_to_match cases: ', len(df_erp_to_match))
+    print('df_tru_to_match cases: ', len(df_tru_to_match))
+    return df_erp_to_match, df_tru_to_match
+
+
+def match_erp_part_vs_rm_spec(erp: pd.DataFrame,
+                              tru: pd.DataFrame,
+                              last_match_round: int,
+                              bundles=None) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, int]:
+    """
+    Match both datasets by using the Raw Material Id.
+    """
+    match_round_name = f'{last_match_round + 1}: ERP Part vs RM Spec'
+    print(f'MATCH ROUND {match_round_name}')
+
+    start = time.time()
+    # Ensure merge keys are all strings----change by arvind
+    #erp['extracted_rm_erp'] = erp['extracted_rm_erp'].astype(str)
+    #tru['extracted_rm_tru'] = tru['extracted_rm_tru'].astype(str)
+    #erp[ERP_MAT_NUM] = erp[ERP_MAT_NUM].astype(str)
+    #tru[TRU_MAT_NUM] = tru[TRU_MAT_NUM].astype(str)
+    matches = (erp[ERP_MATCH_COLS][erp['extracted_rm_erp'].notna()]
+               .merge(tru[TRU_MATCH_COLS][tru['extracted_rm_tru'].notna()],
+                      left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, 'extracted_rm_erp'],
+                      right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, 'extracted_rm_tru'],
+                      how='inner'))
+    matches[SCORE_COL] = 1
+    matches[UNIFIED_MC_COL] = matches[f'{ERP_MAT_NUM}_original'].copy()
+    matches['is_matched'] = True
+    matches['Matching Reason'] = 'ERP Part ID and Tru Spec match'
+    matches['confidence'] = 'high'
+
+    matches = add_matches_bundles(matches, bundles, tru)
+    assign_round_name_and_report_time(matches, match_round_name, start)
+    df_erp_to_match, df_tru_to_match = get_data_yet_to_match(matches, erp, tru)
+    return matches, df_erp_to_match, df_tru_to_match, last_match_round + 1
+
+
+def custom_contains(s: pd.Series, text: str) -> pd.Series:
+    try:
+        results = (s
+                   .str
+                   .lower()
+                   .str
+                   .contains(text, case=False)
+                   )
+        return results
+    except Exception as e:
+        print('Error processing text: ', text)
+        print(e)
+        return pd.Series(index=s.index, data=[False] * len(s))
+
+
+def match_erp_part_vs_rm_title(erp: pd.DataFrame,
+                               tru: pd.DataFrame,
+                               last_match_round: int,
+                               bundles) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, int]:
+    match_round_name = f'{last_match_round + 1}: ERP Part vs RM Title'
+    print(f'MATCH ROUND {match_round_name}')
+    start = time.time()
+
+    list_df_matches = []
+
+    for material_number_src_sys_plant, sub_df_erp in erp[ERP_MATCH_COLS].groupby(
+            [ERP_MAT_NUM, 'SRC_SYS_CD', 'PLNT_CD']):
+        material_number, src_sys, plant = material_number_src_sys_plant
+
+        sub_df_tru = tru.query(f'{TRU_MAT_NUM}=="{material_number}" and '
+                               f'PLNT_CD=="{plant}" and '
+                               f'SRC_SYS_CD=="{src_sys}"').reset_index(drop=True)[TRU_MATCH_COLS]
+        if sub_df_tru.empty:
+            continue
+
+        for i, row_erp in sub_df_erp.iterrows():
+            erp_part_id = row_erp[ERP_PART_ID]
+            if len(erp_part_id) < 4:  # Filter out spurious material numbers
+                continue
+            is_match = custom_contains(sub_df_tru[TRU_SPEC_DESC], erp_part_id)
+
+            if not any(is_match):
+                continue
+
+            tru_cols = TRU_MATCH_COLS.copy()
+            tru_cols = list(set(tru_cols) - {'SRC_SYS_CD', 'PLNT_CD'})
+            tru_section = sub_df_tru[is_match][tru_cols]
+
+            erp_section = pd.DataFrame(data=[row_erp for i in tru_section.index], index=tru_section.index)
+
+            # Concatenate the new index DataFrame with the original DataFrame df
+            partial_matches = pd.concat([erp_section, tru_section], axis=1)
+            partial_matches.reset_index(drop=True, inplace=True)
+            list_df_matches.append(partial_matches)
+    #change by arvind        
+    if not list_df_matches:
+        print(f"No matches found in round {match_round_name}")
+        return pd.DataFrame(), erp, tru, last_match_round + 1
+    matches = pd.concat(list_df_matches, ignore_index=True)
+
+    matches[SCORE_COL] = 1
+    matches[UNIFIED_MC_COL] = matches[f'{ERP_MAT_NUM}_original'].copy()
+    matches['is_matched'] = True
+    matches['Matching Reason'] = 'The ERP Part ID is mentioned in the Tru Title'
+    matches['confidence'] = 'high'
+
+    matches = add_matches_bundles(matches, bundles, tru)
+    assign_round_name_and_report_time(matches, match_round_name, start)
+    df_erp_to_match, df_tru_to_match = get_data_yet_to_match(matches, erp, tru)
+    return matches, df_erp_to_match, df_tru_to_match, last_match_round + 1
+
+
+def match_erp_desc_vs_rm_spec(erp: pd.DataFrame,
+                              tru: pd.DataFrame,
+                              last_match_round: int,
+                              bundles) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, int]:
+    match_round_name = f'{last_match_round + 1}: ERP Desc vs RM Spec'
+    print(f'MATCH ROUND {match_round_name}')
+    start = time.time()
+
+    list_df_matches = []
+
+    for material_number_src_sys_plant, sub_df_erp in erp[ERP_MATCH_COLS].groupby([ERP_MAT_NUM,
+                                                                                  'SRC_SYS_CD',
+                                                                                  'PLNT_CD']):
+        material_number, src_sys, plant = material_number_src_sys_plant
+
+        sub_df_tru = tru[TRU_MATCH_COLS].query(f'{TRU_MAT_NUM}=="{material_number}" and '
+                                               f'PLNT_CD=="{plant}" and '
+                                               f'SRC_SYS_CD=="{src_sys}"').reset_index(drop=True)
+        if sub_df_tru.empty:
+            continue
+
+        for i, row_tru in sub_df_tru.iterrows():
+            rm_spec = row_tru[TRU_SPEC_ID]
+            if len(rm_spec) < 4:  # Filter out spurious material numbers
+                continue
+            is_match = (sub_df_erp[ERP_PART_DESC]
+                        .str
+                        .lower()
+                        .str
+                        .contains(rm_spec, case=False)
+                        )
+
+            if not any(is_match):
+                continue
+
+            erp_section = sub_df_erp[is_match]
+
+            tru_section = pd.DataFrame(data=[row_tru for i in erp_section.index], index=erp_section.index)
+            tru_cols = TRU_MATCH_COLS.copy()
+            tru_cols = list(set(tru_cols) - {'SRC_SYS_CD', 'PLNT_CD'})
+            tru_section = tru_section[tru_cols]
+
+            # Concatenate the new index DataFrame with the original DataFrame df
+            partial_matches = pd.concat([erp_section, tru_section], axis=1)
+            partial_matches.reset_index(drop=True, inplace=True)
+            list_df_matches.append(partial_matches)
+    # ✅ Safeguard against empty list---change by arvind
+    if not list_df_matches:
+        print(f"No ERP Desc vs RM Spec matches found for round {match_round_name}")
+        return pd.DataFrame(), erp, tru, last_match_round + 1
+    matches = pd.concat(list_df_matches, ignore_index=True)
+
+    matches[SCORE_COL] = 1
+    matches[UNIFIED_MC_COL] = matches[f'{ERP_MAT_NUM}_original'].copy()
+    matches['is_matched'] = True
+    matches['Matching Reason'] = 'The Tru Spec is mentioned in the ERP Part Desc'
+    matches['confidence'] = 'high'
+
+    matches = add_matches_bundles(matches, bundles, tru)
+    assign_round_name_and_report_time(matches, match_round_name, start)
+    df_erp_to_match, df_tru_to_match = get_data_yet_to_match(matches, erp, tru)
+    return matches, df_erp_to_match, df_tru_to_match, last_match_round + 1
+
+
+def match_by_reference_table(erp: pd.DataFrame,
+                             tru: pd.DataFrame,
+                             reference_table: pd.DataFrame,
+                             last_match_round: int,
+                             round_name: str,
+                             bundles,
+                             erp_full: pd.DataFrame,
+                             tru_full: pd.DataFrame):
+    """
+    Match records using a reference table.
+    For NLP_LIST_ERP, run FORCE PAIR matching first (on all pairs),
+    then run normal matching logic.
+    """
+    match_round_name = f'{last_match_round + 1}: {round_name}'
+    print(f'🚀 MATCH ROUND {match_round_name}')
+    start = time.time()
+
+    matches = pd.DataFrame()
+
+    # 🟣 STEP 1: FORCE PAIR LOGIC FIRST for NLP_LIST_ERP
+    if "nlp_list_erp" in round_name.lower():
+        print("-" * 60)
+        print(f"🔄 FORCE PAIR LOGIC FOR ALL REFERENCE PAIRS in {round_name}")
+
+        # Strip spaces from key columns
+        reference_table[ERP_PART_ID] = reference_table[ERP_PART_ID].astype(str).str.strip()
+        reference_table[TRU_SPEC_ID] = reference_table[TRU_SPEC_ID].astype(str).str.strip()
+        erp_full[ERP_PART_ID] = erp_full[ERP_PART_ID].astype(str).str.strip()
+        tru_full[TRU_SPEC_ID] = tru_full[TRU_SPEC_ID].astype(str).str.strip()
+
+        target_erp_id = "6115990"
+        target_tru_id = "PC-046458"
+
+        erp_debug = erp_full[erp_full[ERP_PART_ID] == target_erp_id]
+        tru_debug = tru_full[tru_full[TRU_SPEC_ID] == target_tru_id]
+
+        user_logs_path = os.path.join(os.getcwd(), "user_logs")
+        os.makedirs(user_logs_path, exist_ok=True)
+        erp_debug.to_csv(
+                os.path.join(user_logs_path, "erp_debug.csv"),
+                index=False
+            )
+        tru_debug.to_csv(
+                os.path.join(user_logs_path, "tru_debug.csv"),
+                index=False
+            )
+
+
+        forced_pairs = reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates()
+        print(f"✅ Total forced pairs in reference table: {len(forced_pairs)}")
+
+        # DEBUG: Check if target pair exists
+        target_pair = forced_pairs[
+            (forced_pairs[ERP_PART_ID] == '6115990') & 
+            (forced_pairs[TRU_SPEC_ID] == 'PC-046458')
+        ]
+        print(f"🔍 Is target pair in reference table? {not target_pair.empty}")
+
+        # Merge forced pairs
+        erp_forced = erp_full[ERP_MATCH_COLS].merge(
+            forced_pairs, on=ERP_PART_ID, how='inner'
+        )
+        print(f"✅ ERP records found for forced pairs: {len(erp_forced)}")
+        # 📝 Save ERP records for target pair for debugging
+        target_erp = erp_forced[
+        erp_forced[ERP_PART_ID].astype(str).str.strip() == "6115990"]
+        if not target_erp.empty:
+            print(f"📄 Found {len(target_erp)} ERP rows for CMPNT_MATL_NUM=6115990")
+
+            user_logs_path = os.path.join(os.getcwd(), "user_logs")
+            os.makedirs(user_logs_path, exist_ok=True)
+            target_erp.to_csv(
+                os.path.join(user_logs_path, "target_erp.csv"),
+                index=False
+            )
+        else:
+            print("⚠️ No ERP rows found for CMPNT_MATL_NUM=6115990")
+
+        # Filter TRU records for forced pairs
+        tru_forced = tru_full[TRU_MATCH_COLS][
+        tru_full[TRU_SPEC_ID].isin(forced_pairs[TRU_SPEC_ID])]
+        print(f"✅ TRU records found for forced pairs: {len(tru_forced)}")
+
+        # 📝 Save TRU records for target pair for debugging
+        target_tru = tru_forced[
+        tru_forced[TRU_SPEC_ID].astype(str).str.strip() == "PC-046458"]
+        if not target_tru.empty:
+            print(f"📄 Found {len(target_tru)} TRU rows for CHILD_NM=PC-046458")
+            user_logs_path = os.path.join(os.getcwd(), "user_logs")
+            os.makedirs(user_logs_path, exist_ok=True)
+            target_tru.to_csv(os.path.join(user_logs_path, "target_tru.csv"),
+                index=False)
+        else:
+            print("⚠️ No TRU rows found for CHILD_NM=PC-046458")
+
+
+        forced_matches = erp_forced.merge(
+        tru_full[TRU_MATCH_COLS],
+        left_on=[ERP_MAT_NUM, TRU_SPEC_ID],
+        right_on=[TRU_MAT_NUM, TRU_SPEC_ID],
+        how='inner')
+
+        # Ensure SRC_SYS_CD and PLNT_CD exist in forced_matches
+        for col, placeholder in [('SRC_SYS_CD', 'UNKNOWN_SYS'), ('PLNT_CD', 'UNKNOWN_PLANT')]:
+            if col not in forced_matches.columns:
+                print(f"⚠️ {col} missing in forced_matches. Adding placeholder: {placeholder}")
+                forced_matches[col] = placeholder
+                print(f"✅ Forced matches found after joining TRU: {len(forced_matches)}")
+
+        # DEBUG: Check if target pair survived
+        target_forced_match = forced_matches[
+            (forced_matches[ERP_PART_ID] == '6115990') & 
+            (forced_matches[TRU_SPEC_ID] == 'PC-046458')
+        ]
+        print(f"🔍 Is target pair present in forced matches? {not target_forced_match.empty}")
+
+        if not forced_matches.empty:
+            forced_matches[SCORE_COL] = 1
+            forced_matches[UNIFIED_MC_COL] = forced_matches[f'{ERP_MAT_NUM}_original'].copy()
+            forced_matches['is_matched'] = True
+            forced_matches['Matching Reason'] = round_name + ' (forced pair)'
+            forced_matches['confidence'] = 'high'
+            forced_matches = add_matches_bundles(forced_matches, bundles, tru_full)
+
+            # Save forced matches to debug file
+            user_logs_path = os.path.join(os.getcwd(), "user_logs")
+            os.makedirs(user_logs_path, exist_ok=True)
+            forced_matches.to_csv(
+                os.path.join(user_logs_path, "forced_match_debug.csv"),
+                index=False
+            )
+            print(f"📄 Saved all forced matches to user_logs/forced_match_debug.csv")
+
+            matches = pd.concat([matches, forced_matches], ignore_index=True)
+        else:
+            print("🚫 No forced matches found in ERP/TRU full datasets")
+
+    # 🟢 STEP 2: NORMAL MATCHING (ID + description)
+    print("-" * 60)
+    print("🔄 Running NORMAL matching logic")
+
+    # Strip spaces in current ERP/TRU keys
+    erp[ERP_PART_ID] = erp[ERP_PART_ID].astype(str).str.strip()
+    tru[TRU_SPEC_ID] = tru[TRU_SPEC_ID].astype(str).str.strip()
+    reference_table[ERP_PART_ID] = reference_table[ERP_PART_ID].astype(str).str.strip()
+    reference_table[TRU_SPEC_ID] = reference_table[TRU_SPEC_ID].astype(str).str.strip()
+
+    df_erp_with_additional_id = erp[ERP_MATCH_COLS].merge(
+        reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
+        on=ERP_PART_ID,
+        how='inner'
+    )
+
+    matched_per_id = df_erp_with_additional_id.merge(
+        tru[TRU_MATCH_COLS],
+        left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, TRU_SPEC_ID],
+        right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, TRU_SPEC_ID],
+        how='inner'
+    )
+
+    # Match per description
+    if not (reference_table['text_for_matching_erp'].isnull().all() or
+            reference_table['text_for_matching_tru'].isnull().all()):
+        reference_table_text = reference_table.dropna(subset=['text_for_matching_erp', 'text_for_matching_tru'])
+        is_valid_ref = [min(len(str(x)), len(str(y))) > 5
+                        for x, y in zip(reference_table_text['text_for_matching_erp'],
+                                        reference_table_text['text_for_matching_tru'])]
+        reference_table_text = reference_table_text[is_valid_ref]
+
+        df_erp_with_additional_desc = erp[ERP_MATCH_COLS].merge(
+            reference_table_text[['text_for_matching_erp', 'text_for_matching_tru']].drop_duplicates(),
+            on='text_for_matching_erp',
+            how='inner'
+        )
+
+        matched_per_desc = df_erp_with_additional_desc.merge(
+            tru[TRU_MATCH_COLS],
+            left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, 'text_for_matching_tru'],
+            right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, 'text_for_matching_tru'],
+            how='inner'
+        )
+
+        matched_per_desc = matched_per_desc[matched_per_id.columns]
+    else:
+        matched_per_desc = pd.DataFrame(columns=matched_per_id.columns)
+
+    # Combine ID and description matches
+    normal_matches = pd.concat([matched_per_id, matched_per_desc], ignore_index=True)
+
+    if not normal_matches.empty:
+        print(f"✅ Found {len(normal_matches)} normal matches")
+        normal_matches[SCORE_COL] = 1
+        normal_matches[UNIFIED_MC_COL] = normal_matches[f'{ERP_MAT_NUM}_original'].copy()
+        normal_matches['is_matched'] = True
+        normal_matches['Matching Reason'] = round_name
+        normal_matches['confidence'] = 'high'
+        normal_matches = add_matches_bundles(normal_matches, bundles, tru)
+
+        matches = pd.concat([matches, normal_matches], ignore_index=True)
+
+    # ✅ Deduplicate
+    nd = matches.duplicated(subset=NON_DUPLICATES_SET).sum()
+    if nd > 0:
+        print(f"⚠️ {nd} duplicates found. Deduplicating...")
+        matches.drop_duplicates(subset=NON_DUPLICATES_SET, inplace=True)
+
+    # 🕓 Report time and return
+    assign_round_name_and_report_time(matches, match_round_name, start)
+
+    df_erp_to_match, df_tru_to_match = get_data_yet_to_match(matches, erp, tru)
+
+    return matches, df_erp_to_match, df_tru_to_match, last_match_round + 1
+    
+def safe_split(s):
+    if s is None or isinstance(s, float):
+        return []
+    else:
+        try:
+            return s.split("||")
+        except:
+            return []
+
+
+def match_by_text_similarity(df_erp,
+                             df_tru,
+                             similarity_function=jaccard_similarity) -> pd.DataFrame:
+    """
+    Create a cartesian product between rows in both data sources and calculate the text similarity
+    between them.
+    """
+
+    tru_cols = TRU_MATCH_COLS.copy()
+    tru_cols = list(set(tru_cols) - {'SRC_SYS_CD', 'PLNT_CD'})
+    results = pd.DataFrame(columns=ERP_MATCH_COLS + tru_cols + [SCORE_COL])
+    for i, row_erp in df_erp[ERP_MATCH_COLS].iterrows():
+        for j, row_tru in df_tru[tru_cols].iterrows():
+            erp_desc = row_erp['text_for_matching_erp']
+            tru_desc = row_tru['text_for_matching_tru']
+
+            all_trd_names = safe_split(row_tru['TRD_NM_CONCAT'])
+
+            # First, try the full approach
+            if min(row_erp['perc_alpha_char_erp'], row_tru['perc_alpha_char_tru']) < 0.1:
+                score = 0
+            else:
+                score = similarity_function(erp_desc, tru_desc)
+                for trd_nm in all_trd_names:
+                    try:
+                        trd_nm_p = process_text_description(trd_nm)
+                        score = max(score, similarity_function(erp_desc, trd_nm_p))
+                    except:
+                        print(f'tru_desc: {tru_desc}. trd_nm: {trd_nm}')
+                        pass
+
+            partial = pd.concat([row_erp, row_tru])
+            partial.loc[SCORE_COL] = score
+            partial = partial[results.columns]
+
+            results = pd.concat([results, partial.to_frame().T], axis=0, ignore_index=True)
+
+    return results
+
+
+def match_by_cosine_similarity_of_embeddings(df_erp,
+                                             df_tru,
+                                             pure_text_similarity_function) -> pd.DataFrame:
+    """
+    Create a cartesian product between rows in both data sources and calculate the text similarity
+    between them.
+    """
+
+    a = df_erp['embedding_erp'].tolist()
+    b = df_tru['embedding_tru'].tolist()
+
+    cosine_matrix = cosine_similarity(a, b)
+
+    tru_cols = TRU_MATCH_COLS.copy()
+    tru_cols = list(set(tru_cols) - {'SRC_SYS_CD', 'PLNT_CD'})
+
+    results = pd.DataFrame(
+        columns=ERP_MATCH_COLS + ['embedding_erp'] + tru_cols + ['embedding_tru'] + [SCORE_COL])
+    for i, row_erp in df_erp[ERP_MATCH_COLS + ['embedding_erp']].reset_index(drop=True).iterrows():
+        for j, row_tru in df_tru[tru_cols + ['embedding_tru']].reset_index(drop=True).iterrows():
+            if min(row_erp['perc_alpha_char_erp'], row_tru['perc_alpha_char_tru']) < 0.1:
+                score = 0
+            else:
+                score = cosine_matrix[i, j]
+
+            partial = pd.concat([row_erp, row_tru])
+            partial.loc[SCORE_COL] = score
+            partial = partial[results.columns]
+
+            results = pd.concat([results, partial.to_frame().T], axis=0, ignore_index=True)
+
+    return results
+
+
+def match_maker(df_erp,
+                df_tru,
+                matching_method,
+                pure_text_similarity_function,
+                threshold=0.0,
+                known_rejections=None):
+    list_res = []
+
+    g = df_erp.groupby([ERP_MAT_NUM, 'SRC_SYS_CD', 'PLNT_CD'])
+    n = len(g.groups)
+    report_after = max(n // 4, 1)
+    print('Unique combinations to process: ', n)
+
+    i = 0
+    for material_number_src_sys_plant, sub_df_erp in g:
+        material_number, src_sys, plant = material_number_src_sys_plant
+
+        i += 1
+        if i % report_after == 0:
+            print(f'Doing {i} out of {n} tasks ({round(i / n * 100)})')
+            current_time_utc = datetime.utcnow()
+            print("Current UTC Time:", current_time_utc.strftime("%Y-%m-%d %H:%M:%S UTC"))
+
+        sub_df_tru = df_tru.query(f'{TRU_MAT_NUM}=="{material_number}" and '
+                                  f'PLNT_CD=="{plant}" and '
+                                  f'SRC_SYS_CD=="{src_sys}"').reset_index(drop=True)
+        if sub_df_tru.empty:
+            continue
+        matches = matching_method(sub_df_erp,
+                                  sub_df_tru,
+                                  pure_text_similarity_function)
+
+        if matches.empty:
+            continue
+
+        # Take only one matched tru record, the one with the highest score
+
+        # create temporarily column to find common matches
+        matches['key_match_tmp'] = matches[ERP_PART_ID] + '_' + matches[TRU_SPEC_ID]
+        matches[SCORE_COL] = matches[SCORE_COL].astype(float)
+
+        ix_tru_winners = matches.groupby(TRU_SPEC_ID)[SCORE_COL].nlargest(1).droplevel(0).index
+        tru_winners = matches.loc[ix_tru_winners]
+
+        # However, exclude those below the confidence level
+        tru_winners = tru_winners.query(f'{SCORE_COL}>{threshold}').reset_index(drop=True)
+
+        # Take only one matched erp record, the one with the highest score
+        ix_erp_winners = matches.groupby(ERP_PART_ID)[SCORE_COL].nlargest(1).droplevel(0).index
+        erp_winners = matches.loc[ix_erp_winners]
+        erp_winners = erp_winners.query(f'{SCORE_COL}>{threshold}').reset_index(drop=True)
+
+        winning_keys = set(tru_winners['key_match_tmp']).intersection(erp_winners['key_match_tmp'])
+
+        matches = matches[matches['key_match_tmp'].isin(winning_keys)].reset_index(drop=True)
+        matches.drop(columns=['key_match_tmp'], inplace=True)
+
+        list_res.append(matches)
+
+    if len(list_res) == 0:
+        print(f'Nothing was matched in this round')
+        return pd.DataFrame()
+    else:
+        collected = pd.concat(list_res, ignore_index=True, axis=0)
+
+        collected[UNIFIED_MC_COL] = collected[f'{ERP_MAT_NUM}_original'].copy()
+
+        # Force known rejections to have zero in case they show up
+        add_key_prediction(collected)
+        rejected_idx = collected.key_prediction.isin(known_rejections)
+        collected.loc[rejected_idx, SCORE_COL] = 0
+        collected.drop(columns=['key_prediction'], inplace=True)
+        print('Matches broken by being know rejections: ', rejected_idx.sum())
+
+        # Make sure not to match PACK/FERT to RMs
+        wrong_type_matched_idx = collected['CMPNT_MATL_TYPE_CD'].isin(['PACK', 'FERT']) & collected[
+            'spec_type_inferred'] == 'RM'
+        collected.loc[wrong_type_matched_idx, SCORE_COL] = 0
+        print('Matches broken by being wrong type  (PACK/FERT vs RM): ', wrong_type_matched_idx.sum())
+
+        # In theory already done above, but just in case
+        matched = collected.query(f'{SCORE_COL}>{threshold}').reset_index(drop=True)
+
+        matched['is_matched'] = True
+        matched['confidence'] = [calculate_confidence(x, pure_text_similarity_function) for x in matched[SCORE_COL]]
+
+        return matched
+
+
+def match_text_in_rounds(similarity_functions: List[callable],
+                         thresholds: List[float],
+                         df_erp_to_match: pd.DataFrame,
+                         df_tru_to_match: pd.DataFrame,
+                         current_full_matches: pd.DataFrame,
+                         previous_round: int,
+                         known_rejections: list,
+                         bundles: pd.DataFrame) -> (pd.DataFrame, pd.DataFrame, pd.DataFrame):
+    assert len(similarity_functions) == len(thresholds), 'similarity functions and threshold should be the same length'
+
+    matches = current_full_matches
+
+    for sf, t in zip(similarity_functions, thresholds):
+        previous_round += 1
+        print('-' * 60)
+
+        if sf == LLM_EMBEDDINGS:
+            match_round_name = f'{previous_round}: {sf}'
+            method = match_by_cosine_similarity_of_embeddings
+        else:
+            match_round_name = f'{previous_round}: {sf.__name__.replace("_", " ").title()}'
+            method = match_by_text_similarity
+        print(f'MATCH ROUND {match_round_name}')
+        start = time.time()
+
+        matches_current_round = match_maker(df_erp_to_match,
+                                            df_tru_to_match,
+                                            matching_method=method,
+                                            pure_text_similarity_function=sf,
+                                            threshold=t,
+                                            known_rejections=known_rejections)
+        if not matches_current_round.empty:
+            if sf == LLM_EMBEDDINGS:
+                matches_current_round['Matching Reason'] = 'The semantic is similar'
+            else:
+                matches_current_round['Matching Reason'] = 'The text is similar'
+
+            high_confidence_matches = matches_current_round.query('confidence=="high"').reset_index(drop=True)
+            non_high_confidence_matches = matches_current_round.query('confidence!="high"').reset_index(drop=True)
+            high_confidence_matches = add_matches_bundles(high_confidence_matches, bundles, df_tru_to_match)
+            matches_current_round = pd.concat([high_confidence_matches, non_high_confidence_matches], ignore_index=True)
+
+            assign_round_name_and_report_time(matches_current_round, match_round_name, start)
+            matches = pd.concat([matches, matches_current_round], ignore_index=True)
+            print('Amount of current matches: ', len(matches))
+
+        nd = matches.duplicated(subset=NON_DUPLICATES_SET).sum()
+        if nd > 0:
+            print(f'{nd} duplicates found in matches')
+            matches = matches.drop_duplicates(subset=NON_DUPLICATES_SET)
+
+        df_erp_to_match, df_tru_to_match = get_data_yet_to_match(matches,
+                                                                 df_erp_to_match,
+                                                                 df_tru_to_match)
+
+    return matches, df_erp_to_match, df_tru_to_match, previous_round
+
+
+def check_for_alternates(erp_not_matched,
+                         tru_not_matched,
+                         all_matches,
+                         known_rejections,
+                         round_name):
+    print(f'MATCH ROUND {round_name}')
+    start = time.time()
+    list_res = []
+    threshold = 0.6
+    for material_number_src_sys_plant, sub_df_erp in erp_not_matched.groupby([ERP_MAT_NUM, 'SRC_SYS_CD', 'PLNT_CD']):
+        material_number, src_sys, plant = material_number_src_sys_plant
+        sub_df_tru = all_matches.query(f'{TRU_MAT_NUM}=="{material_number}" and '
+                                       f'PLNT_CD=="{plant}" and '
+                                       f'SRC_SYS_CD=="{src_sys}"').reset_index(drop=True)
+        if sub_df_tru.empty:
+            # print(f'{material_number} Material not found in Tru for PLNT_CD "{plant}" and SRC_SYS_CD "{src_sys}"')
+            continue
+        matches = match_by_cosine_similarity_of_embeddings(sub_df_erp,
+                                                           sub_df_tru,
+                                                           None)
+
+        # create temporarily column to find common matches
+        matches['key_match_tmp'] = matches[ERP_PART_ID] + '_' + matches[TRU_SPEC_ID]
+        matches[SCORE_COL] = matches[SCORE_COL].astype(float)
+        ix_tru_winners = matches.groupby(TRU_SPEC_ID)[SCORE_COL].nlargest(1).droplevel(0).index
+
+        tru_winners = matches.loc[ix_tru_winners]
+
+        # However, exclude those below the confidence level
+        tru_winners = tru_winners.query(f'{SCORE_COL}>{threshold}').reset_index(drop=True)
+
+        # Take only one matched erp record, the one with the highest score
+        ix_erp_winners = matches.groupby(ERP_PART_ID)[SCORE_COL].nlargest(1).droplevel(0).index
+        erp_winners = matches.loc[ix_erp_winners]
+        erp_winners = erp_winners.query(f'{SCORE_COL}>{threshold}').reset_index(drop=True)
+
+        winning_keys = set(tru_winners['key_match_tmp']).intersection(erp_winners['key_match_tmp'])
+
+        matches = matches[matches['key_match_tmp'].isin(winning_keys)].reset_index(drop=True)
+        matches.drop(columns=['key_match_tmp'], inplace=True)
+
+        list_res.append(matches)
+    if not list_res:
+        print(f"No alternate matches found in round {round_name}")
+        return all_matches, erp_not_matched, tru_not_matched
+    collected = pd.concat(list_res, ignore_index=True, axis=0)
+    collected[UNIFIED_MC_COL] = collected[f'{ERP_MAT_NUM}_original'].copy()
+    # Force known rejections to have zero in case they show up
+    add_key_prediction(collected)
+
+    collected.loc[collected.key_prediction.isin(known_rejections), SCORE_COL] = 0
+    collected.drop(columns=['key_prediction'], inplace=True)
+    # DEBUG BLOCK 3b: Check if rejection filtering affected target
+    if not collected.empty and (collected[ERP_PART_ID] == "665880").any():
+      print("\n🟠 [DEBUG] Post-Rejection Filtering Check:")
+      print(collected[collected[ERP_PART_ID] == "665880"][[
+        ERP_PART_ID, TRU_SPEC_ID, 'Matching Reason', 'confidence', SCORE_COL]])
+    matched = collected.query(f'{SCORE_COL}>{threshold}').reset_index(drop=True)
+    matched['is_matched'] = True
+    matched['confidence'] = [calculate_confidence(x, LLM_EMBEDDINGS) for x in matched[SCORE_COL]]
+    matched['match_round'] = round_name
+    matched['Matching Reason'] = 'The semantic is similar'
+    print(f'{round_name} matching took {time.time() - start} seconds')
+
+    current_matches = pd.concat([all_matches, matched], ignore_index=True)
+
+    erp_parts_matched = collected['key_erp'].unique()
+    erp_no_matched_after_alternate_logic = erp_not_matched[~erp_not_matched['key_erp'].isin(erp_parts_matched)].copy()
+
+    erp_no_matched_after_alternate_logic['matching_score'] = None
+    tru_not_matched['matching_score'] = None
+
+    return current_matches, erp_no_matched_after_alternate_logic, tru_not_matched
+
+
+def check_for_alternates_tru(erp_not_matched,
+                             tru_not_matched,
+                             all_matches,
+                             known_rejections,
+                             round_name):
+    print(f'MATCH ROUND {round_name}')
+    start = time.time()
+    list_res = []
+    threshold = 0.6
+    for material_number_src_sys_plant, sub_df_tru in tru_not_matched.groupby([TRU_MAT_NUM, 'SRC_SYS_CD', 'PLNT_CD']):
+        material_number, src_sys, plant = material_number_src_sys_plant
+        sub_df_erp = all_matches.query(f'{ERP_MAT_NUM}=="{material_number}" and '
+                                       f'PLNT_CD=="{plant}" and '
+                                       f'SRC_SYS_CD=="{src_sys}"').reset_index(drop=True)
+        if sub_df_erp.empty:
+            # print(f'{material_number} Material not found in Tru for PLNT_CD "{plant}" and SRC_SYS_CD "{src_sys}"')
+            continue
+        matches = match_by_cosine_similarity_of_embeddings(sub_df_erp,
+                                                           sub_df_tru,
+                                                           None)
+
+        # create temporarily column to find common matches
+        matches['key_match_tmp'] = matches[ERP_PART_ID] + '_' + matches[TRU_SPEC_ID]
+        matches[SCORE_COL] = matches[SCORE_COL].astype(float)
+        ix_tru_winners = matches.groupby(TRU_SPEC_ID)[SCORE_COL].nlargest(1).droplevel(0).index
+
+        tru_winners = matches.loc[ix_tru_winners]
+
+        # However, exclude those below the confidence level
+        tru_winners = tru_winners.query(f'{SCORE_COL}>{threshold}').reset_index(drop=True)
+
+        # Take only one matched erp record, the one with the highest score
+        ix_erp_winners = matches.groupby(ERP_PART_ID)[SCORE_COL].nlargest(1).droplevel(0).index
+        erp_winners = matches.loc[ix_erp_winners]
+        erp_winners = erp_winners.query(f'{SCORE_COL}>{threshold}').reset_index(drop=True)
+
+        winning_keys = set(tru_winners['key_match_tmp']).intersection(erp_winners['key_match_tmp'])
+
+        matches = matches[matches['key_match_tmp'].isin(winning_keys)].reset_index(drop=True)
+        matches.drop(columns=['key_match_tmp'], inplace=True)
+
+        list_res.append(matches)
+    if not list_res:
+        print(f"No alternate matches found in round {round_name}")
+        return all_matches, erp_not_matched, tru_not_matched
+    collected = pd.concat(list_res, ignore_index=True, axis=0)
+    collected[UNIFIED_MC_COL] = collected[f'{ERP_MAT_NUM}_original'].copy()
+    # Force known rejections to have zero in case they show up
+    add_key_prediction(collected)
+
+    collected.loc[collected.key_prediction.isin(known_rejections), SCORE_COL] = 0
+    collected.drop(columns=['key_prediction'], inplace=True)
+
+    matched = collected.query(f'{SCORE_COL}>{threshold}').reset_index(drop=True)
+    matched['is_matched'] = True
+    matched['confidence'] = [calculate_confidence(x, LLM_EMBEDDINGS) for x in matched[SCORE_COL]]
+    matched['match_round'] = round_name
+    matched['Matching Reason'] = 'The semantic is similar'
+    print(f'{round_name} matching took {time.time() - start} seconds')
+
+    current_matches = pd.concat([all_matches, matched], ignore_index=True)
+
+    tru_parts_matched = collected['key_tru'].unique()
+    tru_no_matched_after_alternate_logic = tru_not_matched[~tru_not_matched['key_tru'].isin(tru_parts_matched)].copy()
+
+    tru_no_matched_after_alternate_logic['matching_score'] = None
+    tru_no_matched_after_alternate_logic[UNIFIED_MC_COL] = tru_no_matched_after_alternate_logic[
+        f'{ERP_MAT_NUM}_original_tru_ref'].copy()
+
+    erp_not_matched['matching_score'] = None
+    erp_not_matched[UNIFIED_MC_COL] = erp_not_matched[f'{ERP_MAT_NUM}_original'].copy()
+
+    unmatched = pd.concat([erp_not_matched,
+                           tru_no_matched_after_alternate_logic],
+                          ignore_index=True,
+                          axis=0)
+    unmatched['is_matched'] = False
+    unmatched['confidence'] = None
+    unmatched['match_round'] = NOT_MATCHED_ROUND_NAME
+    unmatched['Matching Reason'] = None
+    unmatched = unmatched[matched.columns]
+
+    assert current_matches[UNIFIED_MC_COL].isna().sum() == 0
+    assert unmatched[UNIFIED_MC_COL].isna().sum() == 0
+    return current_matches, unmatched
+
+
+def check_duplicates(matches):
+    print('Amount of current matches: ', len(matches))
+    nd = matches.duplicated(subset=NON_DUPLICATES_SET).sum()
+    if nd > 0:
+        print(f'{nd} duplicates found in matches')
+        matches.drop_duplicates(subset=NON_DUPLICATES_SET, inplace=True)
+
+
+def full_matching_routine(data_version, db_style, device, embeddings_save_dir, erp, model_type,
+                          sentence_transformer_dir, tru, use_azure_dataset, bundles, output_dir):
+    erp, tru = format_raw_material_id(erp, tru)
+
+    erp, tru = preprocessed_text_description(erp, tru)
+    start = time.time()
+    erp = create_features(erp, 'erp')
+    tru = create_features(tru, 'tru')
+    tru = create_features(tru, 'tru_trade_names')
+
+    if tru['text_for_matching_tru_trade_names'].notna().sum() == 0:
+        print('ABORT: something went wrong creating text_for_matching_tru_trade_names.')
+    print(f'Create features took {time.time() - start} seconds')
+
+    erp, tru = get_or_calculate_embeddings(erp=erp,
+                                           tru=tru,
+                                           save_dir=embeddings_save_dir,
+                                           db_style=db_style,
+                                           use_azure_dataset=use_azure_dataset,
+                                           version=data_version,
+                                           model_type=model_type,
+                                           model_dir=sentence_transformer_dir,
+                                           device=device)
+
+    # tru data does not contain src and plant info. So, in order to track appropriately, we expand it with those fields
+    unique_combinations = erp[['SRC_SYS_CD',
+                               'PLNT_CD',
+                               ERP_MAT_NUM,
+                               f'{ERP_MAT_NUM}_original']].drop_duplicates().dropna()
+
+    # tru.to_csv(f'{output_dir}/tru1.csv'
+    tru = tru.merge(unique_combinations,
+                    left_on=[TRU_MAT_NUM],
+                    right_on=[ERP_MAT_NUM],
+                    how='inner')
+    tru.rename(columns={f'{ERP_MAT_NUM}_original': f'{ERP_MAT_NUM}_original_tru_ref'}, inplace=True)
+
+    # Overwrite key so we include src_sys and plnt
+    tru = create_key_column(tru, 'tru')
+
+    # Save embeddings for later
+    tru_embeddings = tru[['key_tru', 'embedding_tru']].copy()
+    erp_embeddings = erp[['key_erp', 'embedding_erp']].copy()
+    tru.drop(columns=['embedding_tru'], inplace=True)
+    erp.drop(columns=['embedding_erp'], inplace=True)
+    tru = tru.dropna(subset=['key_tru', 'PLNT_CD', 'SRC_SYS_CD'])
+    erp = erp.dropna(subset=['key_erp', 'PLNT_CD', 'SRC_SYS_CD'])
+
+    # ✅ Full copies for force pairing
+    erp_full = erp.copy()
+    tru_full = tru.copy()
+    
+    # DEBUG: Check if ERP_PART_ID exists in raw ERP data
+    erp_full[ERP_PART_ID] = erp_full[ERP_PART_ID].astype(str).str.strip()
+    erp_id_to_check = "000000000006115990"
+    erp_id_unpadded = "6115990"
+    child="PC-0014319"
+
+    found_padded = erp_full[ERP_PART_ID].isin([erp_id_to_check]).any()
+    found_unpadded = erp_full[ERP_PART_ID].isin([erp_id_unpadded]).any()
+    CH_unpadded = tru_full['CHILD_NM'].isin([child]).any()
+
+    print("="*60)
+    print("🔍 ERP_PART_ID Presence Check")
+    if found_padded:
+     print(f"✅ Found ERP_PART_ID {erp_id_to_check} in ERP data")
+     print(f"✅ Found CHILD_ID {CH_unpadded} in TRU data")
+    else:
+     print(f"❌ DID NOT find ERP_PART_ID {erp_id_to_check} in ERP data")
+
+    if found_unpadded:
+     print(f"✅ Found ERP_PART_ID {erp_id_unpadded} in ERP data")
+     print(f"✅ Found CHILD_ID {CH_unpadded} in TRU data")
+    else:
+     print(f"❌ DID NOT find ERP_PART_ID {erp_id_unpadded} in ERP data")
+     print("="*60)
+
+
+    ############################################################
+    # Matching logic
+    ############################################################
+    previous_round = 0
+    print('-' * 60)
+    matches_per_id, erp_to_match, tru_to_match, previous_round = match_erp_part_vs_rm_spec(erp,
+                                                                                           tru,
+                                                                                           previous_round,
+                                                                                           bundles)
+    ##############NLP_LIST_ERP########
+    print('-' * 60)
+    print('-' * 60)
+    NLP_list_ERP_folder = os.path.dirname(os.path.realpath(__file__))
+    NLP_list_ERP_folder = os.path.abspath(os.path.join(NLP_list_ERP_folder, os.pardir))
+    xmatches_NLP_list_ERP = pd.read_csv(f'{NLP_list_ERP_folder}/reference_tables/NLP_list_ERP.csv', encoding='latin1', dtype='str')
+
+    print('✅ STEP 1: Loaded NLP_list_ERP.csv')
+    print(xmatches_NLP_list_ERP.head())
+    # Debug: Check for target pair in reference table
+    check_pair = xmatches_NLP_list_ERP[
+    (xmatches_NLP_list_ERP[ERP_PART_ID] == "6115990") &
+    (xmatches_NLP_list_ERP[TRU_SPEC_ID] == "PC-046458")]
+    print(f"🔍 Is target pair in reference table? {not check_pair.empty}")
+
+    # Merge ERP text
+    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP.merge(
+    erp_full[['text_for_matching_erp', ERP_PART_ID]].drop_duplicates(),
+    how='left',
+    on=ERP_PART_ID)
+    print('✅ STEP 2: After merging ERP text')
+    print(xmatches_NLP_list_ERP_with_text.head())
+    # Debug: Check for target pair
+    check_pair = xmatches_NLP_list_ERP_with_text[
+    (xmatches_NLP_list_ERP_with_text[ERP_PART_ID] == "6115990") &
+    (xmatches_NLP_list_ERP_with_text[TRU_SPEC_ID] == "PC-046458")]
+    print(f"🔍 Is target pair present after ERP merge? {not check_pair.empty}")
+
+    # Merge TRU text
+    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text.merge(
+    tru_full[['text_for_matching_tru', TRU_SPEC_ID]].drop_duplicates(),
+    how='left',
+    on=TRU_SPEC_ID)
+    print('✅ STEP 3: After merging TRU text')
+    print(xmatches_NLP_list_ERP_with_text.head())
+    # Debug: Check for target pair
+    check_pair = xmatches_NLP_list_ERP_with_text[
+    (xmatches_NLP_list_ERP_with_text[ERP_PART_ID] == "6115990") &
+    (xmatches_NLP_list_ERP_with_text[TRU_SPEC_ID] == "PC-046458")]
+    print(f"🔍 Is target pair present after TRU merge? {not check_pair.empty}")
+
+    # Select required columns
+    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text[[ERP_PART_ID,
+                                                                   TRU_SPEC_ID,
+                                                                   'text_for_matching_erp',
+                                                                   'text_for_matching_tru']]
+    print('✅ STEP 4: After selecting relevant columns')
+# Debug: Check for target pair
+    check_pair = xmatches_NLP_list_ERP_with_text[
+    (xmatches_NLP_list_ERP_with_text[ERP_PART_ID] == "6115990") &
+    (xmatches_NLP_list_ERP_with_text[TRU_SPEC_ID] == "PC-046458")
+]
+    print(f"🔍 Is target pair still present after column filtering? {not check_pair.empty}")
+
+# Drop duplicates
+    xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text.drop_duplicates()
+    print('✅ STEP 5: After dropping duplicates')
+# Debug: Check for target pair
+    check_pair = xmatches_NLP_list_ERP_with_text[
+    (xmatches_NLP_list_ERP_with_text[ERP_PART_ID] == "6115990") &
+    (xmatches_NLP_list_ERP_with_text[TRU_SPEC_ID] == "PC-046458")
+]
+    print(f"🔍 Is target pair still present after dropping duplicates? {not check_pair.empty}")
+    matches_NLP_list_ERP, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
+                                                                                           tru_to_match,
+                                                                                           xmatches_NLP_list_ERP_with_text,
+                                                                                           previous_round,
+                                                                                           'matches_NLP_list_ERP suggested X-match',
+                                                                                           bundles,erp_full,tru_full)
+    check_duplicates(matches_NLP_list_ERP)
+    print(matches_NLP_list_ERP)
+
+
+
+    user_logs_path = os.path.join(os.getcwd(), "user_logs")
+    os.makedirs(user_logs_path, exist_ok=True)  # create directory if it doesn't exist
+    matches_NLP_list_ERP.to_csv(
+    os.path.join(user_logs_path, "matches_NLP_list_ERP.csv"), 
+    index=False)
+
+    print('-' * 60)
+    matches_per_title, erp_to_match, tru_to_match, previous_round = match_erp_part_vs_rm_title(erp_to_match,
+                                                                                               tru_to_match,
+                                                                                               previous_round,
+                                                                                               bundles)
+
+    print('-' * 60)
+    matches_per_erp_desc, erp_to_match, tru_to_match, previous_round = match_erp_desc_vs_rm_spec(erp_to_match,
+                                                                                                 tru_to_match,
+                                                                                                 previous_round,
+                                                                                                 bundles)
+    check_duplicates(matches_per_title)
+
+    print('-' * 60)
+    human_feedback_folder = os.path.dirname(os.path.realpath(__file__))
+    human_feedback_folder = os.path.abspath(os.path.join(human_feedback_folder, os.pardir))
+    human_feedback = pd.read_csv(f'{human_feedback_folder}/reference_tables/feedback_poc.csv')
+    human_feedback_with_text = human_feedback.merge(
+        erp[['text_for_matching_erp', ERP_PART_ID]].drop_duplicates(),
+        how='left',
+        on=ERP_PART_ID)
+    human_feedback_with_text = human_feedback_with_text.merge(
+        tru[['text_for_matching_tru', TRU_SPEC_ID]].drop_duplicates(),
+        how='left',
+        on=TRU_SPEC_ID)
+    human_feedback_with_text = human_feedback_with_text[[ERP_PART_ID,
+                                                         TRU_SPEC_ID,
+                                                         'text_for_matching_erp',
+                                                         'text_for_matching_tru']]
+    human_feedback_with_text = human_feedback_with_text.drop_duplicates()
+    matches_per_hfb, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
+                                                                                           tru_to_match,
+                                                                                           human_feedback_with_text,
+                                                                                           previous_round,
+                                                                                           'Human Feedback',
+                                                                                           bundles,erp_full,tru_full )
+    check_duplicates(matches_per_hfb)
+##check missing#######################################################
+    # erp_list=["000000000000578009","000000000000572618","000000000000200143","000000000000573605","000000000000034915","000000000000573324","000000000000573321","000000000000101338","000000000000578048","000000000500002994","000000000500001956","000000000000578047","000000000500001955","000000000000559199","000000000000084127","000000000000579138","000000000000578012","000000000000013807","000000000000572619","578009","572618","200143","573605","34915","573324","573321","101338","578048","500002994","500001956","578047","500001955","559199","84127","579138","578012","13807","572619"]
+    # check_list=erp[['text_for_matching_erp', ERP_PART_ID]].query('CMPNT_MATL_NUM in @erp_list')
+    # print('check if any id is present')
+    # print(check_list)
+    ################ Pendulum
+    print('-' * 60)
+    pendulum_folder = os.path.dirname(os.path.realpath(__file__))
+    pendulum_folder = os.path.abspath(os.path.join(pendulum_folder, os.pardir))
+    pendulum = pd.read_csv(f'{pendulum_folder}/reference_tables/pendulum_formatted_v2.csv')
+    pendulum_with_text = pendulum.merge(
+        erp[['text_for_matching_erp', ERP_PART_ID]].drop_duplicates(),
+        how='left',
+        on=ERP_PART_ID)
+    pendulum_with_text = pendulum_with_text.merge(
+        tru[['text_for_matching_tru', TRU_SPEC_ID]].drop_duplicates(),
+        how='left',
+        on=TRU_SPEC_ID)
+    pendulum_with_text = pendulum_with_text[[ERP_PART_ID,
+                                             TRU_SPEC_ID,
+                                             'text_for_matching_erp',
+                                             'text_for_matching_tru']]
+    pendulum_with_text = pendulum_with_text.drop_duplicates()
+    matches_per_pend, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
+                                                                                            tru_to_match,
+                                                                                            pendulum_with_text,
+                                                                                            previous_round,
+                                                                                            'Pair found in Pendulum',
+                                                                                            bundles,erp_full,tru_full )
+    check_duplicates(matches_per_pend)
+
+    ##### Fortrea X-matches
+    print('-' * 60)
+    fortrea_folder = os.path.dirname(os.path.realpath(__file__))
+    fortrea_folder = os.path.abspath(os.path.join(fortrea_folder, os.pardir))
+    xmatches_fortrea = pd.read_csv(f'{fortrea_folder}/reference_tables/xmatches_fortrea_full.csv')
+    xmatches_fortrea_with_text = xmatches_fortrea.merge(
+        erp[['text_for_matching_erp', ERP_PART_ID]].drop_duplicates(),
+        how='left',
+        on=ERP_PART_ID)
+    xmatches_fortrea_with_text = xmatches_fortrea_with_text.merge(
+        tru[['text_for_matching_tru', TRU_SPEC_ID]].drop_duplicates(),
+        how='left',
+        on=TRU_SPEC_ID)
+    xmatches_fortrea_with_text = xmatches_fortrea_with_text[[ERP_PART_ID,
+                                                             TRU_SPEC_ID,
+                                                             'text_for_matching_erp',
+                                                             'text_for_matching_tru']]
+    xmatches_fortrea_with_text = xmatches_fortrea_with_text.drop_duplicates()
+    matches_fortrea, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
+                                                                                           tru_to_match,
+                                                                                           xmatches_fortrea_with_text,
+                                                                                           previous_round,
+                                                                                           'Fortrea suggested X-match',
+                                                                                           bundles,erp_full,tru_full)
+    check_duplicates(matches_fortrea)
+
+    ##### Fortrea Pendulum Validated
+    print('-' * 60)
+    pendulum_fortrea = pd.read_csv(f'{fortrea_folder}/reference_tables/pendulum_fortrea_full.csv')
+    pendulum_fortrea_with_text = pendulum_fortrea.merge(
+        erp[['text_for_matching_erp', ERP_PART_ID]].drop_duplicates(),
+        how='left',
+        on=ERP_PART_ID)
+    pendulum_fortrea_with_text = pendulum_fortrea_with_text.merge(
+        tru[['text_for_matching_tru', TRU_SPEC_ID]].drop_duplicates(),
+        how='left',
+        on=TRU_SPEC_ID)
+    pendulum_fortrea_with_text = pendulum_fortrea_with_text[[ERP_PART_ID,
+                                                             TRU_SPEC_ID,
+                                                             'text_for_matching_erp',
+                                                             'text_for_matching_tru']]
+    pendulum_fortrea_with_text = pendulum_fortrea_with_text.drop_duplicates()
+    matches_pend_fortrea, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
+                                                                                                tru_to_match,
+                                                                                                pendulum_fortrea_with_text,
+                                                                                                previous_round,
+                                                                                                'Fortrea Pendulum Validated',
+                                                                                                bundles,erp_full,tru_full)
+    check_duplicates(matches_pend_fortrea)
+    
+    ##### Pomezia_Xref
+    print('-' * 60)
+    Pomezia_folder = os.path.dirname(os.path.realpath(__file__))
+    Pomezia_folder = os.path.abspath(os.path.join(Pomezia_folder, os.pardir))
+    xmatches_Pomezia = pd.read_csv(f'{Pomezia_folder}/reference_tables/Pomezia_Xref.csv',encoding='latin1',dtype='str')
+    print(erp[['text_for_matching_erp', ERP_PART_ID]].drop_duplicates())
+    xmatches_Pomezia_with_text = xmatches_Pomezia.merge(
+        erp[['text_for_matching_erp', ERP_PART_ID]].drop_duplicates(),
+        how='left',
+        on=ERP_PART_ID)
+    xmatches_Pomezia_with_text = xmatches_Pomezia_with_text.merge(
+        tru[['text_for_matching_tru', TRU_SPEC_ID]].drop_duplicates(),
+        how='left',
+        on=TRU_SPEC_ID)
+    xmatches_Pomezia_with_text = xmatches_Pomezia_with_text[[ERP_PART_ID,
+                                                             TRU_SPEC_ID,
+                                                             'text_for_matching_erp',
+                                                             'text_for_matching_tru']]
+    xmatches_Pomezia_with_text = xmatches_Pomezia_with_text.drop_duplicates()
+    matches_Pomezia, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
+                                                                                           tru_to_match,
+                                                                                           xmatches_Pomezia_with_text,
+                                                                                           previous_round,
+                                                                                           'Pomezia suggested X-match',
+                                                                                           bundles,erp_full,tru_full)
+    check_duplicates(matches_Pomezia)
+    print(matches_Pomezia)
+
+    
+
+    ##### VDR_TRU
+    print('-' * 60)
+    VDR_TRU_folder = os.path.dirname(os.path.realpath(__file__))
+    VDR_TRU_folder = os.path.abspath(os.path.join(VDR_TRU_folder, os.pardir))
+    xmatches_VDR_TRU = pd.read_csv(f'{VDR_TRU_folder}/reference_tables/VDR_TRU.csv',encoding='latin1',dtype='str')
+    
+    xmatches_VDR_TRU_with_text = xmatches_VDR_TRU.merge(
+        erp[['text_for_matching_erp', ERP_PART_ID]].drop_duplicates(),
+        how='left',
+        on=ERP_PART_ID)
+    xmatches_VDR_TRU_with_text = xmatches_VDR_TRU_with_text.merge(
+        tru[['text_for_matching_tru', TRU_SPEC_ID]].drop_duplicates(),
+        how='left',
+        on=TRU_SPEC_ID)
+    xmatches_VDR_TRU_with_text = xmatches_VDR_TRU_with_text[[ERP_PART_ID,
+                                                             TRU_SPEC_ID,
+                                                             'text_for_matching_erp',
+                                                             'text_for_matching_tru']]
+    xmatches_VDR_TRU_with_text = xmatches_VDR_TRU_with_text.drop_duplicates()
+    matches_VDR_TRU, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
+                                                                                           tru_to_match,
+                                                                                           xmatches_VDR_TRU_with_text,
+                                                                                           previous_round,
+                                                                                           'VDR_TRU suggested X-match',
+                                                                                           bundles,erp_full,tru_full)
+    check_duplicates(matches_VDR_TRU)
+    print(matches_VDR_TRU)
+
+    ##### Xref_Request_for_SJC
+    print('-' * 60)
+    Xref_Request_for_SJC_folder = os.path.dirname(os.path.realpath(__file__))
+    Xref_Request_for_SJC_folder = os.path.abspath(os.path.join(Xref_Request_for_SJC_folder, os.pardir))
+    xmatches_Xref_Request_for_SJC = pd.read_csv(f'{Xref_Request_for_SJC_folder}/reference_tables/Xref_Request_for_SJC.csv',encoding='latin1',dtype='str')
+    #xmatches_Xref_Request_for_SJC=xmatches_Xref_Request_for_SJC.astype(str)
+    print(xmatches_Xref_Request_for_SJC)
+    xmatches_Xref_Request_for_SJC_with_text = xmatches_Xref_Request_for_SJC.merge(
+        erp[['text_for_matching_erp', ERP_PART_ID]].drop_duplicates(),
+        how='left',
+        on=ERP_PART_ID)
+    print("xmatches_Xref_Request_for_SJC_with_text 1")
+    print(xmatches_Xref_Request_for_SJC_with_text)
+    xmatches_Xref_Request_for_SJC_with_text = xmatches_Xref_Request_for_SJC_with_text.merge(
+        tru[['text_for_matching_tru', TRU_SPEC_ID]].drop_duplicates(),
+        how='left',
+        on=TRU_SPEC_ID)
+    print("xmatches_Xref_Request_for_SJC_with_text 2")
+    print(xmatches_Xref_Request_for_SJC_with_text)
+    xmatches_Xref_Request_for_SJC_with_text = xmatches_Xref_Request_for_SJC_with_text[[ERP_PART_ID,
+                                                             TRU_SPEC_ID,
+                                                             'text_for_matching_erp',
+                                                             'text_for_matching_tru']]
+    xmatches_Xref_Request_for_SJC_with_text = xmatches_Xref_Request_for_SJC_with_text.drop_duplicates()
+    print("xmatches_Xref_Request_for_SJC_with_text 2")
+    print(xmatches_Xref_Request_for_SJC_with_text)
+    matches_Xref_Request_for_SJC, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
+                                                                                           tru_to_match,
+                                                                                           xmatches_Xref_Request_for_SJC_with_text,
+                                                                                           previous_round,
+                                                                                           'Xref_Request_for_SJC suggested X-match',
+                                                                                           bundles,erp_full,tru_full)
+    check_duplicates(matches_Xref_Request_for_SJC)
+    print(matches_Xref_Request_for_SJC)
+
+    ##### EPR_priority_confidence
+    print('-' * 60)
+    EPR_priority_confidence_folder = os.path.dirname(os.path.realpath(__file__))
+    EPR_priority_confidence_folder = os.path.abspath(os.path.join(EPR_priority_confidence_folder, os.pardir))
+    xmatches_EPR_priority_confidence = pd.read_csv(f'{EPR_priority_confidence_folder}/reference_tables/EPR_priority_confidence.csv',encoding='latin1',dtype='str')
+    #xmatches_EPR_priority_confidence=xmatches_EPR_priority_confidence.astype(str)
+    print('reading xmatches_EPR_priority_confidence file from folder ')
+    print(xmatches_EPR_priority_confidence)
+    xmatches_EPR_priority_confidence_with_text = xmatches_EPR_priority_confidence.merge(
+        erp[['text_for_matching_erp', ERP_PART_ID]].drop_duplicates(),
+        how='left',
+        on=ERP_PART_ID)
+    print('mapping using ERP PART ID')
+    print(xmatches_EPR_priority_confidence_with_text)
+    xmatches_EPR_priority_confidence_with_text = xmatches_EPR_priority_confidence_with_text.merge(
+        tru[['text_for_matching_tru', TRU_SPEC_ID]].drop_duplicates(),
+        how='left',
+        on=TRU_SPEC_ID)
+    print('mapping using TRU_SPEC_ID')
+    print(xmatches_EPR_priority_confidence_with_text)
+    xmatches_EPR_priority_confidence_with_text = xmatches_EPR_priority_confidence_with_text[[ERP_PART_ID,
+                                                             TRU_SPEC_ID,
+                                                             'text_for_matching_erp',
+                                                             'text_for_matching_tru']]
+    print('xmatches_EPR_priority_confidence_with_text s1',xmatches_EPR_priority_confidence_with_text)
+    xmatches_EPR_priority_confidence_with_text = xmatches_EPR_priority_confidence_with_text.drop_duplicates()
+    print('xmatches_EPR_priority_confidence_with_text s2',xmatches_EPR_priority_confidence_with_text)
+    matches_EPR_priority_confidence, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
+                                                                                           tru_to_match,
+                                                                                           xmatches_EPR_priority_confidence_with_text,
+                                                                                           previous_round,
+                                                                                           'matches_EPR_priority_confidence suggested X-match',
+                                                                                           bundles,erp_full,tru_full)
+    check_duplicates(matches_EPR_priority_confidence)
+    print(matches_EPR_priority_confidence)
+
+    ##############Potential PC_DC Spec list - NLP_1########
+    print('-' * 60)
+    Potential_PC_DC_Spec_list_folder = os.path.dirname(os.path.realpath(__file__))
+    Potential_PC_DC_Spec_list_folder = os.path.abspath(os.path.join(Potential_PC_DC_Spec_list_folder, os.pardir))
+    xmatches_Potential_PC_DC_Spec = pd.read_csv(f'{Potential_PC_DC_Spec_list_folder}/reference_tables/Potential PC_DC Spec list - NLP_1.csv',encoding='latin1',dtype='str')
+    #xmatches_EPR_priority_confidence=xmatches_EPR_priority_confidence.astype(str)
+    print('reading xmatches_EPR_priority_confidence file from folder ')
+    print(xmatches_Potential_PC_DC_Spec)
+    xmatches_Potential_PC_DC_Spec_with_text = xmatches_Potential_PC_DC_Spec.merge(
+        erp[['text_for_matching_erp', ERP_PART_ID]].drop_duplicates(),
+        how='left',
+        on=ERP_PART_ID)
+    print('mapping using ERP PART ID')
+    print(xmatches_Potential_PC_DC_Spec_with_text)
+    xmatches_Potential_PC_DC_Spec_with_text = xmatches_Potential_PC_DC_Spec_with_text.merge(
+        tru[['text_for_matching_tru', TRU_SPEC_ID]].drop_duplicates(),
+        how='left',
+        on=TRU_SPEC_ID)
+    print('mapping using TRU_SPEC_ID')
+    print(xmatches_Potential_PC_DC_Spec_with_text)
+    xmatches_Potential_PC_DC_Spec_with_text = xmatches_Potential_PC_DC_Spec_with_text[[ERP_PART_ID,
+                                                             TRU_SPEC_ID,
+                                                             'text_for_matching_erp',
+                                                             'text_for_matching_tru']]
+    print('xmatches_Potential_PC_DC_Spec_with_text s1',xmatches_Potential_PC_DC_Spec_with_text)
+    xmatches_Potential_PC_DC_Spec_with_text = xmatches_Potential_PC_DC_Spec_with_text.drop_duplicates()
+    print('xmatches_Potential_PC_DC_Spec_with_text s2',xmatches_Potential_PC_DC_Spec_with_text)
+    matches_Potential_PC_DC_Spec, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
+                                                                                           tru_to_match,
+                                                                                           xmatches_Potential_PC_DC_Spec_with_text,
+                                                                                           previous_round,
+                                                                                           'matches_Potential_PC_DC_Spec suggested X-match',
+                                                                                           bundles,erp_full,tru_full)
+    check_duplicates(matches_Potential_PC_DC_Spec)
+    print(matches_Potential_PC_DC_Spec)
+
+
+    # ##############NLP_LIST_ERP########
+    # print('-' * 60)
+    # NLP_list_ERP_folder = os.path.dirname(os.path.realpath(__file__))
+    # NLP_list_ERP_folder = os.path.abspath(os.path.join(NLP_list_ERP_folder, os.pardir))
+    # xmatches_NLP_list_ERP = pd.read_csv(f'{NLP_list_ERP_folder}/reference_tables/NLP_list_ERP.csv',encoding='latin1',dtype='str')
+    # #xmatches_EPR_priority_confidence=xmatches_EPR_priority_confidence.astype(str)
+    # print('reading xmatches_EPR_priority_confidence file from folder ')
+    # print(xmatches_NLP_list_ERP)
+    # xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP.merge(
+    #     erp[['text_for_matching_erp', ERP_PART_ID]].drop_duplicates(),
+    #     how='left',
+    #     on=ERP_PART_ID)
+    # print('mapping using ERP PART ID')
+    # print(xmatches_NLP_list_ERP_with_text)
+    # xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text.merge(
+    #     tru[['text_for_matching_tru', TRU_SPEC_ID]].drop_duplicates(),
+    #     how='left',
+    #     on=TRU_SPEC_ID)
+    # print('mapping using TRU_SPEC_ID')
+    # print(xmatches_NLP_list_ERP_with_text)
+    # xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text[[ERP_PART_ID,
+    #                                                          TRU_SPEC_ID,
+    #                                                          'text_for_matching_erp',
+    #                                                          'text_for_matching_tru']]
+    # print('xmatches_NLP_list_ERP_with_text s1',xmatches_NLP_list_ERP_with_text)
+    # xmatches_NLP_list_ERP_with_text = xmatches_NLP_list_ERP_with_text.drop_duplicates()
+    # print('xmatches_NLP_list_ERP_with_text s2',xmatches_NLP_list_ERP_with_text)
+    # matches_NLP_list_ERP, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
+    #                                                                                        tru_to_match,
+    #                                                                                        xmatches_NLP_list_ERP_with_text,
+    #                                                                                        previous_round,
+    #                                                                                        'matches_NLP_list_ERP suggested X-match',
+    #                                                                                        bundles,erp_full,tru_full)
+    # check_duplicates(matches_NLP_list_ERP)
+    # print(matches_NLP_list_ERP)
+
+
+
+    # user_logs_path = os.path.join(os.getcwd(), "user_logs")
+    # os.makedirs(user_logs_path, exist_ok=True)  # create directory if it doesn't exist
+    # matches_NLP_list_ERP.to_csv(
+    # os.path.join(user_logs_path, "matches_NLP_list_ERP.csv"), 
+    # index=False)
+
+
+    ################ Self Learnt
+    print('-' * 60)
+    high_confidence_matches = pd.concat([matches_per_id,
+                                         matches_per_title,
+                                         matches_per_erp_desc,
+                                         matches_per_hfb,
+                                         matches_per_pend,
+                                         matches_fortrea,
+                                         matches_pend_fortrea,
+                                         matches_Pomezia,
+                                         matches_VDR_TRU,
+                                         matches_Xref_Request_for_SJC,
+                                         matches_EPR_priority_confidence,
+                                         matches_Potential_PC_DC_Spec,
+                                         matches_NLP_list_ERP
+                                         
+
+                                         ],
+                                        ignore_index=True)
+    check_duplicates(high_confidence_matches)
+    print(high_confidence_matches)
+
+    reference_high_conf = high_confidence_matches[[ERP_PART_ID,
+                                                   TRU_SPEC_ID,
+                                                   ERP_PART_DESC,
+                                                   TRU_SPEC_DESC,
+                                                   'text_for_matching_erp',
+                                                   'text_for_matching_tru',
+                                                   'perc_alpha_char_erp',
+                                                   'perc_alpha_char_tru']].copy().drop_duplicates()
+    reference_high_conf['length_desc'] = [
+    min(len(str(x)), len(str(y))) for x, y in zip(reference_high_conf[ERP_PART_DESC], reference_high_conf[TRU_SPEC_DESC])]
+    reference_high_conf = reference_high_conf.query('perc_alpha_char_erp>0.5 and '
+                                                    'perc_alpha_char_tru>0.5 and '
+                                                    'length_desc>5')
+    reference_high_conf = reference_high_conf[[ERP_PART_ID,
+                                               TRU_SPEC_ID,
+                                               'text_for_matching_erp',
+                                               'text_for_matching_tru']].copy().drop_duplicates()
+    round_name = 'Self Learnt through other products with similar BOM'
+    matches_per_self, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
+                                                                                            tru_to_match,
+                                                                                            reference_high_conf,
+                                                                                            previous_round,
+                                                                                            round_name,
+                                                                                            bundles,erp_full,tru_full)
+    current_full_matches = pd.concat([high_confidence_matches, matches_per_self])
+    check_duplicates(current_full_matches)
+    print(current_full_matches)
+
+    ############### Match per Text Similarity ##############################
+    # Read known rejections and pass them to the next rounds
+    known_rejections_df = pd.read_csv(f'{fortrea_folder}/reference_tables/rejections_fortrea.csv')
+    add_key_prediction(known_rejections_df)
+    known_rejections = list(known_rejections_df['key_prediction'].unique())
+    # DEBUG BLOCK 3a: Check if target is in rejection file
+    if "665880" in known_rejections_df[ERP_PART_ID].values:
+     print("\n❌ [DEBUG] Target 665880 is present in rejection file!")
+    else:
+     print("\n✅ [DEBUG] Target 665880 NOT found in rejection file!")
+    similarities = [jaccard_similarity,
+                    leven_similarity,
+                    jaccard_similarity]
+    thresholds = [0.0, 0.3, 0.3]
+    current_full_matches, erp_to_match, tru_to_match, previous_round = match_text_in_rounds(similarities,
+                                                                                            thresholds,
+                                                                                            erp_to_match,
+                                                                                            tru_to_match,
+                                                                                            current_full_matches,
+                                                                                            previous_round,
+                                                                                            known_rejections,
+                                                                                            bundles)
+    # Put back the embeddings
+    erp_to_match = erp_to_match.merge(erp_embeddings,
+                                      on='key_erp',
+                                      how='left')
+
+    tru_to_match.drop_duplicates(subset=['key_tru'], inplace=True)
+    n = len(tru_to_match)
+    original_tru_match = tru_to_match.copy()
+    tru_to_match = tru_to_match.merge(tru_embeddings,
+                                      on='key_tru',
+                                      how='left')
+    tru_to_match.drop_duplicates(subset=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, TRU_SPEC_ID], inplace=True)
+    if len(tru_to_match) != n:
+        print('Duplicates were created when merging tru_embeddings back')
+        print(f'original n: {n}. New n: {len(tru_to_match)}')
+        # NA's
+        original_tru_match.to_csv(f'{output_dir}/tru_to_match_before_merge.csv')
+        tru_embeddings.to_csv(f'{output_dir}/tru_embeddings.csv')
+        tru_to_match.to_csv(f'{output_dir}/tru_to_match_after_merge.csv')
+        exit(1)
+    current_full_matches, erp_to_match, tru_to_match, previous_round = match_text_in_rounds([LLM_EMBEDDINGS],
+                                                                                            [0.1],
+                                                                                            erp_to_match,
+                                                                                            tru_to_match,
+                                                                                            current_full_matches,
+                                                                                            previous_round,
+                                                                                            known_rejections,
+                                                                                            bundles)
+    ######### Alternates
+    print('-' * 60)
+    previous_round = previous_round + 1
+    round_name = f'{previous_round}: Alternates'
+
+    # Drop these columns and bring them back again to make sure no null are there
+    current_full_matches.drop(columns=['embedding_tru', 'embedding_erp'],errors='ignore', inplace=True)
+    current_full_matches = (current_full_matches
+                            .merge(tru_embeddings, on='key_tru', how='left')
+                            .merge(erp_embeddings, on='key_erp', how='left'))
+    current_full_matches, erp_to_match, tru_to_match = check_for_alternates(erp_to_match,
+                                                                            tru_to_match,
+                                                                            current_full_matches,
+                                                                            known_rejections,
+                                                                            round_name)
+
+    print('-' * 60)
+    previous_round = previous_round + 1
+    round_name = f'{previous_round}: Alternates'
+    current_full_matches, unmatched_alternate = check_for_alternates_tru(erp_to_match,
+                                                                         tru_to_match,
+                                                                         current_full_matches,
+                                                                         known_rejections,
+                                                                         round_name)
+
+    nd = current_full_matches.duplicated(subset=NON_DUPLICATES_SET).sum()
+    if nd > 0:
+        print(f'{nd} duplicates found in matches. Will drop them.')
+        current_full_matches.drop_duplicates(subset=NON_DUPLICATES_SET)
+        user_logs_path = os.path.join(os.getcwd(), "user_logs")
+        os.makedirs(user_logs_path, exist_ok=True)
+
+       # 📝 Save ALL matches to CSV
+        all_matches_file = os.path.join(user_logs_path, "all_matches_before_save.csv")
+        current_full_matches.to_csv(all_matches_file, index=False)
+    return current_full_matches, unmatched_alternate
+
+
+def main(input_dir,
+         erp_im_dataset_name,
+         erp_em_dataset_name,
+         tru_dataset_name,
+         trade_names_dataset_name,
+         data_version,
+         sentence_transformer_dir,
+         save=False,
+         output_dir: Union[None, str] = None,
+         datastore_name='xbomrefadlsg2',
+         device='cuda',
+         upload_to_adls=True,
+         embeddings_save_dir="precalculated_embeddings",
+         model_type='offline_transformer',
+         db_style='pandas',
+         use_azure_dataset=True):
+    run_params = {}
+    erp, tru, erp_discarded, tru_discarded, run_params, tru_no_erp,tru_off_specs_no_common, bundles = ingest_data_and_prepare_examples(
+        input_dir,
+        erp_im_dataset_name,
+        erp_em_dataset_name,
+        tru_dataset_name,
+        trade_names_dataset_name,
+        run_params,
+        output_dir)
+
+    matched, unmatched = full_matching_routine(data_version, db_style, device,
+                                               embeddings_save_dir, erp, model_type,
+                                               sentence_transformer_dir, tru, use_azure_dataset, bundles, output_dir)
+    unmatched['Matching Reason'] = 'Not match in any round'
+
+    print('#' * 60)
+    print('Main matching routine finished. Will append tru not common')
+    print('#' * 60)
+    unmatched_by_default = tru_no_erp.copy()
+    missing_cols = list(set(unmatched.columns) - set(unmatched_by_default.columns))
+    for col in missing_cols:
+        unmatched_by_default[col] = None
+    unmatched_by_default = unmatched_by_default[unmatched.columns]
+    unmatched_by_default['is_matched'] = False
+    unmatched_by_default['PLNT_CD'] = 'Not Found in ERP'
+    unmatched_by_default['SRC_SYS_CD'] = 'Not Found in ERP'
+    unmatched_by_default[UNIFIED_MC_COL] = unmatched_by_default[TRU_MAT_NUM]
+    unmatched_by_default['Matching Reason'] = 'Code not found in ERP'
+    unmatched = pd.concat([unmatched, unmatched_by_default], ignore_index=True)
+    #matched = pd.DataFrame() #for off spec test
+    #unmatched = pd.DataFrame() #for off spec test
+    # Match off-specs
+    try:
+        print('')
+        print('#' * 60)
+        print('Starting off spec matching')
+        print('#' * 60)
+        # STEP 1: Calculate all ERP-only codes BEFORE filtering
+        all_erp_codes = set(erp_discarded[ERP_MAT_NUM])
+        all_tru_codes = set(tru_discarded[TRU_MAT_NUM])
+        common_codes = all_erp_codes.intersection(all_tru_codes)
+        erp_only_codes = all_erp_codes - all_tru_codes
+        print('Common number of codes in both sources off-specs:', len(common_codes))
+        print('ERP-only codes:', erp_only_codes)
+        erp_discarded_common = erp_discarded[erp_discarded[ERP_MAT_NUM].isin(common_codes)].reset_index(drop=True)
+        tru_discarded_common = tru_discarded[tru_discarded[TRU_MAT_NUM].isin(common_codes)].reset_index(drop=True)
+        tru_no_common = tru_off_specs_no_common
+        #new missing combination
+        # 
+        #
+        # Step 3: Include extra TRU specs not in tru_discarded
+        tru_mat_ids_full = set(tru[TRU_MAT_NUM])
+        extra_common_ids = all_erp_codes.intersection(tru_mat_ids_full)
+        extra_tru_candidates = tru[tru[TRU_MAT_NUM].isin(extra_common_ids) & ~tru[TRU_SPEC_ID].isin(tru_discarded[TRU_SPEC_ID])].copy()
+        if not extra_tru_candidates.empty:
+            print(f'Adding {len(extra_tru_candidates)} extra TRU specs to tru_discarded_common for off-spec match')
+            #tru_discarded_common = pd.concat([tru_discarded_common, extra_tru_candidates], ignore_index=True)
+            #tru_discarded_common.drop_duplicates(subset=[TRU_SPEC_ID], inplace=True)
+        # STEP 4: Perform full matching routine
+        matched_off_specs, unmatched_off_specs = full_matching_routine(data_version, db_style, device,
+                                                                       embeddings_save_dir, erp_discarded_common, model_type,
+                                                                       sentence_transformer_dir, tru_discarded_common,
+                                                                       use_azure_dataset,
+                                                                       bundles, output_dir)
+        matched_off_specs['Matching Reason'] = 'Off Spec Match'
+        unmatched_off_specs['Matching Reason'] = 'Off Spec Non Match'
+        #  Adjust Off Spec Matches that are in Rejection List
+        fortrea_folder = os.path.dirname(os.path.realpath(__file__))
+        fortrea_folder = os.path.abspath(os.path.join(fortrea_folder, os.pardir))
+        rejection_file_path = f'{fortrea_folder}/reference_tables/rejections_fortrea.csv' 
+        erp_file_path = f'{fortrea_folder}/reference_tables/erp_off_spec.csv' # 👈 Path to your file
+       
+        matched_off_specs = handle_off_spec_rejections(
+        matched_df=matched_off_specs,
+        rejection_file_path=rejection_file_path,
+        erp_mapping_file_path=erp_file_path,
+        debug_cmpnt_num="665880",
+        debug_child_nm="PC-0000249") 
+
+        matched = handle_off_spec_rejections(
+        matched_df=matched,
+        rejection_file_path=rejection_file_path,
+        erp_mapping_file_path=erp_file_path,
+        debug_cmpnt_num="6142376",
+        debug_child_nm="DC-0077398") 
+
+        matched = pd.concat([matched, matched_off_specs], ignore_index=True)
+
+        debug_id = "665880"
+        debug_child = "PC-0000249"
+
+        print(" CHECKPOINT 1: After handle_off_spec_rejections")
+        print(matched_off_specs.query('CMPNT_MATL_NUM==@debug_id and CHILD_NM==@debug_child'))
+        print(" CHECKPOINT 2: After concat")
+        print(matched.query('CMPNT_MATL_NUM==@debug_id and CHILD_NM==@debug_child'))
+
+        print('matched_off_specs_dataset',matched_off_specs)
+        unmatched = pd.concat([unmatched, unmatched_off_specs], ignore_index=True)
+        unmatched = handle_off_spec_rejections(
+        matched_df=unmatched,
+        rejection_file_path=rejection_file_path,
+        erp_mapping_file_path=erp_file_path,
+        debug_cmpnt_num="6142376",
+        debug_child_nm="DC-0077398") 
+        # DEBUG BLOCK 2: Trace in matched_off_specs
+        if not matched_off_specs.empty and (matched_off_specs[ERP_PART_ID] == "665880").any():
+         print("\n🟢 [DEBUG] Found in matched_off_specs (before rejection filtering):")
+         (matched_off_specs[matched_off_specs[ERP_PART_ID] == "665880"][[
+        ERP_PART_ID, TRU_SPEC_ID, 'Matching Reason', 'confidence']])
+
+
+        try:
+            # --- Tru records not found in ERP --
+            unmatched_by_default = tru_no_common.copy()
+            missing_cols = list(set(unmatched.columns) - set(unmatched_by_default.columns))
+            for col in missing_cols:
+                unmatched_by_default[col] = None
+            unmatched_by_default = unmatched_by_default[unmatched.columns]
+            unmatched_by_default['is_matched'] = False
+            unmatched_by_default['PLNT_CD'] = 'Not Found in ERP'
+            unmatched_by_default['SRC_SYS_CD'] = 'Not Found in ERP'
+            unmatched_by_default[UNIFIED_MC_COL] = unmatched_by_default[TRU_MAT_NUM]
+            unmatched_by_default['Matching Reason'] = 'Off Spec Code not found in ERP'
+            unmatched = pd.concat([unmatched, unmatched_by_default], ignore_index=True)
+            #updated for missing comp id issue
+            # --- ERP records not in TRU (all_erp_codes - all_tru_codes) ---
+            erp_only_codes = all_erp_codes - all_tru_codes
+            erp_only_df = erp_discarded[erp_discarded[ERP_MAT_NUM].isin(erp_only_codes)].copy()
+            missing_cols = list(set(unmatched.columns) - set(erp_only_df.columns))
+            for col in missing_cols:
+                erp_only_df[col] = None
+            erp_only_df = erp_only_df[unmatched.columns]
+            erp_only_df['is_matched'] = False
+            erp_only_df[UNIFIED_MC_COL] = erp_only_df[ERP_MAT_NUM]
+            erp_only_df['Matching Reason'] = 'Off Spec Non Match'
+            
+            unmatched = pd.concat([unmatched, erp_only_df], ignore_index=True)
+
+
+            df_check = erp_only_df
+            user_logs_path = os.path.join(os.getcwd(), "user_logs")
+            os.makedirs(user_logs_path, exist_ok=True)
+            df_check.to_csv(os.path.join(user_logs_path, "missing_mat_data.csv"), index=False)
+        except Exception as e:
+            print('Attaching not common tru coming from off specs did not work')
+    except Exception as e:
+        print('Matching off-specs did not work')
+        print(e) 
+        error_details = traceback.format_exc()
+        print("Exception details:\n", error_details)
+        exit(1)
+
+    full_matches = pd.concat([matched, unmatched], ignore_index=True)
+    debug_id = "665880"
+    debug_child = "PC-0000249"
+
+    print(" CHECKPOINT 3: After full match")
+    print(full_matches.query('CMPNT_MATL_NUM==@debug_id and CHILD_NM==@debug_child'))
+  
+
+    print('#' * 60)
+    print('FULL MATCHING ROUTINE FINISHED.')
+    print('#' * 60)
+
+    print('n#' * 60)
+    print('STARTING PREDICTION JOB FOR RAW MATERIALS')
+    print('#' * 60)
+
+    run = Run.get_context()
+    if run.identity.startswith('OfflineRun'):  # We are running local.
+        workspace = Workspace.from_config(path='../.azureml/dev_config.json')
+    else:  # We are running a pipeline inside azureml
+        workspace = run.experiment.workspace
+
+    try:
+        full_matches[CLASSIFICATION_COL] = predict(workspace, full_matches, TRU_SPEC_DESC, 'CHILD_TYPE_CD')
+        print("Prediction added to the full data")
+        print('#' * 60)
+        print('#' * 60)
+        print('FULL MATCHING ROUTINE FINISHED. WILL SAVE RESULTS.')
+        print('#' * 60)
+    except Exception as e:
+        print('PC TEMPLATE Prediction did not work')
+        print(e)
+        full_matches[CLASSIFICATION_COL] = None
+
+    print('#' * 60)
+    print('Boosting Matched based on PC')
+    print('#' * 60)
+    try:
+        full_matches = boost_matches(full_matches, workspace)
+    except:
+        full_matches.to_csv(f'{output_dir}/full_matches_failed_from_boosting.csv', index=False)
+        raise exit(1)
+
+    matched = save_results(datastore_name, erp_discarded, full_matches, output_dir, save,
+                           tru_discarded, run_params, upload_to_adls)
+
+    return matched, run_params
+
+
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input-dir')
+    parser.add_argument('--erp-im-dataset-name')
+    parser.add_argument('--erp-em-dataset-name')
+    parser.add_argument('--tru-dataset-name')
+    parser.add_argument('--trade-names-name')
+    parser.add_argument('--output_dir', default='../../../matched_data')
+    parser.add_argument('--sentence-transformer-dir',
+                        default='../../../register_static_inputs_in_azure/all_roberta_large_v1')
+    parser.add_argument('--embeddings-dir')
+    parser.add_argument('--datastore-name')
+    parser.add_argument('--data-version')
+    parser.add_argument('--model-type')
+    parser.add_argument('--db-style')
+    parser.add_argument('--device')
+    return vars(parser.parse_args())
+
+
+if __name__ == '__main__':
+    args = get_args()
+
+    try:
+        run = Run.get_context()
+        openai.api_key = run.get_secret(name='CrossHound')
+        openai.api_base = 'https://cog-openai-dto-crosshound-01-dev.openai.azure.com'
+        openai.api_type = 'azure'
+        openai.api_version = '2023-05-15'  # this may change in the future
+        deployment_name = 'text-embedding-ada-002'
+    except:
+        pass
+    main(input_dir=args.get('input_dir'),
+         erp_im_dataset_name=args.get('erp_im_dataset_name'),
+         erp_em_dataset_name=args.get('erp_em_dataset_name'),
+         tru_dataset_name=args.get('tru_dataset_name'),
+         trade_names_dataset_name=args.get('trade_names_name'),
+         data_version=args.get('data_version'),
+         sentence_transformer_dir=args.get('sentence_transformer_dir'),
+         save=True,
+         output_dir=args.get('output_dir'),
+         datastore_name=args.get('datastore_name', 'xbomrefadlsg2'),
+         model_type=args.get('model_type'),
+         db_style=args.get('db_style'),
+         use_azure_dataset=True,
+         embeddings_save_dir=args.get('embeddings_dir'))
