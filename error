@@ -4,6 +4,6 @@ if not forced_matches.empty:
 matches = (
     matches
     .sort_values(by=["SRC_SYS_CD", "PLNT_CD"], ascending=[False, False])
-    .drop_duplicates(subset=["CMPNT_MATL_NUM", "CHILD_NM"], keep="first")
+    .drop_duplicates(subset=["CMPNT_MATL_NUM", "CHILD_NM", "MATL_NUM"], keep="first")
     .reset_index(drop=True)
 )
