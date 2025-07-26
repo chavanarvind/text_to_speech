@@ -1,9 +1,281 @@
-if not forced_matches.empty:
-    matches = pd.concat([matches, forced_matches], ignore_index=True)
+FORCE PAIR LOGIC FOR ALL REFERENCE PAIRS in matches_NLP_list_ERP suggested X-match
+✅ Total forced pairs in reference table: 1619
+🔍 Is target pair in reference table? True
+✅ ERP records found for forced pairs: 14143
+⚠️ No ERP rows found for CMPNT_MATL_NUM=6115990
+✅ TRU records found for forced pairs: 14632
+⚠️ No TRU rows found for CHILD_NM=PC-046458
+⚠️ SRC_SYS_CD missing in forced_matches. Adding placeholder: UNKNOWN_SYS
+✅ Forced matches found after joining TRU: 5626
+⚠️ PLNT_CD missing in forced_matches. Adding placeholder: UNKNOWN_PLANT
+✅ Forced matches found after joining TRU: 5626
+🔍 Is target pair present in forced matches? False
+📄 Saved all forced matches to user_logs/forced_match_debug.csv
+------------------------------------------------------------
+🔄 Running NORMAL matching logic
+✅ Found 12980 normal matches
+****** Adding 1389 more matches based on SPEC_FLOW_CD
+⚠️ 6171 duplicates found. Deduplicating...
+2: matches_NLP_list_ERP suggested X-match round matched: 8669 (2.89 seconds)
+df_erp_to_match cases:  352459
+df_tru_to_match cases:  351382
+Amount of current matches:  8669
+      SRC_SYS_CD_x            MATL_NUM   MATL_NUM_original   
+0              CLA  000000000000096437  000000000000096437  \
+1              MVX  000000000002897500             2897500   
+2              CLA  000000000000555486  000000000000555486   
+3              CAP  000000000079639933  000000000079639933   
+4              CAP  000000000079639933  000000000079639933   
+...            ...                 ...                 ...   
+14829          NaN  000000000005985402             5985402   
+14830          NaN  000000000005985402             5985402   
+14833          NaN  000000000079607074  000000000079607074   
+14835          NaN  000000000079617731  000000000079617731   
+14836          NaN  000000000079617717  000000000079617717   
 
-matches = (
-    matches
-    .sort_values(by=["SRC_SYS_CD", "PLNT_CD"], ascending=[False, False])
-    .drop_duplicates(subset=["CMPNT_MATL_NUM", "CHILD_NM", "MATL_NUM"], keep="first")
-    .reset_index(drop=True)
-)
+                                MATL_SHRT_DESC PLNT_CD_x CMPNT_MATL_TYPE_CD   
+0                J BABY ACEITE BED TIME 12X100      CO01               PACK  \
+1                NICORETTE GUM 4MG CFM 30ST SA       HBG                 72   
+2            BABAB FLEX FABRIC MED AST 24x30UN      BR12               PACK   
+3      Listerine Total Care Green Tea 1000ml_K      1000               PACK   
+4      Listerine Total Care Green Tea 1000ml_K      1000               PACK   
+...                                        ...       ...                ...   
+14829                 JH 24HM SOFT BODY CR 300       NaN                  P   
+14830                 JH 24HM SOFT BODY CR 300       NaN                  P   
+14833   SF Dry-MaxAll Nights Ultra-Dry XXL 42s       NaN               PACK   
+14835        SF Secure Cottony Extra Large 12s       NaN               PACK   
+14836        SF Secure Cottony Extra Large 40s       NaN               PACK   
+
+      CMPNT_MATL_NUM CMPNT_MATL_NUM_original   
+0             340390      000000000000340390  \
+1             945055                  945055   
+2             200143      000000000000200143   
+3            6077957      000000000006077957   
+4            6141404      000000000006141404   
+...              ...                     ...   
+14829     PMC0901298              PMC0901298   
+14830     PMC0901316              PMC0901316   
+14833        6113699      000000000006113699   
+14835        6129048      000000000006129048   
+14836        6143257      000000000006143257   
+
+                              CMPNT_MATL_DESC   
+0                          ETIQ CODBAR BLANCA  \
+1                          WP GUM 30ST COATED   
+2                       SLIPSHEET 1,28 X 1,28   
+3         Corner Pad JB Johonson's Sku (90cm)   
+4      PET SS for Listerine Product-1000ml GD   
+...                                       ...   
+14829          Label side F. soft cream 300 m   
+14830          Label side B. soft cream 300 m   
+14833                        Shipper UT AN 42   
+14835             Shipper Cottony XL 12 (Vpk)   
+14836           Shipper Cottony XL 40 (Rev23)   
+
+                 text_for_matching_erp extracted_rm_erp  perc_alpha_char_erp   
+0                   etiq codbar blanca              NaN             1.000000  \
+1                            wp coated              NaN             1.000000   
+2                         slipsheet 28              NaN             0.818182   
+3      corner pad jb johonson sku 90cm              NaN             0.923077   
+4                pet ss for product gd              NaN             1.000000   
+...                                ...              ...                  ...   
+14829                 label side cream              NaN             1.000000   
+14830                 label side cream              NaN             1.000000   
+14833                 shipper ut an 42              NaN             0.846154   
+14835                shipper xl 12 vpk              NaN             0.857143   
+14836              shipper xl 40 rev23              NaN             0.750000   
+
+                                      key_erp        CHILD_NM SRC_SYS_CD_y   
+0          000000000000096437_340390_CO01_CLA  PC-COL-MAE-226          CLA  \
+1           000000000002897500_945055_HBG_MVX      PC-0002523          MVX   
+2          000000000000555486_200143_BR12_CLA       PC-045951          CLA   
+3         000000000079639933_6077957_1000_CAP      PC-0018085          CAP   
+4         000000000079639933_6141404_1000_CAP      PC-0018085          CAP   
+...                                       ...             ...          ...   
+14829  000000000005985402_PMC0901298_EG04_BPC      DC-0074081          NaN   
+14830  000000000005985402_PMC0901316_EG04_BPC      DC-0074081          NaN   
+14833     000000000079607074_6113699_5100_CAP      DC-0091793          NaN   
+14835     000000000079617731_6129048_5100_CAP      DC-0084144          NaN   
+14836     000000000079617717_6143257_5100_CAP      DC-0084152          NaN   
+
+      PLNT_CD_y RGN_CD             mat_num MATL_NUM_original_tru_ref   
+0          CO01  LATAM  000000000000096437        000000000000096437  \
+1           HBG   EMEA  000000000002897500                   2897500   
+2          BR12  LATAM  000000000000555486        000000000000555486   
+3          1000   APAC  000000000079639933        000000000079639933   
+4          1000   APAC  000000000079639933        000000000079639933   
+...         ...    ...                 ...                       ...   
+14829       NaN   EMEA  000000000005985402                   5985402   
+14830       NaN   EMEA  000000000005985402                   5985402   
+14833       NaN   APAC  000000000079607074        000000000079607074   
+14835       NaN   APAC  000000000079617731        000000000079617731   
+14836       NaN   APAC  000000000079617717        000000000079617717   
+
+           mat_num_padded    mat_num_original       FG_NM   
+0      000000000000096437  000000000000096437   FP-028655  \
+1      000000000002897500  000000000002897500  FG-0049711   
+2      000000000000555486  000000000000555486  FG-0016340   
+3      000000000079639933  000000000079639933  FG-0051928   
+4      000000000079639933  000000000079639933  FG-0051928   
+...                   ...                 ...         ...   
+14829  000000000005985402  000000000005985402  FG-0019126   
+14830  000000000005985402  000000000005985402  FG-0019126   
+14833  000000000079607074  000000000079607074  FG-0022943   
+14835  000000000079617731  000000000079617731  FG-0014253   
+14836  000000000079617717  000000000079617717  FG-0014255   
+
+                                              FG_SPEC_NM FD_NM   
+0           96437 - JOHNSONS BABY ACEITE BED TIME 12X100  None  \
+1           2897500 NICORETTE GUM 4MG FRESHMINT 30PCS SA  None   
+2      555486 111958500 BAND-AID OURTONE B45 AST 24x3...  None   
+3      Listerine_Total Care Green Tea Mouthwash/1000 ...  None   
+4      Listerine_Total Care Green Tea Mouthwash/1000 ...  None   
+...                                                  ...   ...   
+14829  5985402 Johnsons 24hour Moisture soft cream 30...  None   
+14830  5985402 Johnsons 24hour Moisture soft cream 30...  None   
+14833  79607074 Stayfree Dry-Max All Nights Ultra-Dry...  None   
+14835  79617731_Stayfree Secure Cottony Extra Large (...  None   
+14836  79617717 Stayfree Secure Cottony Extra Large (...  None   
+
+      CHILD_NM_original                                   CHILD_TITLE_DESC   
+0        PC-COL-MAE-226    Labels/Rótulo /ETIQUETA CODIGO DE BARRAS BLANCA  \
+1            PC-0002523  945055 SHIPPER – 211 x 187 x 234 mm – SK 165/B...   
+2             PC-045951                       200143 SLIPSHEET 1,28 X 1,28   
+3            PC-0018085          Listerine 1L PCR PET Cap seal-74.5x0.04mm   
+4            PC-0018085          Listerine 1L PCR PET Cap seal-74.5x0.04mm   
+...                 ...                                                ...   
+14829        DC-0074081  Johnsons 24hour Moisture soft cream 300 gm_Lab...   
+14830        DC-0074081  Johnsons 24hour Moisture soft cream 300 gm_Lab...   
+14833        DC-0091793  FG79607074 Polybag Stayfree Dry-Max All Nights...   
+14835        DC-0084144  FG79617731 Shipper SF Secure XL Wings 12s - Po...   
+14836        DC-0084152  FG79617717 Shipper SF Secure XL Wings 40s - po...   
+
+      spec_type_inferred                                      TEMPL_TYPE_CD   
+0                     PC                       Labels / Leaflets / Booklets  \
+1                     PC                               Corrugated / Shipper   
+2                     PC  Packaging Component (PC) Generic Doc Centric T...   
+3                     PC                   Film / Laminates / Pouch and Bag   
+4                     PC                   Film / Laminates / Pouch and Bag   
+...                  ...                                                ...   
+14829                 DC                                               None   
+14830                 DC                                               None   
+14833                 DC                                               None   
+14835                 DC                                               None   
+14836                 DC                                               None   
+
+             CHILD_TYPE_CD                                 ERP_DESC   
+0      Packaging Component            J BABY ACEITE BED TIME 12X100  \
+1      Packaging Component           NICO GUM FRSHMNT 4MG 30     SA   
+2      Packaging Component        BABAB FLEX FABRIC MED AST 24x30UN   
+3      Packaging Component  Listerine Total Care Green Tea 1000ml_K   
+4      Packaging Component  Listerine Total Care Green Tea 1000ml_K   
+...                    ...                                      ...   
+14829  Decorated Component           JH 24HM SOFT BODY CR 300 AR/EN   
+14830  Decorated Component           JH 24HM SOFT BODY CR 300 AR/EN   
+14833  Decorated Component   SF Dry-MaxAll Nights Ultra-Dry XXL 42s   
+14835  Decorated Component        SF Secure Cottony Extra Large 12s   
+14836  Decorated Component        SF Secure Cottony Extra Large 40s   
+
+                                   text_for_matching_tru   
+0         labels rótulo etiqueta codigo de barras blanca  \
+1                                       shipper sk fefco   
+2                                              slipsheet   
+3                                       pcr pet cap seal   
+4                                       pcr pet cap seal   
+...                                                  ...   
+14829       johnsons hour moisture cream gm label bundle   
+14830       johnsons hour moisture cream gm label bundle   
+14833          polybag stayfree max all units in gcc lcn   
+14835  shipper xl wings popup in mulund gcc lcn super...   
+14836  shipper xl wings popup india mulund gcc lcn su...   
+
+      text_for_matching_tru_trade_names extracted_rm_tru  perc_alpha_char_tru   
+0                                                    NaN                0.975  \
+1                                                    NaN                1.000   
+2                                                    NaN                1.000   
+3                                                    NaN                1.000   
+4                                                    NaN                1.000   
+...                                 ...              ...                  ...   
+14829                                                NaN                1.000   
+14830                                                NaN                1.000   
+14833                                                NaN                1.000   
+14835                                                NaN                1.000   
+14836                                                NaN                1.000   
+
+                                          key_tru   
+0      000000000000096437_PC-COL-MAE-226_CO01_CLA  \
+1           000000000002897500_PC-0002523_HBG_MVX   
+2           000000000000555486_PC-045951_BR12_CLA   
+3          000000000079639933_PC-0018085_1000_CAP   
+4          000000000079639933_PC-0018085_1000_CAP   
+...                                           ...   
+14829      000000000005985402_DC-0074081_EG04_BPC   
+14830      000000000005985402_DC-0074081_EG04_BPC   
+14833      000000000079607074_DC-0091793_5100_CAP   
+14835      000000000079617731_DC-0084144_5100_CAP   
+14836      000000000079617717_DC-0084152_5100_CAP   
+
+                                           SPEC_FLOW_CD TRD_NM_CONCAT   
+0                              FP-028655>PC-COL-MAE-226           NaN  \
+1                                 FG-0049711>PC-0002523           NaN   
+2      FG-0016340 > FD-0001908 > FD-0001841 > PC-045951           NaN   
+3                  FG-0051928 > DC-0078779 > PC-0018085           NaN   
+4                  FG-0051928 > DC-0078779 > PC-0018085           NaN   
+...                                                 ...           ...   
+14829               FG-0019126 > DC-0074081 > PC-043029           NaN   
+14830               FG-0019126 > DC-0074081 > PC-043029           NaN   
+14833              FG-0022943 > DC-0091793 > PC-0001409           NaN   
+14835              FG-0014253 > DC-0084144 > PC-0002516           NaN   
+14836              FG-0014255 > DC-0084152 > PC-0017705           NaN   
+
+      TRD_NM_FULL   SRC_SYS_CD        PLNT_CD  matching_score   
+0             NaN  UNKNOWN_SYS  UNKNOWN_PLANT               1  \
+1             NaN  UNKNOWN_SYS  UNKNOWN_PLANT               1   
+2             NaN  UNKNOWN_SYS  UNKNOWN_PLANT               1   
+3             NaN  UNKNOWN_SYS  UNKNOWN_PLANT               1   
+4             NaN  UNKNOWN_SYS  UNKNOWN_PLANT               1   
+...           ...          ...            ...             ...   
+14829         NaN          BPC           EG04               1   
+14830         NaN          BPC           EG04               1   
+14833         NaN          CAP           5100               1   
+14835         NaN          CAP           5100               1   
+14836         NaN          CAP           5100               1   
+
+         unified_mat_code  is_matched   
+0      000000000000096437        True  \
+1                 2897500        True   
+2      000000000000555486        True   
+3      000000000079639933        True   
+4      000000000079639933        True   
+...                   ...         ...   
+14829             5985402        True   
+14830             5985402        True   
+14833  000000000079607074        True   
+14835  000000000079617731        True   
+14836  000000000079617717        True   
+
+                                         Matching Reason confidence   
+0      matches_NLP_list_ERP suggested X-match (forced...       high  \
+1      matches_NLP_list_ERP suggested X-match (forced...       high   
+2      matches_NLP_list_ERP suggested X-match (forced...       high   
+3      matches_NLP_list_ERP suggested X-match (forced...       high   
+4      matches_NLP_list_ERP suggested X-match (forced...       high   
+...                                                  ...        ...   
+14829                PC and DC mentioned in SPEC_FLOW_CD       high   
+14830                PC and DC mentioned in SPEC_FLOW_CD       high   
+14833                PC and DC mentioned in SPEC_FLOW_CD       high   
+14835                PC and DC mentioned in SPEC_FLOW_CD       high   
+14836                PC and DC mentioned in SPEC_FLOW_CD       high   
+
+                                     match_round  
+0      2: matches_NLP_list_ERP suggested X-match  
+1      2: matches_NLP_list_ERP suggested X-match  
+2      2: matches_NLP_list_ERP suggested X-match  
+3      2: matches_NLP_list_ERP suggested X-match  
+4      2: matches_NLP_list_ERP suggested X-match  
+...                                          ...  
+14829  2: matches_NLP_list_ERP suggested X-match  
+14830  2: matches_NLP_list_ERP suggested X-match  
+14833  2: matches_NLP_list_ERP suggested X-match  
+14835  2: matches_NLP_list_ERP suggested X-match  
+14836  2: matches_NLP_list_ERP suggested X-match  
