@@ -1,16 +1,9 @@
-# 🧠 Enrich TRU with SRC_SYS_CD and PLNT_CD from ERP
-unique_combinations = erp[['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, f'{ERP_MAT_NUM}_original']].drop_duplicates().dropna()
-tru = tru.merge(unique_combinations,
-                left_on=[TRU_MAT_NUM],
-                right_on=[ERP_MAT_NUM],
-                how='inner')
+if not forced_matches.empty:
+    matches = pd.concat([matches, forced_matches], ignore_index=True)
 
-tru.rename(columns={f'{ERP_MAT_NUM}_original': f'{ERP_MAT_NUM}_original_tru_ref'}, inplace=True)
-
-# ✅ Create key columns
-tru = create_key_column(tru, 'tru')
-erp = create_key_column(erp, 'erp')
-
-# ✅ NOW copy the enriched versions
-erp_full = erp.copy()
-tru_full = tru.copy()
+matches = (
+    matches
+    .sort_values(by=["SRC_SYS_CD", "PLNT_CD"], ascending=[False, False])
+    .drop_duplicates(subset=["CMPNT_MATL_NUM", "CHILD_NM"], keep="first")
+    .reset_index(drop=True)
+)
