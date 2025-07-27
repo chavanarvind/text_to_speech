@@ -1,2 +1,2 @@
-today=time.strftime("%m%d%Y", time.localtime())
+today = time.strftime("%d%m%Y", time.localtime())
 print(today)
