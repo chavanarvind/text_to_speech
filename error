@@ -1,13 +1,2 @@
-For which date the folders will get created next week?
- 
-Because ingestion team has scheduled their job to run on every Thursday at 6 am. So their job will search for folder name with 31072025, 07082025, 14082025, etc.
- 
-Vidya Shankar, Niharika 
-Because ingestion team has scheduled their job to run on every Thursday at 6 am. So their job will search for folder name with 31072025, 07082025, 14082025, etc.
-
-Ist time?
- 
-Ingestion team's job will run on every thursday at 4 AM EST.
- 
-So, we want folders to be created before 4 AM EST and should have thursday date in the folder name.
- 
+today=time.strftime("%m%d%Y", time.localtime())
+print(today)
