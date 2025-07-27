@@ -1,13 +1,13 @@
-forced_matches = erp_forced.merge(
-    tru_full[TRU_MATCH_COLS],
-    left_on=[ERP_MAT_NUM, TRU_SPEC_ID],
-    right_on=[TRU_MAT_NUM, TRU_SPEC_ID],
-    how='inner'
-)
+For which date the folders will get created next week?
+ 
+Because ingestion team has scheduled their job to run on every Thursday at 6 am. So their job will search for folder name with 31072025, 07082025, 14082025, etc.
+ 
+Vidya Shankar, Niharika 
+Because ingestion team has scheduled their job to run on every Thursday at 6 am. So their job will search for folder name with 31072025, 07082025, 14082025, etc.
 
-forced_matches = erp_forced.merge(
-    tru_full[TRU_MATCH_COLS],
-    left_on=["SRC_SYS_CD", "PLNT_CD", ERP_MAT_NUM, TRU_SPEC_ID],
-    right_on=["SRC_SYS_CD", "PLNT_CD", TRU_MAT_NUM, TRU_SPEC_ID],
-    how='inner'
-)
+Ist time?
+ 
+Ingestion team's job will run on every thursday at 4 AM EST.
+ 
+So, we want folders to be created before 4 AM EST and should have thursday date in the folder name.
+ 
