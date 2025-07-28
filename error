@@ -1,5 +1,12 @@
-       forced_matches = erp_forced.merge(
+ forced_matches = erp_forced.merge(
         tru_full[TRU_MATCH_COLS],
-        left_on=[ERP_MAT_NUM, TRU_SPEC_ID],
-        right_on=[TRU_MAT_NUM, TRU_SPEC_ID],
+        left_on=["SRC_SYS_CD", "PLNT_CD", ERP_MAT_NUM, TRU_SPEC_ID],
+        right_on=["SRC_SYS_CD", "PLNT_CD", TRU_MAT_NUM, TRU_SPEC_ID],
         how='inner')
+
+        # Ensure SRC_SYS_CD and PLNT_CD exist in forced_matches
+        for col, placeholder in [('SRC_SYS_CD', 'UNKNOWN_SYS'), ('PLNT_CD', 'UNKNOWN_PLANT')]:
+            if col not in forced_matches.columns:
+                print(f"⚠️ {col} missing in forced_matches. Adding placeholder: {placeholder}")
+                forced_matches[col] = placeholder
+                print(f"✅ Forced matches found after joining TRU: {len(forced_matches)}")
