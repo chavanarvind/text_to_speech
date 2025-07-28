@@ -1,140 +1,30 @@
-def match_by_reference_table(erp: pd.DataFrame,
-                             tru: pd.DataFrame,
-                             reference_table: pd.DataFrame,
-                             last_match_round: int,
-                             round_name: str,
-                             bundles,
-                             erp_full: pd.DataFrame,
-                             tru_full: pd.DataFrame):
-    """
-    Match records using a reference table.
-    For NLP_LIST_ERP, run FORCE PAIR matching first (strict), then retry loose.
-    Then run normal matching logic.
-    """
-    match_round_name = f'{last_match_round + 1}: {round_name}'
-    print(f'\U0001f680 MATCH ROUND {match_round_name}')
-    start = time.time()
+ FORCE PAIR LOGIC FOR ALL REFERENCE PAIRS in matches_NLP_list_ERP suggested X-match
+Cleaning up all outstanding Run operations, waiting 300.0 seconds
+1 items cleaning up...
+Cleanup took 0.20624423027038574 seconds
+Traceback (most recent call last):
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 3652, in get_loc
+    return self._engine.get_loc(casted_key)
+  File "pandas/_libs/index.pyx", line 147, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/index.pyx", line 176, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/hashtable_class_helper.pxi", line 7080, in pandas._libs.hashtable.PyObjectHashTable.get_item
+  File "pandas/_libs/hashtable_class_helper.pxi", line 7088, in pandas._libs.hashtable.PyObjectHashTable.get_item
+KeyError: 'CHILD_NM'
 
-    matches = pd.DataFrame()
+The above exception was the direct cause of the following exception:
 
-    # 🔸 STEP 1: FORCE PAIR LOGIC FIRST for NLP_LIST_ERP
-    if "nlp_list_erp" in round_name.lower():
-        print("-" * 60)
-        print(f"\U0001f504 FORCE PAIR LOGIC FOR ALL REFERENCE PAIRS in {round_name}")
+Traceback (most recent call last):
+  File "cross_hound/matcher.py", line 1851, in <module>
+    main(input_dir=args.get('input_dir'),
+  File "cross_hound/matcher.py", line 1629, in main
+    matched, unmatched = full_matching_routine(data_version, db_style, device,
+  File "cross_hound/matcher.py", line 1119, in full_matching_routine
+    matches_NLP_list_ERP, erp_to_match, tru_to_match, previous_round = match_by_reference_table(erp_to_match,
+  File "cross_hound/matcher.py", line 453, in match_by_reference_table
+    df[TRU_SPEC_ID] = df[TRU_SPEC_ID].astype(str).str.strip()
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/frame.py", line 3760, in __getitem__
+    indexer = self.columns.get_loc(key)
+  File "/opt/conda/envs/ptca/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 3654, in get_loc
+    raise KeyError(key) from err
+KeyError: 'CHILD_NM'
 
-        # Clean key columns
-        for df in [reference_table, erp_full, tru_full]:
-            df[ERP_PART_ID] = df[ERP_PART_ID].astype(str).str.strip()
-            df[TRU_SPEC_ID] = df[TRU_SPEC_ID].astype(str).str.strip()
-
-        forced_pairs = reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates()
-        print(f"✅ Total forced pairs in reference table: {len(forced_pairs)}")
-
-        # ⚠️ STEP 1A: Strict forced matching (original logic)
-        erp_forced = erp_full[ERP_MATCH_COLS].merge(forced_pairs, on=ERP_PART_ID, how='inner')
-        forced_matches_strict = erp_forced.merge(
-            tru_full[TRU_MATCH_COLS],
-            left_on=["SRC_SYS_CD", "PLNT_CD", ERP_MAT_NUM, TRU_SPEC_ID],
-            right_on=["SRC_SYS_CD", "PLNT_CD", TRU_MAT_NUM, TRU_SPEC_ID],
-            how='inner')
-
-        if not forced_matches_strict.empty:
-            forced_matches_strict[SCORE_COL] = 1
-            forced_matches_strict[UNIFIED_MC_COL] = forced_matches_strict[f'{ERP_MAT_NUM}_original'].copy()
-            forced_matches_strict['is_matched'] = True
-            forced_matches_strict['Matching Reason'] = round_name + ' (forced pair - strict)'
-            forced_matches_strict['confidence'] = 'high'
-            forced_matches_strict = add_matches_bundles(forced_matches_strict, bundles, tru_full)
-        else:
-            forced_matches_strict = pd.DataFrame()
-
-        # ✅ STEP 1B: Loose match for unmatched forced pairs (keep ERP side SRC_SYS_CD, PLNT_CD)
-        matched_keys = forced_matches_strict[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates()
-        unmatched_pairs = forced_pairs.merge(matched_keys, on=[ERP_PART_ID, TRU_SPEC_ID], how='left', indicator=True)
-        unmatched_pairs = unmatched_pairs[unmatched_pairs['_merge'] == 'left_only'].drop('_merge', axis=1)
-
-        erp_loose = erp_full[ERP_MATCH_COLS].merge(unmatched_pairs, on=ERP_PART_ID, how='inner')
-        tru_loose = tru_full[TRU_MATCH_COLS][tru_full[TRU_SPEC_ID].isin(unmatched_pairs[TRU_SPEC_ID])]
-
-        # Drop conflicting columns from TRU side to avoid _x/_y suffixes
-        tru_loose = tru_loose.drop(columns=[col for col in ['SRC_SYS_CD', 'PLNT_CD'] if col in tru_loose.columns])
-
-        forced_matches_loose = erp_loose.merge(tru_loose, on=TRU_SPEC_ID, how='inner')
-        print(f"✅ Loose matches found: {len(forced_matches_loose)}")
-
-        if not forced_matches_loose.empty:
-            forced_matches_loose[SCORE_COL] = 1
-            forced_matches_loose[UNIFIED_MC_COL] = forced_matches_loose[f'{ERP_MAT_NUM}_original'].copy()
-            forced_matches_loose['is_matched'] = True
-            forced_matches_loose['Matching Reason'] = round_name + ' (forced pair - loose)'
-            forced_matches_loose['confidence'] = 'high'
-            forced_matches_loose = add_matches_bundles(forced_matches_loose, bundles, tru_full)
-
-        # Combine both sets of forced matches
-        forced_matches = pd.concat([forced_matches_strict, forced_matches_loose], ignore_index=True)
-        matches = pd.concat([matches, forced_matches], ignore_index=True)
-
-    # 🟢 STEP 2: NORMAL MATCHING (ID + description)
-    print("-" * 60)
-    print("\U0001f504 Running NORMAL matching logic")
-
-    for df in [erp, tru, reference_table]:
-        df[ERP_PART_ID] = df[ERP_PART_ID].astype(str).str.strip()
-        df[TRU_SPEC_ID] = df[TRU_SPEC_ID].astype(str).str.strip()
-
-    df_erp_with_additional_id = erp[ERP_MATCH_COLS].merge(
-        reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
-        on=ERP_PART_ID,
-        how='inner')
-
-    matched_per_id = df_erp_with_additional_id.merge(
-        tru[TRU_MATCH_COLS],
-        left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, TRU_SPEC_ID],
-        right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, TRU_SPEC_ID],
-        how='inner')
-
-    # Optional: Description-based match if text available
-    if not (reference_table['text_for_matching_erp'].isnull().all() or
-            reference_table['text_for_matching_tru'].isnull().all()):
-        reference_table_text = reference_table.dropna(subset=['text_for_matching_erp', 'text_for_matching_tru'])
-        is_valid_ref = [min(len(str(x)), len(str(y))) > 5
-                        for x, y in zip(reference_table_text['text_for_matching_erp'],
-                                        reference_table_text['text_for_matching_tru'])]
-        reference_table_text = reference_table_text[is_valid_ref]
-
-        df_erp_with_additional_desc = erp[ERP_MATCH_COLS].merge(
-            reference_table_text[['text_for_matching_erp', 'text_for_matching_tru']].drop_duplicates(),
-            on='text_for_matching_erp',
-            how='inner')
-
-        matched_per_desc = df_erp_with_additional_desc.merge(
-            tru[TRU_MATCH_COLS],
-            left_on=['SRC_SYS_CD', 'PLNT_CD', ERP_MAT_NUM, 'text_for_matching_tru'],
-            right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_MAT_NUM, 'text_for_matching_tru'],
-            how='inner')
-        matched_per_desc = matched_per_desc[matched_per_id.columns]
-    else:
-        matched_per_desc = pd.DataFrame(columns=matched_per_id.columns)
-
-    # Combine
-    normal_matches = pd.concat([matched_per_id, matched_per_desc], ignore_index=True)
-    if not normal_matches.empty:
-        print(f"✅ Found {len(normal_matches)} normal matches")
-        normal_matches[SCORE_COL] = 1
-        normal_matches[UNIFIED_MC_COL] = normal_matches[f'{ERP_MAT_NUM}_original'].copy()
-        normal_matches['is_matched'] = True
-        normal_matches['Matching Reason'] = round_name
-        normal_matches['confidence'] = 'high'
-        normal_matches = add_matches_bundles(normal_matches, bundles, tru)
-        matches = pd.concat([matches, normal_matches], ignore_index=True)
-
-    # Deduplicate
-    nd = matches.duplicated(subset=NON_DUPLICATES_SET).sum()
-    if nd > 0:
-        print(f"⚠️ {nd} duplicates found. Deduplicating...")
-        matches.drop_duplicates(subset=NON_DUPLICATES_SET, inplace=True)
-
-    assign_round_name_and_report_time(matches, match_round_name, start)
-    df_erp_to_match, df_tru_to_match = get_data_yet_to_match(matches, erp, tru)
-
-    return matches, df_erp_to_match, df_tru_to_match, last_match_round + 1
