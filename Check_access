@@ -1,2 +1,11 @@
-pip uninstall frontend
+deactivate
+
+python -m venv qr_env
+
+.\qr_env\Scripts\activate   # Windows
+# OR
+source qr_env/bin/activate  # Mac/Linux
+
+pip install streamlit pymupdf pillow pyzbar
+
 streamlit run "QR code analysis.py"
