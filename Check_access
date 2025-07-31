@@ -1,72 +1,171 @@
-def force_pair_matching(
-    erp_full: pd.DataFrame,
-    tru_full: pd.DataFrame,
-    reference_table: pd.DataFrame,
-    round_name: str,
-    bundles: pd.DataFrame,
-    debug_comp_id: str = None,
-    debug_child_num: str = None
-) -> pd.DataFrame:
-    """
-    Dedicated matching round for force pair mappings using full ERP and TRU,
-    with debug checks for specific COMP ID and CHILD NUM.
-    """
-    print(f"{'-'*60}\nFORCE PAIR MATCHING ROUND: {round_name}")
+import os
+import argparse
+import pandas as pd
+import psutil
+import sqlite3
+from datetime import datetime
+from concurrent.futures import ProcessPoolExecutor
+from azureml.core import Run
 
-    start_time = time.time()
+AI_OUTPUT_COLUMNS = [
+    "AI_FINAL_CATEGORY", "AI_FINAL_CATEGORY_CONFIDENCE", "AI_MATCHING_REASON_FINAL_CATEGORY",
+    "AI_FINAL_SUBCATEGORY", "AI_FINAL_SUBCATEGORY_CONFIDENCE", "AI_MATCHING_REASON_FINAL_SUBCATEGORY"
+]
 
-    # 🟢 Debug Step: Check if COMP ID and CHILD NUM exist in input data
-    if debug_comp_id:
-        erp_check = erp_full[erp_full[ERP_PART_ID].astype(str) == debug_comp_id]
-        if not erp_check.empty:
-            print(f"✅ COMP ID {debug_comp_id} FOUND in ERP data")
-        else:
-            print(f"❌ COMP ID {debug_comp_id} MISSING in ERP data")
+DEDUP_DB = "dedup.db"
+SIZE_THRESHOLD_MB = 120
+MAX_WORKERS = 14
+BATCH_SIZE = 1000
 
-    if debug_child_num:
-        tru_check = tru_full[tru_full[TRU_SPEC_ID].astype(str) == debug_child_num]
-        if not tru_check.empty:
-            print(f"✅ CHILD NUM {debug_child_num} FOUND in TRU data")
-        else:
-            print(f"❌ CHILD NUM {debug_child_num} MISSING in TRU data")
+def log(msg):
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
 
-    if debug_comp_id and debug_child_num:
-        ref_check = reference_table[
-            (reference_table[ERP_PART_ID].astype(str) == debug_comp_id) &
-            (reference_table[TRU_SPEC_ID].astype(str) == debug_child_num)
-        ]
-        if not ref_check.empty:
-            print(f"✅ Pair ({debug_comp_id}, {debug_child_num}) FOUND in reference table")
-        else:
-            print(f"❌ Pair ({debug_comp_id}, {debug_child_num}) MISSING in reference table")
+def setup_db(db_path=DEDUP_DB):
+    conn = sqlite3.connect(db_path, timeout=30)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("CREATE TABLE IF NOT EXISTS processed_keys (composite_key TEXT PRIMARY KEY)")
+    return conn
 
-    # Step 1: Force Pair Mapping
-    forced_matches = erp_full[ERP_MATCH_COLS].merge(
-        reference_table[[ERP_PART_ID, TRU_SPEC_ID]].drop_duplicates(),
-        on=ERP_PART_ID,
-        how='inner'
-    ).merge(
-        tru_full[TRU_MATCH_COLS],
-        left_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
-        right_on=['SRC_SYS_CD', 'PLNT_CD', TRU_SPEC_ID],
-        how='inner'
-    )
+def is_key_seen(conn, key):
+    cur = conn.execute("SELECT 1 FROM processed_keys WHERE composite_key = ?", (key,))
+    return cur.fetchone() is not None
 
-    if forced_matches.empty:
-        print(f"⚠️ No force pair matches found in {round_name}")
-    else:
-        print(f"✅ {len(forced_matches)} force pair matches found in {round_name}")
+def insert_new_keys(conn, keys):
+    keys = list(set(keys))
+    for i in range(0, len(keys), BATCH_SIZE):
+        batch = [(k,) for k in keys[i:i+BATCH_SIZE]]
+        with conn:
+            conn.executemany("INSERT OR IGNORE INTO processed_keys (composite_key) VALUES (?)", batch)
 
-        # Add metadata for these matches
-        forced_matches[SCORE_COL] = 1
-        forced_matches[UNIFIED_MC_COL] = forced_matches[f'{ERP_MAT_NUM}_original'].copy()
-        forced_matches['is_matched'] = True
-        forced_matches['Matching Reason'] = f'{round_name} (forced pair)'
-        forced_matches['confidence'] = 'high'
-        forced_matches['is_forced_match'] = True
+def load_predictions(inference_output_dir):
+    all_predictions = []
+    for file in os.listdir(inference_output_dir):
+        if file.endswith(".parquet"):
+            try:
+                df = pd.read_parquet(os.path.join(inference_output_dir, file))
+                required_cols = ["CMPNT_MATL_NUM"] + AI_OUTPUT_COLUMNS
+                if all(col in df.columns for col in required_cols):
+                    df = df[required_cols].dropna(subset=["CMPNT_MATL_NUM"])
+                    all_predictions.append(df)
+            except Exception as e:
+                log(f" Failed to load {file}: {e}")
+    return pd.concat(all_predictions, ignore_index=True) if all_predictions else None
 
-        # Handle bundles if needed
-        forced_matches = add_matches_bundles(forced_matches, bundles, tru_full)
+def process_key_file(file_path, pred_df, final_output_dir):
+    try:
+        conn = setup_db()
+        key_df = pd.read_parquet(file_path)
 
-    print(f"⏱️ Force pair matching completed in {round(time.time() - start_time, 2)} seconds")
-    return forced_matches
+        if "composite_key" not in key_df.columns or "CMPNT_MATL_NUM" not in key_df.columns:
+            log(f" Skipping {file_path}, missing required columns")
+            return
+
+        key_df["already_seen"] = key_df["composite_key"].apply(lambda k: is_key_seen(conn, k))
+        key_df = key_df[~key_df["already_seen"]].drop(columns="already_seen")
+
+        if key_df.empty:
+            log(f" All rows already processed: {os.path.basename(file_path)}")
+            return
+
+        merged_df = key_df.merge(pred_df, how="left", on="CMPNT_MATL_NUM")
+        new_keys = key_df["composite_key"].dropna().unique().tolist()
+        insert_new_keys(conn, new_keys)
+
+        merged_df = merged_df.drop("composite_key", axis=1, errors="ignore")
+        output_path = os.path.join(final_output_dir, os.path.basename(file_path))
+        merged_df.to_parquet(output_path, index=False)
+
+        log(f" Processed {file_path} → {len(merged_df)} rows")
+        log(f" RAM usage: {psutil.virtual_memory().percent}%")
+        conn.close()
+    except Exception as e:
+        log(f" Error in file {file_path}: {e}")
+
+def classify_files_by_size(dir_path, threshold_mb=SIZE_THRESHOLD_MB):
+    small, large = [], []
+    for file in os.listdir(dir_path):
+        if file.endswith(".parquet"):
+            full_path = os.path.join(dir_path, file)
+            size_mb = os.path.getsize(full_path) / (1024 * 1024)
+            (small if size_mb <= threshold_mb else large).append(full_path)
+    return small, large
+
+def main(inference_output_dir, key_output_dir, final_output_dir):
+    run = Run.get_context()
+    os.makedirs(final_output_dir, exist_ok=True)
+
+    log(" Loading prediction files...")
+    pred_df = load_predictions(inference_output_dir)
+    if pred_df is None:
+        log(" No valid prediction files found.")
+        return
+
+    log(" Classifying key files by size...")
+    small_files, large_files = classify_files_by_size(key_output_dir)
+
+    log(f" {len(small_files)} small files → multiprocessing")
+    log(f" {len(large_files)} large files → sequential")
+
+    # Sequential large files
+    for file_path in large_files:
+        process_key_file(file_path, pred_df, final_output_dir)
+
+    # Parallel small files
+    if small_files:
+        with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            for path in small_files:
+                executor.submit(process_key_file, path, pred_df, final_output_dir)
+
+    log(" All files processed successfully.")
+
+    # ✅ Concatenate, Deduplicate and Save Final File
+    try:
+        log(" Concatenating all final output parquet files into one...")
+
+        all_dfs = []
+        file_list = []
+        raw_total_rows = 0
+
+        for file in os.listdir(final_output_dir):
+            if file.endswith(".parquet") and file != "merged_final_output.parquet":
+                file_path = os.path.join(final_output_dir, file)
+                df = pd.read_parquet(file_path)
+                all_dfs.append(df)
+                raw_total_rows += len(df)
+                file_list.append(file)
+
+        if not all_dfs:
+            log(" No output files found to merge.")
+            return
+
+        merged_df = pd.concat(all_dfs, ignore_index=True).drop_duplicates()
+        final_path = os.path.join(final_output_dir, "merged_final_output.parquet")
+        merged_df.to_parquet(final_path, index=False)
+
+        # ✅ Logging merge diagnostics
+        log(f"📂 Files merged: {len(file_list)}")
+        log(f"📊 Total rows before merge: {raw_total_rows}")
+        log(f"✅ Final merged rows (after deduplication): {len(merged_df)}")
+        log(f"🧹 Duplicate rows removed: {raw_total_rows - len(merged_df)}")
+
+        # Upload to AzureML
+        run.upload_file("merged_final_output.parquet", final_path)
+        log("Final file uploaded to AzureML run artifacts.")
+
+        # ✅ Delete intermediate parquet files
+        for file in file_list:
+            os.remove(os.path.join(final_output_dir, file))
+        log("Intermediate parquet files deleted after merge.")
+
+    except Exception as e:
+        log(f"Error during final merge: {e}")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--inference_output_dir", required=True)
+    parser.add_argument("--key_output_dir", required=True)
+    parser.add_argument("--final_output_dir", required=True)
+    args = parser.parse_args()
+
+    main(args.inference_output_dir, args.key_output_dir, args.final_output_dir)
