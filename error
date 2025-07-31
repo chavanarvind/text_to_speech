@@ -49,7 +49,7 @@ def load_predictions(inference_output_dir):
                     df = df[required_cols].dropna(subset=["CMPNT_MATL_NUM"])
                     all_predictions.append(df)
             except Exception as e:
-                log(f"❌ Failed to load {file}: {e}")
+                log(f" Failed to load {file}: {e}")
     return pd.concat(all_predictions, ignore_index=True) if all_predictions else None
 
 def process_key_file(file_path, pred_df, final_output_dir):
@@ -58,14 +58,14 @@ def process_key_file(file_path, pred_df, final_output_dir):
         key_df = pd.read_parquet(file_path)
 
         if "composite_key" not in key_df.columns or "CMPNT_MATL_NUM" not in key_df.columns:
-            log(f"⚠️ Skipping {file_path}, missing required columns")
+            log(f" Skipping {file_path}, missing required columns")
             return
 
         key_df["already_seen"] = key_df["composite_key"].apply(lambda k: is_key_seen(conn, k))
         key_df = key_df[~key_df["already_seen"]].drop(columns="already_seen")
 
         if key_df.empty:
-            log(f"⏭️ All rows already processed: {os.path.basename(file_path)}")
+            log(f" All rows already processed: {os.path.basename(file_path)}")
             return
 
         merged_df = key_df.merge(pred_df, how="left", on="CMPNT_MATL_NUM")
@@ -76,11 +76,11 @@ def process_key_file(file_path, pred_df, final_output_dir):
         output_path = os.path.join(final_output_dir, os.path.basename(file_path))
         merged_df.to_parquet(output_path, index=False)
 
-        log(f"✅ Processed {file_path} → {len(merged_df)} rows")
-        log(f"💾 RAM usage: {psutil.virtual_memory().percent}%")
+        log(f" Processed {file_path} → {len(merged_df)} rows")
+        log(f" RAM usage: {psutil.virtual_memory().percent}%")
         conn.close()
     except Exception as e:
-        log(f"❌ Error in file {file_path}: {e}")
+        log(f" Error in file {file_path}: {e}")
 
 def classify_files_by_size(dir_path, threshold_mb=SIZE_THRESHOLD_MB):
     small, large = [], []
@@ -95,17 +95,17 @@ def main(inference_output_dir, key_output_dir, final_output_dir):
     run = Run.get_context()
     os.makedirs(final_output_dir, exist_ok=True)
 
-    log("📥 Loading prediction files...")
+    log(" Loading prediction files...")
     pred_df = load_predictions(inference_output_dir)
     if pred_df is None:
-        log("❌ No valid prediction files found.")
+        log(" No valid prediction files found.")
         return
 
-    log("📂 Classifying key files by size...")
+    log(" Classifying key files by size...")
     small_files, large_files = classify_files_by_size(key_output_dir)
 
-    log(f"🔄 {len(small_files)} small files → multiprocessing")
-    log(f"🐢 {len(large_files)} large files → sequential")
+    log(f" {len(small_files)} small files → multiprocessing")
+    log(f" {len(large_files)} large files → sequential")
 
     # Sequential large files
     for file_path in large_files:
@@ -117,11 +117,11 @@ def main(inference_output_dir, key_output_dir, final_output_dir):
             for path in small_files:
                 executor.submit(process_key_file, path, pred_df, final_output_dir)
 
-    log("🎉 All files processed successfully.")
+    log(" All files processed successfully.")
 
-    # 👉 NEW: Concatenate, Deduplicate and Save Final File
+    #  NEW: Concatenate, Deduplicate and Save Final File
     try:
-        log("📦 Concatenating all final output parquet files into one...")
+        log(" Concatenating all final output parquet files into one...")
 
         all_dfs = []
         for file in os.listdir(final_output_dir):
@@ -130,21 +130,21 @@ def main(inference_output_dir, key_output_dir, final_output_dir):
                 all_dfs.append(df)
 
         if not all_dfs:
-            log("⚠️ No output files found to merge.")
+            log(" No output files found to merge.")
             return
 
         merged_df = pd.concat(all_dfs, ignore_index=True).drop_duplicates()
         final_path = os.path.join(final_output_dir, "merged_final_output.parquet")
         merged_df.to_parquet(final_path, index=False)
 
-        log(f"✅ Final deduplicated file saved at: {final_path}")
+        log(f" Final deduplicated file saved at: {final_path}")
 
         # Optional: Upload to AzureML run artifacts
         run.upload_file("merged_final_output.parquet", final_path)
-        log("🚀 Final file uploaded to AzureML run artifacts.")
+        log("Final file uploaded to AzureML run artifacts.")
 
     except Exception as e:
-        log(f"❌ Error during final merge: {e}")
+        log(f"Error during final merge: {e}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
