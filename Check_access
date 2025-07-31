@@ -1,11 +1,102 @@
-deactivate
+import streamlit as st
+import fitz  # PyMuPDF
+from PIL import Image
+from pyzbar.pyzbar import decode
+import io
+import re
+import os
 
-python -m venv qr_env
+st.set_page_config(page_title="QR & Barcode Verifier", layout="wide")
+st.title("📦 QR & Barcode Verification from Artwork PDF")
 
-.\qr_env\Scripts\activate   # Windows
-# OR
-source qr_env/bin/activate  # Mac/Linux
+# --- Optional: Add DLL directory (if needed manually) ---
+try:
+    dll_path = os.path.dirname(__file__)
+    os.add_dll_directory(dll_path)
+except Exception as e:
+    st.warning("DLL path couldn't be added. Make sure libzbar-64.dll is in script directory.")
 
-pip install streamlit pymupdf pillow pyzbar
+# --- File Upload ---
+uploaded_file = st.file_uploader("Upload AW PDF File", type=["pdf"])
 
-streamlit run "QR code analysis.py"
+# --- Helper Functions ---
+def extract_qr_gtin(barcodes):
+    for b in barcodes:
+        data = b.data.decode("utf-8")
+        if "kenvue" in data:
+            match = re.search(r"/01/(\d{14})", data)
+            if match:
+                return match.group(1), data, b
+    return None, None, None
+
+def extract_ean_gtin(barcodes):
+    for b in barcodes:
+        code = b.data.decode("utf-8")
+        if code.isdigit() and len(code) == 13:
+            return code.zfill(14)  # Patch to 14 digits
+    return None
+
+# --- Process PDF ---
+if uploaded_file:
+    try:
+        doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
+        page = doc.load_page(0)
+        zoom = 2
+        mat = fitz.Matrix(zoom, zoom)
+        pix = page.get_pixmap(matrix=mat)
+        img = Image.open(io.BytesIO(pix.tobytes("png")))
+
+        st.image(img, caption="Scanned Page Image", use_column_width=True)
+
+        try:
+            barcodes = decode(img)
+        except OSError as dll_error:
+            st.error("❌ Failed to load 'libzbar-64.dll'. Please ensure it is present in the app folder.")
+            st.stop()
+
+        qr_gtin, qr_url, qr_obj = extract_qr_gtin(barcodes)
+        ean_gtin = extract_ean_gtin(barcodes)
+
+        st.subheader("🔍 Decoded Results")
+        st.write(f"**QR Code URL**: `{qr_url}`" if qr_url else "❌ QR Code not found or invalid format")
+        st.write(f"**GTIN from QR Code**: `{qr_gtin}`" if qr_gtin else "❌ GTIN not found in QR")
+        st.write(f"**GTIN from Barcode (EAN-13)**: `{ean_gtin}`" if ean_gtin else "❌ EAN-13 barcode not found")
+
+        if qr_obj:
+            # --- QR Dimension Check ---
+            dpi = 72 * zoom  # zoom=2 --> 144 DPI
+            mm_per_pixel = 25.4 / dpi
+            width_mm = qr_obj.rect.width * mm_per_pixel
+            height_mm = qr_obj.rect.height * mm_per_pixel
+
+            st.subheader("📏 QR Code Size Check")
+            st.write(f"QR Code Dimensions: **{width_mm:.2f} mm × {height_mm:.2f} mm**")
+
+            if width_mm >= 15.621 and height_mm >= 15.621:
+                st.success("✅ QR code size is within acceptable limits.")
+            else:
+                st.error("❌ QR code size is too small. Minimum required: 15.621 mm × 15.621 mm")
+
+        if qr_gtin and ean_gtin:
+            if qr_gtin == ean_gtin:
+                st.success("✅ GTIN from QR matches the Barcode (EAN-13)")
+                result = {
+                    "QR_GTIN": qr_gtin,
+                    "Barcode_EAN13": ean_gtin,
+                    "Match": True,
+                    "Comment": "GTIN matches EAN-13"
+                }
+            else:
+                st.error("❌ GTIN mismatch between QR and Barcode")
+                result = {
+                    "QR_GTIN": qr_gtin,
+                    "Barcode_EAN13": ean_gtin,
+                    "Match": False,
+                    "Comment": "GTIN does not match EAN-13"
+                }
+            st.json(result)
+        else:
+            st.warning("Please ensure both QR and EAN-13 barcode are visible on the first page.")
+
+    except Exception as e:
+        st.error(f"❌ Unexpected error: {e}")
