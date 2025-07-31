@@ -119,7 +119,7 @@ def main(inference_output_dir, key_output_dir, final_output_dir):
 
     log(" All files processed successfully.")
 
-    #  NEW: Concatenate, Deduplicate and Save Final File
+    # ✅ Concatenate, Deduplicate and Save Final File
     try:
         log(" Concatenating all final output parquet files into one...")
 
@@ -142,6 +142,12 @@ def main(inference_output_dir, key_output_dir, final_output_dir):
         # Optional: Upload to AzureML run artifacts
         run.upload_file("merged_final_output.parquet", final_path)
         log("Final file uploaded to AzureML run artifacts.")
+
+        # ✅ Delete intermediate parquet files
+        for file in os.listdir(final_output_dir):
+            if file.endswith(".parquet") and file != "merged_final_output.parquet":
+                os.remove(os.path.join(final_output_dir, file))
+        log("Intermediate parquet files deleted after merge.")
 
     except Exception as e:
         log(f"Error during final merge: {e}")
