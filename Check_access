@@ -16,4 +16,20 @@ img = Image.open(io.BytesIO(pix.tobytes("png")))
 barcodes = decode(img)
 for barcode in barcodes:
     print("Type:", barcode.type)
-    print("Data:", barcode.data.decode("utf-8"))
+
+
+
+
+extra information for you: 
+QR Code Format:
+1. Start of URL: 'htpp://2d.kenvue'
+2. API Version '01'
+3. Number has 14 Digits
+ 
+Bar Code:
+1. Patch to 14 digits with leading zeroes
+ 
+Comparison
+Compared QR Digits to Patched Barcode
+
+
