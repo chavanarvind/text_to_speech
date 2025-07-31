@@ -1,21 +1,2 @@
-Traceback (most recent call last):
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\QR code analysis.py", line 2, in <module>
-    import fitz  # PyMuPDF
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\fitz\__init__.py", line 1, in <module>
-    from frontend import *
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\frontend\__init__.py", line 1, in <module>
-    from .events import *
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\frontend\events\__init__.py", line 1, in <module>
-    from .clipboard import *
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\frontend\events\clipboard.py", line 2, in <module>
-    from ..dom import Event
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\frontend\dom.py", line 439, in <module>
-    from . import dispatcher
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\frontend\dispatcher.py", line 15, in <module>
-    from . import config, server
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\frontend\server.py", line 24, in <module>
-    app.mount(config.STATIC_ROUTE, StaticFiles(directory=config.STATIC_DIRECTORY), name=config.STATIC_NAME)
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\audioenv\lib\site-packages\starlette\staticfiles.py", line 56, in __init__
-    raise RuntimeError(f"Directory '{directory}' does not exist")
-RuntimeError: Directory 'static/' does not exist
-(audioenv) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> 
+pip uninstall frontend
+streamlit run "QR code analysis.py"
