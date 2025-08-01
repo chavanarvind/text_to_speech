@@ -1,33 +1,31 @@
 import os
 import requests
+import zipfile
 
-# ✅ Your virtual env pyzbar folder
-pyzbar_dir = r"C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\qr_env\Lib\site-packages\pyzbar"
-os.makedirs(pyzbar_dir, exist_ok=True)
+# Create a temp folder
+os.makedirs("dll_temp", exist_ok=True)
 
-# ✅ DLL file names and download URLs (64-bit verified)
+# DLL download URLs (64-bit working version from Hugging Face)
 dlls = {
     "libzbar-64.dll": "https://huggingface.co/datasets/arvindchavan-public/qr-dlls/resolve/main/libzbar-64.dll",
     "libiconv.dll": "https://huggingface.co/datasets/arvindchavan-public/qr-dlls/resolve/main/libiconv.dll"
 }
 
-# ✅ Step 1: Remove old DLLs
-for dll_name in dlls:
-    dll_path = os.path.join(pyzbar_dir, dll_name)
-    if os.path.exists(dll_path):
-        os.remove(dll_path)
-        print(f"🗑️ Removed old {dll_name}")
+# Download DLLs into folder
+for name, url in dlls.items():
+    print(f"⬇️ Downloading {name}")
+    response = requests.get(url)
+    if response.status_code == 200:
+        with open(f"dll_temp/{name}", "wb") as f:
+            f.write(response.content)
+        print(f"✅ {name} downloaded")
+    else:
+        print(f"❌ Failed to download {name}")
 
-# ✅ Step 2: Download new DLLs
-for dll_name, url in dlls.items():
-    print(f"⬇️ Downloading {dll_name}...")
-    try:
-        r = requests.get(url)
-        r.raise_for_status()
-        with open(os.path.join(pyzbar_dir, dll_name), "wb") as f:
-            f.write(r.content)
-        print(f"✅ Downloaded and saved: {dll_name}")
-    except Exception as e:
-        print(f"❌ Failed to download {dll_name}: {e}")
+# Create ZIP of DLLs
+zip_path = "pyzbar_dlls_64bit.zip"
+with zipfile.ZipFile(zip_path, "w") as zipf:
+    for name in dlls:
+        zipf.write(f"dll_temp/{name}", arcname=name)
 
-print("\n🚀 Done. Restart your app and verify QR/barcode functionality.")
+print(f"\n✅ DLLs zipped as: {zip_path}")
