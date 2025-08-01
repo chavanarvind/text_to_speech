@@ -1,1 +1,35 @@
-https://www.microsoft.com/en-us/download/details.aspx?id=40784
+📦 QR & Barcode Verification from Artwork PDF
+DLL path couldn't be added. Make sure libzbar-64.dll is in script directory.
+
+Upload AW PDF File
+
+404177118-LPM-806260-NA-r0 1 (1).pdf
+Drag and drop file here
+Limit 200MB per file • PDF
+404177118-LPM-806260-NA-r0 1 (1).pdf
+484.1KB
+The use_column_width parameter has been deprecated and will be removed in a future release. Please utilize the use_container_width parameter instead.
+
+0
+Scanned Page Image
+
+🔍 Decoded Results
+QR Code URL: http://2d.kenvue.com/01/03574661853178
+
+GTIN from QR Code: 03574661853178
+
+GTIN from Barcode (EAN-13): 03574661853178
+
+📏 QR Code Size Check
+QR Code Dimensions: 11.29 mm × 10.94 mm
+
+❌ QR code size is too small. Minimum required: 15.621 mm × 15.621 mm
+
+✅ GTIN from QR matches the Barcode (EAN-13)
+
+{
+"QR_GTIN":"03574661853178"
+"Barcode_EAN13":"03574661853178"
+"Match":true
+"Comment":"GTIN matches EAN-13"
+}
