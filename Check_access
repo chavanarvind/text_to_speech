@@ -1,5 +1,23 @@
-dll_path = os.path.join(os.path.dirname(__file__), "qr_env", "Lib", "site-packages", "pyzbar")
+expected_width = 15.621
+expected_height = 15.621
 
+qr_width_str = f"{qr_width_mm:.2f}" if qr_width_mm else ""
+qr_height_str = f"{qr_height_mm:.2f}" if qr_height_mm else ""
+qr_size_ok = size_check if size_check is not None else ""
 
-import site
-dll_path = os.path.join(site.getsitepackages()[0], "pyzbar")
+qr_size_icon = "✅" if size_check else ("❌" if size_check is False else "")
+match_icon = "✅" if match_status else ("❌" if match_status is False else "")
+
+results.append({
+    "File_Name": file_name,
+    "Page": page_num + 1,
+    "QR_GTIN": qr_gtin or "",
+    "EAN13_GTIN": ean_gtin or "",
+    "QR_URL": qr_url or "",
+    "QR_Width_mm": qr_width_str,
+    "QR_Height_mm": qr_height_str,
+    "Expected_QR_Size_mm": f"{expected_width:.3f} × {expected_height:.3f}",
+    "QR_Size_OK": qr_size_icon,
+    "GTIN_Match": match_icon,
+    "Comment": "GTIN matches EAN-13" if match_status else "Mismatch or missing"
+})
