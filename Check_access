@@ -1,11 +1,40 @@
-⬇️ Downloading libzbar-64.dll
-❌ Failed to download libzbar-64.dll
-⬇️ Downloading libiconv.dll
-❌ Failed to download libiconv.dll
----------------------------------------------------------------------------
-FileNotFoundError                         Traceback (most recent call last)
-Cell In[1], line 29
-     27 with zipfile.ZipFile(zip_path, "w") as zipf:
-     28     for name in dlls:
----> 29         zipf.write(f"dll_temp/{name}", arcname=name)
-     31 print(f"\n✅ DLLs zipped as: {zip_path}")
+import os
+import requests
+import zipfile
+
+# Directory to store DLLs and zip
+os.makedirs("dll_temp", exist_ok=True)
+
+# Official 64-bit ZBar DLL URLs
+dll_sources = {
+    "libzbar-64.dll": "https://github.com/NaturalHistoryMuseum/barcode-reader-dlls/releases/download/0.1/libzbar-64.dll",
+    "libiconv.dll": "https://github.com/NaturalHistoryMuseum/barcode-reader-dlls/releases/download/0.1/libiconv.dll"
+}
+
+# Remove old files if any
+for name in dll_sources:
+    path = os.path.join("dll_temp", name)
+    if os.path.exists(path):
+        os.remove(path)
+        print(f"🗑 Removed old {name}")
+
+# Download fresh DLLs
+for name, url in dll_sources.items():
+    print(f"⬇️ Downloading {name}...")
+    resp = requests.get(url, timeout=30)
+    if resp.status_code == 200:
+        with open(os.path.join("dll_temp", name), "wb") as f:
+            f.write(resp.content)
+        print(f"✅ Downloaded {name}")
+    else:
+        print(f"❌ Failed: {name}, status {resp.status_code}")
+
+# Zip the DLLs
+zip_filename = "pyzbar_dlls.zip"
+with zipfile.ZipFile(zip_filename, "w") as zf:
+    for name in dll_sources:
+        src = os.path.join("dll_temp", name)
+        if os.path.exists(src):
+            zf.write(src, arcname=name)
+
+print(f"\n📦 Zipped DLLs into: {zip_filename}")
