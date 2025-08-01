@@ -1,7 +1,34 @@
-SyntaxError: (unicode error) 'unicodeescape' codec can't decode bytes in position 2-3: truncated \UXXXXXXXX escape
-PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\RPM_Data_Prep_Pipeline> py .\download_result.py
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\RPM_Data_Prep_Pipeline\download_result.py", line 2
-    df=pd.read_parquet("C:\Users\AChava05\Downloads\merged_final_output.parquet")
-                                                                                ^
-SyntaxError: (unicode error) 'unicodeescape' codec can't decode bytes in position 2-3: truncated \UXXXXXXXX escape
-PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\RPM_Data_Prep_Pipeline> 
+import fitz  # PyMuPDF
+from PIL import Image
+from pyzbar.pyzbar import decode
+import io
+
+doc = fitz.open("404177118-LPM-806260-NA-r0.pdf")
+ 
+page = doc.load_page(0)  # first page
+ 
+zoom = 2  # for high quality
+mat = fitz.Matrix(zoom, zoom)
+pix = page.get_pixmap(matrix=mat)
+ 
+img = Image.open(io.BytesIO(pix.tobytes("png")))
+
+barcodes = decode(img)
+for barcode in barcodes:
+    print("Type:", barcode.type)
+    print("Data:", barcode.data.decode("utf-8"))
+
+
+
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\qr_env\lib\site-packages\pyzbar\wrapper.py", line 127, in load_libzbar
+    libzbar, dependencies = zbar_library.load()
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\qr_env\lib\site-packages\pyzbar\zbar_library.py", line 60, in load
+    dependencies, libzbar = load_objects(Path(__file__).parent)
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\qr_env\lib\site-packages\pyzbar\zbar_library.py", line 54, in load_objects
+    libzbar = cdll.LoadLibrary(str(directory.joinpath(fname)))
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\ctypes\__init__.py", line 452, in LoadLibrary
+    return self._dlltype(name)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\ctypes\__init__.py", line 374, in __init__
+    self._handle = _dlopen(self._name, mode)
+FileNotFoundError: Could not find module 'C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\qr_env\lib\site-packages\pyzbar\libzbar-64.dll' (or one of its dependencies). Try using the full path with constructor syntax.
+(qr_env) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> 
