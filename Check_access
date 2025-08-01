@@ -2,39 +2,44 @@ import os
 import requests
 import zipfile
 
-# Directory to store DLLs and zip
-os.makedirs("dll_temp", exist_ok=True)
+# Step 1: Setup directory for temporary DLLs
+dll_folder = "dll_temp"
+os.makedirs(dll_folder, exist_ok=True)
 
-# Official 64-bit ZBar DLL URLs
-dll_sources = {
+# Step 2: Define DLLs and their trusted download URLs
+dll_urls = {
     "libzbar-64.dll": "https://github.com/NaturalHistoryMuseum/barcode-reader-dlls/releases/download/0.1/libzbar-64.dll",
     "libiconv.dll": "https://github.com/NaturalHistoryMuseum/barcode-reader-dlls/releases/download/0.1/libiconv.dll"
 }
 
-# Remove old files if any
-for name in dll_sources:
-    path = os.path.join("dll_temp", name)
+# Step 3: Remove existing DLLs if any
+for name in dll_urls:
+    path = os.path.join(dll_folder, name)
     if os.path.exists(path):
         os.remove(path)
         print(f"🗑 Removed old {name}")
 
-# Download fresh DLLs
-for name, url in dll_sources.items():
+# Step 4: Download the DLLs
+for name, url in dll_urls.items():
     print(f"⬇️ Downloading {name}...")
-    resp = requests.get(url, timeout=30)
-    if resp.status_code == 200:
-        with open(os.path.join("dll_temp", name), "wb") as f:
-            f.write(resp.content)
-        print(f"✅ Downloaded {name}")
-    else:
-        print(f"❌ Failed: {name}, status {resp.status_code}")
+    try:
+        response = requests.get(url, timeout=30)
+        if response.status_code == 200:
+            with open(os.path.join(dll_folder, name), "wb") as f:
+                f.write(response.content)
+            print(f"✅ Downloaded: {name}")
+        else:
+            print(f"❌ Failed: {name} | Status code: {response.status_code}")
+    except Exception as e:
+        print(f"❌ Error downloading {name}: {e}")
 
-# Zip the DLLs
-zip_filename = "pyzbar_dlls.zip"
-with zipfile.ZipFile(zip_filename, "w") as zf:
-    for name in dll_sources:
-        src = os.path.join("dll_temp", name)
-        if os.path.exists(src):
-            zf.write(src, arcname=name)
+# Step 5: Create a zip package of the DLLs
+zip_path = "pyzbar_dlls.zip"
+with zipfile.ZipFile(zip_path, "w") as zipf:
+    for name in dll_urls:
+        dll_path = os.path.join(dll_folder, name)
+        if os.path.exists(dll_path):
+            zipf.write(dll_path, arcname=name)
+            print(f"📦 Added {name} to {zip_path}")
 
-print(f"\n📦 Zipped DLLs into: {zip_filename}")
+print(f"\n✅ All DLLs zipped into: {zip_path}")
