@@ -1,34 +1,26 @@
-import fitz  # PyMuPDF
-from PIL import Image
-from pyzbar.pyzbar import decode
-import io
+import os
+import requests
 
-doc = fitz.open("404177118-LPM-806260-NA-r0.pdf")
- 
-page = doc.load_page(0)  # first page
- 
-zoom = 2  # for high quality
-mat = fitz.Matrix(zoom, zoom)
-pix = page.get_pixmap(matrix=mat)
- 
-img = Image.open(io.BytesIO(pix.tobytes("png")))
+# 🔁 Update this path if your environment is elsewhere
+env_pyzbar_path = r"C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\qr_env\Lib\site-packages\pyzbar"
+os.makedirs(env_pyzbar_path, exist_ok=True)
 
-barcodes = decode(img)
-for barcode in barcodes:
-    print("Type:", barcode.type)
-    print("Data:", barcode.data.decode("utf-8"))
+# DLL files to download
+dll_links = {
+    "libzbar-64.dll": "https://github.com/NaturalHistoryMuseum/barcode-reader-dlls/raw/master/bin/64/libzbar-64.dll",
+    "libiconv.dll": "https://github.com/NaturalHistoryMuseum/barcode-reader-dlls/raw/master/bin/64/libiconv.dll"
+}
 
+# Download each DLL into the environment
+for dll_name, url in dll_links.items():
+    print(f"⬇️ Downloading {dll_name}...")
+    response = requests.get(url)
+    if response.status_code == 200:
+        file_path = os.path.join(env_pyzbar_path, dll_name)
+        with open(file_path, "wb") as f:
+            f.write(response.content)
+        print(f"✅ Saved: {file_path}")
+    else:
+        print(f"❌ Failed to download {dll_name} from {url} (status code: {response.status_code})")
 
-
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\qr_env\lib\site-packages\pyzbar\wrapper.py", line 127, in load_libzbar
-    libzbar, dependencies = zbar_library.load()
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\qr_env\lib\site-packages\pyzbar\zbar_library.py", line 60, in load
-    dependencies, libzbar = load_objects(Path(__file__).parent)
-  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\qr_env\lib\site-packages\pyzbar\zbar_library.py", line 54, in load_objects
-    libzbar = cdll.LoadLibrary(str(directory.joinpath(fname)))
-  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\ctypes\__init__.py", line 452, in LoadLibrary
-    return self._dlltype(name)
-  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\ctypes\__init__.py", line 374, in __init__
-    self._handle = _dlopen(self._name, mode)
-FileNotFoundError: Could not find module 'C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\qr_env\lib\site-packages\pyzbar\libzbar-64.dll' (or one of its dependencies). Try using the full path with constructor syntax.
-(qr_env) PS C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis> 
+print("\n🚀 All done! Restart Python and test your QR code reading.")
