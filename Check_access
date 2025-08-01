@@ -1,104 +1,11 @@
-import streamlit as st
-import fitz  # PyMuPDF
-from PIL import Image
-from pyzbar.pyzbar import decode
-import io
-import re
-import os
-import pandas as pd
-from ctypes import cdll
-
-# --- Optional DLL path setup ---
-dll_path = os.path.join(os.path.dirname(__file__), "qr_env", "Lib", "site-packages", "pyzbar")
-if os.path.exists(dll_path):
+2025-08-01 13:41:49.666 Uncaught app execution
+Traceback (most recent call last):
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\qr_env\lib\site-packages\streamlit\runtime\scriptrunner\exec_code.py", line 128, in exec_func_with_error_handling
+    result = func()
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\qr_env\lib\site-packages\streamlit\runtime\scriptrunner\script_runner.py", line 669, in code_to_exec
+    exec(code, module.__dict__)  # noqa: S102
+  File "C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\qr_verifier_app.py", line 14, in <module>
     os.add_dll_directory(dll_path)
-    try:
-        cdll.LoadLibrary(os.path.join(dll_path, "libiconv.dll"))
-        cdll.LoadLibrary(os.path.join(dll_path, "libzbar-64.dll"))
-    except Exception:
-        pass  # Let pyzbar try to load normally if this fails
-
-# --- Streamlit page setup ---
-st.set_page_config(page_title="QR & Barcode Verifier", layout="wide")
-st.title("📦 QR & Barcode Verification from Artwork PDF")
-
-# --- File Upload ---
-uploaded_file = st.file_uploader("Upload AW PDF File", type=["pdf"])
-
-# --- Helper Functions ---
-def extract_qr_gtin(barcodes):
-    for b in barcodes:
-        data = b.data.decode("utf-8")
-        if "kenvue" in data:
-            match = re.search(r"/01/(\d{14})", data)
-            if match:
-                return match.group(1), data, b
-    return None, None, None
-
-def extract_ean_gtin(barcodes):
-    for b in barcodes:
-        code = b.data.decode("utf-8")
-        if code.isdigit() and len(code) == 13:
-            return code.zfill(14)  # pad to 14 digits
-    return None
-
-# --- Main Processing ---
-results = []
-if uploaded_file:
-    try:
-        file_name = uploaded_file.name
-        doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
-        total_pages = len(doc)
-        st.success(f"✅ Loaded PDF with {total_pages} pages")
-
-        for page_num in range(total_pages):
-            st.markdown(f"### 📄 Page {page_num + 1}")
-            page = doc.load_page(page_num)
-            zoom = 2
-            mat = fitz.Matrix(zoom, zoom)
-            pix = page.get_pixmap(matrix=mat)
-            img = Image.open(io.BytesIO(pix.tobytes("png")))
-
-            st.image(img, caption=f"Page {page_num + 1}", use_container_width=True)
-
-            barcodes = decode(img)
-            qr_gtin, qr_url, qr_obj = extract_qr_gtin(barcodes)
-            ean_gtin = extract_ean_gtin(barcodes)
-
-            qr_width_mm, qr_height_mm = None, None
-            size_check = None
-            if qr_obj:
-                dpi = 72 * zoom
-                mm_per_pixel = 25.4 / dpi
-                qr_width_mm = qr_obj.rect.width * mm_per_pixel
-                qr_height_mm = qr_obj.rect.height * mm_per_pixel
-                size_check = qr_width_mm >= 15.621 and qr_height_mm >= 15.621
-
-            match_status = qr_gtin == ean_gtin if qr_gtin and ean_gtin else False
-
-            results.append({
-                "File_Name": file_name,
-                "Page": page_num + 1,
-                "QR_GTIN": qr_gtin or "",
-                "EAN13_GTIN": ean_gtin or "",
-                "QR_URL": qr_url or "",
-                "QR_Width_mm": f"{qr_width_mm:.2f}" if qr_width_mm else "",
-                "QR_Height_mm": f"{qr_height_mm:.2f}" if qr_height_mm else "",
-                "QR_Size_OK": size_check if size_check is not None else "",
-                "GTIN_Match": match_status,
-                "Comment": "GTIN matches EAN-13" if match_status else "Mismatch or missing"
-            })
-
-        df = pd.DataFrame(results)
-        st.subheader("🧾 Results Summary")
-        st.dataframe(df, use_container_width=True)
-
-        # --- Export Buttons ---
-        csv = df.to_csv(index=False).encode('utf-8')
-        json = df.to_json(orient="records", indent=2)
-
-        st.download_button("⬇️ Download CSV", csv, "gtin_results.csv", "text/csv")
-        st.download_button("⬇️ Download JSON", json, "gtin_results.json", "application/json")
-
-    except Exception as e:
-        st.error(f"❌ Error while processing PDF: {e}")
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\os.py", line 1118, in add_dll_directory
+    cookie = nt._add_dll_directory(path)
+OSError: [WinError 87] The parameter is incorrect: '.\\qr_env\\Lib\\site-packages\\pyzbar'
