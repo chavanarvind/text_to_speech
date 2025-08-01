@@ -1,26 +1,6 @@
-import os
-import requests
+⬇️ Downloading libzbar-64.dll...
+❌ Failed to download libzbar-64.dll from https://github.com/NaturalHistoryMuseum/barcode-reader-dlls/raw/master/bin/64/libzbar-64.dll (status code: 404)
+⬇️ Downloading libiconv.dll...
+❌ Failed to download libiconv.dll from https://github.com/NaturalHistoryMuseum/barcode-reader-dlls/raw/master/bin/64/libiconv.dll (status code: 404)
 
-# 🔁 Update this path if your environment is elsewhere
-env_pyzbar_path = r"C:\Users\AChava05\OneDrive - Kenvue\AChava05\video_analysis\qr_env\Lib\site-packages\pyzbar"
-os.makedirs(env_pyzbar_path, exist_ok=True)
-
-# DLL files to download
-dll_links = {
-    "libzbar-64.dll": "https://github.com/NaturalHistoryMuseum/barcode-reader-dlls/raw/master/bin/64/libzbar-64.dll",
-    "libiconv.dll": "https://github.com/NaturalHistoryMuseum/barcode-reader-dlls/raw/master/bin/64/libiconv.dll"
-}
-
-# Download each DLL into the environment
-for dll_name, url in dll_links.items():
-    print(f"⬇️ Downloading {dll_name}...")
-    response = requests.get(url)
-    if response.status_code == 200:
-        file_path = os.path.join(env_pyzbar_path, dll_name)
-        with open(file_path, "wb") as f:
-            f.write(response.content)
-        print(f"✅ Saved: {file_path}")
-    else:
-        print(f"❌ Failed to download {dll_name} from {url} (status code: {response.status_code})")
-
-print("\n🚀 All done! Restart Python and test your QR code reading.")
+🚀 All done! Restart Python and test your QR code reading.
